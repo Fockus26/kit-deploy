@@ -6,12 +6,12 @@
 ## Now
 
 **Phase:** 01 — Server ready · **Track:** own, infrastructure first (D018)
-Kickoff closed 2026-11-10 (plan approved by César). Nothing touched on the VPS yet.
+server-ready.sh ran on the VPS 2026-11-11 (César's OK).
 
 | Unit | Branch | Status | Log |
 |---|---|---|---|
 | 1 · server-ready script + Docker test | `feat/infra-server-ready` | merged (PR Fockus26/kit-deploy#1, 42653fd; test Docker 37/37) | `PHASE_LOG/feat-infra-server-ready.md` |
-| 2 · run on the VPS + measurements | — | **waits for César's explicit OK** (commands in the PR) | — |
+| 2 · run on the VPS + measurements | PR #2 fix + #3 D017 | done 2026-11-11 (cert webroot, Caddy up, RAM measured) | `PHASE_LOG/feat-infra-server-ready.md` |
 
 ## Blocked (actions for César or external)
 
@@ -22,7 +22,7 @@ Kickoff closed 2026-11-10 (plan approved by César). Nothing touched on the VPS 
 
 ## Next
 
-- Phase 01, unit 2: César runs (or OKs) the PR's commands on the VPS; then nmap, reboot, RAM → phase 01 closes.
+- Close phase 01: reboot test (César's OK: brief outage of every site) and nmap from a clean network (the laptop's network fakes every port as open). Then phase 02.
   `caddy-dns/cloudflare`, ufw 80/443, swap, `OOMScoreAdjust`), tested with `--test` in Docker;
 
 ## Phases
