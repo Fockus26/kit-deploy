@@ -13,6 +13,7 @@
     "shots:publish": "bash scripts/publish-pr-shots.sh .pr-shots",
     "test:related": "bun scripts/test-related.ts",
     "test": "bun test ./tests/unit --dots --pass-with-no-tests",
+    "test:infra": "bash infra/test/server-ready.test.sh",
     "shots": "node scripts/pr-screenshots.ts .pr-shots.json",
     "context:backup": "bash scripts/context-backup.sh",
     "context:restore": "bash scripts/context-backup.sh --restore"
