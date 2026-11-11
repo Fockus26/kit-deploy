@@ -9,7 +9,7 @@
 | 1 | Cloudflare API token limited to **DNS edit on the zone fockus.dev** (Caddy DNS-01); César writes it into `/etc/caddy/cloudflare.env` on the VPS | `infra/` Caddy unit | kickoff (D001) | 01 | Pending |
 | 2 | DNS-only records → 178.238.238.7: `deploy`, `*.preview`, `hello` (throwaway app); `maranatha` in phase 07 | Cloudflare | kickoff (D001) | 01–03, 07 | Pending |
 | 3 | Brevo: verify fockus.dev (SPF/DKIM/DMARC records in Cloudflare) and create the API/SMTP key (secret, `env set`) | phase 06 alerts | kickoff (D002) | 06 | Pending |
-| 4 | Copy `/etc/kit-deploy/master.key` into César's password manager right after it is generated | VPS | kickoff (D012) | 01/04 | Pending |
+| 4 | Copy `/etc/kit-deploy/master.key` into César's password manager right after it is generated | VPS | kickoff (D012) | 01/04 | Resolved (2026-11-11) |
 | 5 | GHCR read-only token for the VPS (`docker login ghcr.io` as root, typed by César) | VPS | kickoff | 02 | Pending |
 | 6 | `gh secret set KIT_DEPLOY_TOKEN` in each project's repo (César pastes the token from the dashboard/CLI) | each repo | kickoff | 02, 07 | Pending |
 | 7 | Register César's passkey and TOTP at the first login; store the recovery codes | `/login` | kickoff (D003) | 03 | Pending |

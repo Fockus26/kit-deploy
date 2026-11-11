@@ -22,15 +22,14 @@ server-ready.sh ran on the VPS 2026-11-11 (César's OK).
 
 ## Next
 
-- Close phase 01: reboot passed 2026-11-11 (all back by themselves in ~2.5 min); only nmap from a clean network is left (the laptop's network fakes every port as open). Then phase 02.
-  `caddy-dns/cloudflare`, ufw 80/443, swap, `OOMScoreAdjust`), tested with `--test` in Docker;
+- Phase 01 cerrada sin el nmap (César, 2026-11-11): cuando Actions procese PR #4, mergearlo y correr `gh workflow run port-scan.yml`; esperado 22, 80, 6432.
 
 ## Phases
 
 | # | Phase | Status |
 |---|---|---|
-| 01 | Server ready | next |
-| 02 | One site by hand | pending |
+| 01 | Server ready | done 2026-11-11 (nmap externo pendiente: PR #4, Actions atascado) |
+| 02 | One site by hand | next |
 | 03 | Previews | pending |
 | 04 | Variables and databases | pending |
 | 05 | Dashboard (kit UI phases in `phases/ui/`) | pending · brief in `design/BRIEF-kit-deploy.md` |
