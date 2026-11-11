@@ -28,6 +28,8 @@ send carries it with the new count). What repeats is what is most worth fixing.
 | 1 | 2026-11-10 | Gap | 1 | project-kickoff skill › Phase tracks | No track fits an infrastructure-first project (server, agent, CLI, then a dashboard); a custom track was improvised | Add an "Infra" track: own phases first, the UI phases nested in a "Dashboard" phase |
 | 3 | 2026-11-10 | Friction | 1 | `new-project.ps1` + `reference/scripts/qa-local.ts:552` | A fresh project fails `typecheck` (`env.NODE_ENV = …`: read-only with Next 16 types) and `lint` (tsconfig.json left with CRLF) | `Object.assign(env, { NODE_ENV: "production" })` in the kit; run `biome format --write` at the end of `new-project.ps1` |
 | 2 | 2026-11-10 | Repetition | 1 | project-kickoff skill › Block C, personality | César asked to *see* the directions instead of reading them, then a mix and variations | Render the 3 directions as a quick Design canvas (same screen each) before asking him to choose |
+| 4 | 2026-11-11 | Friction | 1 | `biome-templates` / kit biome.json › `files.includes` | `!**/.claude/worktrees` also matches the worktree root, so `bun run lint` inside a pool slot ignores every file and exits 1 | Exclude worktrees relative to the root (`!.claude/worktrees`) or document `--config-path` for slots |
+| 5 | 2026-11-11 | Gap | 1 | `reference/vps/bootstrap.sh` + VPS-POSTGRES.md | The kit leaves db.<domain> on certbot standalone; any later web server on :80 breaks its renewal silently (brief Trap) and each project solves it alone | bootstrap.sh: issue by webroot from day one (`/var/www/acme`), or ship the standalone→webroot migration kit-deploy wrote |
 
 ## Sending it to the kit
 

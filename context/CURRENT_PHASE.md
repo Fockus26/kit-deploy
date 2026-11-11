@@ -10,18 +10,20 @@ Kickoff closed 2026-11-10 (plan approved by César). Nothing touched on the VPS 
 
 | Unit | Branch | Status | Log |
 |---|---|---|---|
-| server-ready script + Docker test | `infra/server-ready` | next | — |
+| 1 · server-ready script + Docker test | `feat/infra-server-ready` | merged (PR Fockus26/kit-deploy#1, 42653fd; test Docker 37/37) | `PHASE_LOG/feat-infra-server-ready.md` |
+| 2 · run on the VPS + measurements | — | **waits for César's explicit OK** (commands in the PR) | — |
 
 ## Blocked (actions for César or external)
+
+- QA pendiente: César pidió (2026-11-10) el QA una sola vez al final, no por unidad (fase 09).
 
 - CONTENT_CHECKLIST #1: Cloudflare token (DNS edit, zone fockus.dev) — needed before Caddy's wildcard (phase 03), not for 01's base install.
 - CONTENT_CHECKLIST #2: DNS-only record `deploy.fockus.dev` and `hello.fockus.dev` before phase 02.
 
 ## Next
 
-- Phase 01, unit 1: `infra/server-ready.sh` (certbot → webroot first, Docker + log limits, Caddy with
+- Phase 01, unit 2: César runs (or OKs) the PR's commands on the VPS; then nmap, reboot, RAM → phase 01 closes.
   `caddy-dns/cloudflare`, ufw 80/443, swap, `OOMScoreAdjust`), tested with `--test` in Docker;
-  then César's OK to run it on the VPS. See `phases/01-SERVER-READY.md`.
 
 ## Phases
 
