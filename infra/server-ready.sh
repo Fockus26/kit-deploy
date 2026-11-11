@@ -184,6 +184,9 @@ import sites/*.caddy
 EOF
 caddy fmt --overwrite /etc/caddy/Caddyfile >/dev/null 2>&1 || true
 caddy validate --config /etc/caddy/Caddyfile >/dev/null
+# validate runs as root and opens the log files: they would stay root 0600 and the caddy user
+# could not write them (the service failed on the VPS, 2026-11-11).
+chown -R caddy:caddy /var/log/caddy
 
 if [ "$TEST" = 0 ]; then
   # The official unit (caddyserver/dist), plus the Cloudflare token file César writes

@@ -53,6 +53,7 @@ check "daemon.json max-file 3" bash -c "jq -e '.\"log-opts\".\"max-file\" == \"3
 check "daemon.json live-restore" bash -c "jq -e '.\"live-restore\" == true' /etc/docker/daemon.json"
 check "dockerd accepts daemon.json" dockerd --validate --config-file /etc/docker/daemon.json
 check "other host gets 404, not the challenge dir" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: $D' http://127.0.0.1/)\" = 404 ]"
+check "Caddy logs owned by caddy" bash -c "[ -z \"$(find /var/log/caddy ! -user caddy)\" ]"
 check "JSON access log written" bash -c "tail -1 /var/log/caddy/access.log | jq -e '.request.host == \"$D\"'"
 mkdir -p /srv/hello && echo hola > /srv/hello/index.html
 printf 'http://hello.test {\n\timport kit_access_log\n\troot * /srv/hello\n\tfile_server\n}\n' > /etc/caddy/sites/hello.caddy
