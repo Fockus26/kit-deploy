@@ -15,13 +15,16 @@
     "test": "bun test ./tests/unit --dots --pass-with-no-tests",
     "build:agent": "bun build --compile --target=bun-linux-x64 agent/main.ts --outfile build/kit-agent",
     "build:cli": "bun build --compile --target=bun-linux-x64 cli/main.ts --outfile build/kit-deploy",
+    "db:generate": "drizzle-kit generate",
     "test:infra": "bash infra/test/server-ready.test.sh",
     "shots": "node scripts/pr-screenshots.ts .pr-shots.json",
     "context:backup": "bash scripts/context-backup.sh",
     "context:restore": "bash scripts/context-backup.sh --restore"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.4",
     "next": "16.4.6",
+    "postgres": "^4.1.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "^4.6.7"
@@ -37,6 +40,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "drizzle-kit": "^0.31.11",
     "tailwindcss": "4.3.3",
     "typescript": "^5"
   },
