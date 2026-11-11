@@ -60,6 +60,7 @@ describe("renderSite", () => {
     ["a host with a space", { hosts: ["a.dev b.dev"], port: 20000 }],
     ["a single-label host", { hosts: ["localhost"], port: 20000 }],
     ["a wildcard host", { hosts: ["*.fockus.dev"], port: 20000 }],
+    ["an IP address", { hosts: ["127.0.0.1"], port: 20000 }],
     ["a port below D016's range", { hosts: ["a.dev"], port: 3000 }],
     ["a port above D016's range", { hosts: ["a.dev"], port: 30000 }],
     ["a fractional port", { hosts: ["a.dev"], port: 20000.5 }],
