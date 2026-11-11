@@ -1,0 +1,35 @@
+# Checks from outside which TCP ports of the VPS answer (D016: only 22, 80, 443, 6432).
+# Run by hand: Actions › Port scan › Run workflow (or `gh workflow run port-scan.yml`).
+# A GitHub runner is a clean network: César's laptop accepts every connection itself, so a scan
+# from it reports all ports open (2026-11-11). Used at the close of phase 01 and in phase 09.
+name: Port scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: Host or IP to scan
+        default: 178.238.238.7
+      allowed:
+        description: Ports that may be open, space separated
+        default: "22 80 443 6432"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install nmap
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nmap >/dev/null
+      - name: Scan all TCP ports
+        env:
+          HOST: ${{ inputs.host }}
+          ALLOWED: ${{ inputs.allowed }}
+        run: |
+          nmap -Pn -sT -p- -T4 --open -oG scan.txt "$HOST" > /dev/null
+          open=$(grep -oE '[0-9]+/open' scan.txt | cut -d/ -f1 | sort -n | tr '\n' ' ' | sed 's/ $//')
+          echo "Open ports on $HOST: ${open:-none}"
+          echo "Open ports on \`$HOST\`: **${open:-none}** (allowed: $ALLOWED)" >> "$GITHUB_STEP_SUMMARY"
+          bad=""
+          for p in $open; do case " $ALLOWED " in *" $p "*) ;; *) bad="$bad $p" ;; esac; done
+          [ -z "$bad" ] || { echo "::error::Unexpected open ports:$bad"; exit 1; }
