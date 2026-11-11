@@ -45,7 +45,9 @@ export function assertHost(host: string): string {
   if (
     host.length > 253 ||
     labels.length < 2 ||
-    !labels.every((l) => HOST_LABEL.test(l))
+    !labels.every((l) => HOST_LABEL.test(l)) ||
+    // An all-numeric TLD is an IP address (127.0.0.1), not a domain.
+    /^[0-9]+$/.test(labels.at(-1) ?? "")
   ) {
     throw new CoreInputError(`invalid hostname "${host}"`);
   }
