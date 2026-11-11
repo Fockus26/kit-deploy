@@ -8,13 +8,23 @@ async function run(
   argv: readonly string[],
   opts: { timeoutMs?: number } = {},
 ): Promise<RunResult> {
-  const proc = Bun.spawn([...argv], {
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-    timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    killSignal: "SIGKILL",
-  });
+  let proc: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">>;
+  try {
+    proc = Bun.spawn([...argv], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    });
+  } catch (e) {
+    // A missing binary (docker, caddy, ss) is a failed command with its reason, like a shell's 127.
+    return {
+      code: 127,
+      stdout: "",
+      stderr: `${argv[0]}: ${(e as Error).message}`,
+    };
+  }
   const [stdout, stderr, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
