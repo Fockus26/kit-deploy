@@ -22,7 +22,7 @@ server-ready.sh ran on the VPS 2026-11-11 (César's OK).
 
 ## Next
 
-- Close phase 01: reboot test (César's OK: brief outage of every site) and nmap from a clean network (the laptop's network fakes every port as open). Then phase 02.
+- Close phase 01: reboot passed 2026-11-11 (all back by themselves in ~2.5 min); only nmap from a clean network is left (the laptop's network fakes every port as open). Then phase 02.
   `caddy-dns/cloudflare`, ufw 80/443, swap, `OOMScoreAdjust`), tested with `--test` in Docker;
 
 ## Phases
