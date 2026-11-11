@@ -14,6 +14,8 @@ server-ready.sh ran on the VPS 2026-11-11 (César's OK).
 | 2 · run on the VPS + measurements | PR #2 fix + #3 D017 | done 2026-11-11 (cert webroot, Caddy up, RAM measured) | `PHASE_LOG/feat-infra-server-ready.md` |
 | 02·1 · lib/core (Caddy site, docker run args, ports) | PR #5 | merged 8aad7fe | — |
 | 02·2 · kit-agent daemon, closed op list | PR #6 | merged df77440 (CI green, security review: no high-confidence findings) | — |
+| 02·3 · CLI kit-deploy version/list/status | PR #7 | merged 50354bf | — |
+| 02·4 · POST /api/v1/deploy + first Drizzle schema | PR #8 | merged cb146d6 (Postgres test only in local Docker, not in CI; no migration on the VPS) | — |
 
 ## Blocked (actions for César or external)
 
