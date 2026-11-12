@@ -172,6 +172,21 @@ describe("containers", () => {
     expect(calls.map((c) => c[1])).toEqual(["inspect"]);
   });
 
+  test("start: only a managed container", async () => {
+    const name = "kd_hello-prod-3f2a9c1e7b4d";
+    const managed = setup({ "docker inspect": () => ({ stdout: "1\n" }) });
+    expect(
+      (await managed.send({ id: "1", op: "container.start", params: { name } }))
+        .ok,
+    ).toBe(true);
+    expect(managed.calls.at(-1)).toEqual(["docker", "start", name]);
+    const foreign = setup({ "docker inspect": () => ({ stdout: "\n" }) });
+    expect(
+      await foreign.send({ id: "2", op: "container.start", params: { name } }),
+    ).toMatchObject({ ok: false, error: { code: "not_managed" } });
+    expect(foreign.calls.map((c) => c[1])).toEqual(["inspect"]);
+  });
+
   test("stop and remove a managed container", async () => {
     const { send, calls } = setup({
       "docker inspect": () => ({ stdout: "1\n" }),

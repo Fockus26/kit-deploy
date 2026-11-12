@@ -45,7 +45,8 @@ export interface DeployStore {
   createDeployment(d: NewDeployment): Promise<DeploymentRef | null>;
 }
 
-export type Db = PostgresJsDatabase<typeof schema>;
+/** With the postgres.js client: the switch reserves a connection for its advisory lock. */
+export type Db = PostgresJsDatabase<typeof schema> & { $client: postgres.Sql };
 
 let shared: Db | null = null;
 

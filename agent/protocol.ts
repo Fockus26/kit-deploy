@@ -70,6 +70,7 @@ export const Request = z.discriminatedUnion("op", [
     timeoutS: z.number().int().min(0).max(120).optional(),
   }),
   op("container.remove", { name: containerNameSchema }),
+  op("container.start", { name: containerNameSchema }),
   op("container.list", { project: project.optional() }),
   op("site.write", { target, hosts: z.array(host).min(1).max(50), port }),
   op("site.remove", { target }),

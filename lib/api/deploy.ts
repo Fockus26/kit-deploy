@@ -38,9 +38,15 @@ export function imageFor(repo: string, sha: string): string {
   return assertImage(`ghcr.io/${repo.toLowerCase()}:${sha}`);
 }
 
+export type DeployHooks = {
+  /** A deployment of this project is queued: start the switch (after the response). */
+  onQueued?: (projectId: string) => void;
+};
+
 export async function handleDeploy(
   request: Request,
   store: DeployStore,
+  hooks: DeployHooks = {},
 ): Promise<Response> {
   const token = bearerToken(request.headers.get("authorization"));
   if (!token) return unauthorized();
@@ -68,7 +74,11 @@ export async function handleDeploy(
     await store.touchToken(found.tokenId);
 
     const existing = await store.findOpenDeployment(found.project.id, sha);
-    if (existing) return json(200, { deployment: existing });
+    if (existing) {
+      // A retry of a commit still queued (the web restarted mid-way?) kicks the switch again.
+      if (existing.status === "queued") hooks.onQueued?.(found.project.id);
+      return json(200, { deployment: existing });
+    }
 
     const deployment = await store.createDeployment({
       projectId: found.project.id,
@@ -76,7 +86,10 @@ export async function handleDeploy(
       sha,
       image: imageFor(found.project.repo, sha),
     });
-    if (deployment) return json(202, { deployment });
+    if (deployment) {
+      hooks.onQueued?.(found.project.id);
+      return json(202, { deployment });
+    }
     // A concurrent retry of the same commit created it between our lookup and our insert.
     const twin = await store.findOpenDeployment(found.project.id, sha);
     if (!twin) throw new Error("open deployment vanished after a conflict");
