@@ -11,7 +11,7 @@ TGZ="${1:-}"; shift || true
 [ -f "$TGZ" ] || { echo "Usage: ship.sh <build/kit-deploy-<sha>.tgz> [--install [install.sh options]]" >&2; exit 1; }
 VPS="${KIT_VPS:-kit-vps}"
 NAME="$(basename "$TGZ")"
-case "$NAME" in kit-deploy-[0-9a-f]*.tgz) ;; *) echo "Not a kit-deploy release: $NAME" >&2; exit 1 ;; esac
+[[ "$NAME" =~ ^kit-deploy-[0-9a-f]{12}\.tgz$ ]] || { echo "Not a kit-deploy release: $NAME" >&2; exit 1; }
 
 INSTALL=0
 EXTRA=()
@@ -23,14 +23,20 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-echo "== Copy $NAME to $VPS"
-scp -q "$TGZ" "$VPS:/tmp/$NAME"
+# A fresh private directory on the VPS, never a guessable /tmp path another user could plant.
+DIR="$(ssh "$VPS" 'mktemp -d /tmp/kit-deploy-ship.XXXXXX')"
+case "$DIR" in /tmp/kit-deploy-ship.*) ;; *) echo "mktemp on $VPS failed" >&2; exit 1 ;; esac
+echo "== Copy $NAME to $VPS:$DIR"
+scp -q "$TGZ" "$VPS:$DIR/$NAME"
+ARGS="$(printf ' %q' "${EXTRA[@]}")"
+[ "${#EXTRA[@]}" = 0 ] && ARGS=""
+# The new release's scripts, not the installed ones: a fix to them applies to this run.
 if [ "$INSTALL" = 1 ]; then
   echo "== install.sh"
-  # shellcheck disable=SC2029  # the arguments are checked above and by install.sh
-  ssh -t "$VPS" "set -e; d=\$(mktemp -d); tar -xzf /tmp/$NAME -C \$d ./infra/install.sh; sudo bash \$d/infra/install.sh /tmp/$NAME ${EXTRA[*]:-}; rm -rf \$d /tmp/$NAME"
+  # shellcheck disable=SC2029  # expanded here on purpose; every piece is checked or %q-quoted
+  ssh -t "$VPS" "set -e; cd $DIR; tar -xzf $NAME ./infra; sudo bash infra/install.sh $DIR/$NAME$ARGS; rm -rf $DIR"
 else
   echo "== update.sh"
-  # The new release's update.sh, not the installed one: a fix to it applies to this update.
-  ssh "$VPS" "set -e; d=\$(mktemp -d); tar -xzf /tmp/$NAME -C \$d ./infra/update.sh; sudo bash \$d/infra/update.sh /tmp/$NAME; rm -rf \$d /tmp/$NAME"
+  # shellcheck disable=SC2029
+  ssh "$VPS" "set -e; cd $DIR; tar -xzf $NAME ./infra; sudo bash infra/update.sh $DIR/$NAME; rm -rf $DIR"
 fi

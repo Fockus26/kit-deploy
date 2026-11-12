@@ -21,7 +21,7 @@ mkdir -p /etc/caddy/sites
 printf '#!/bin/sh\necho "caddy $*" >> /tmp/caddy.log\nexit 0\n' > /usr/local/bin/caddy && chmod 755 /usr/local/bin/caddy
 useradd -m cesar
 useradd -m other
-PW="$(kit-db url kit_deploy --direct | sed 's#.*://kit_deploy:\([^@]*\)@.*#\1#')"
+PW="$(kit-db url kit_deploy | sed 's#.*://kit_deploy:\([^@]*\)@.*#\1#')"
 extract
 
 echo "== 1. First install"
@@ -36,7 +36,7 @@ check "/etc/kit-deploy 0710 root:kit-deploy" bash -c "[ \"\$(stat -c '%U:%G %a' 
 check "master.key untouched, root 0400" bash -c "[ \"\$(sha256sum /etc/kit-deploy/master.key)\" = '$KEY_SHA' ] && [ \"\$(stat -c '%U %a' /etc/kit-deploy/master.key)\" = 'root 400' ]"
 check "cli.env 0640 root:kit-deploy" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/kit-deploy/cli.env)\" = 'root:kit-deploy 640' ]"
 check "web.env 0600 root" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/kit-deploy/web.env)\" = 'root:root 600' ]"
-check "direct URL on 5432 (session mode, not PgBouncer)" grep -q '^DATABASE_URL=postgresql://kit_deploy:.*@127.0.0.1:5432/kit_deploy$' /etc/kit-deploy/cli.env
+check "PgBouncer URL, like every project (:6432, sslmode)" grep -q '^DATABASE_URL=postgresql://kit_deploy:.*:6432/kit_deploy?sslmode=' /etc/kit-deploy/cli.env
 check "password never printed" bash -c "! grep -qF '$PW' /tmp/install1.log"
 check "migrations applied (4 tables)" bash -c "[ \"\$(su postgres -c \"psql -tA -d kit_deploy -c \\\"select count(*) from information_schema.tables where table_schema='public' and table_name in ('projects','deployments','deploy_tokens','domains')\\\"\")\" = 4 ]"
 check "current -> releases/<sha>" bash -c "[ \"\$(readlink /opt/kit-deploy/current)\" = /opt/kit-deploy/releases/$SHA ]"
@@ -49,7 +49,8 @@ su cesar -c 'kit-deploy version' > /tmp/v.out 2>&1 || { echo "--- version as ces
 check "cesar: the CLI reads cli.env and reaches the database" bash -c "su cesar -c 'kit-deploy rollback kd_hello' 2>&1 | grep -qx 'no project kd_hello'"
 check "other: no agent" bash -c "su other -c 'kit-deploy version' 2>&1 | grep -q 'EACCES'"
 check "other: cannot read cli.env" bash -c "! su other -c 'cat /etc/kit-deploy/cli.env' 2>/dev/null"
-check "web: --network host, loopback, no Docker socket" bash -c "grep -q -- '--network host' /var/log/kit-deploy-web.cmd && grep -q 'HOSTNAME=127.0.0.1' /var/log/kit-deploy-web.cmd && ! grep -q docker.sock /var/log/kit-deploy-web.cmd"
+check "web: bridge, published on loopback only, no Docker socket" bash -c "grep -q -- '-p 127.0.0.1:3100:3000' /var/log/kit-deploy-web.cmd && ! grep -q -- '--network' /var/log/kit-deploy-web.cmd && ! grep -q docker.sock /var/log/kit-deploy-web.cmd"
+check "web: db.fockus.dev through host-gateway" grep -q -- '--add-host db.fockus.dev:host-gateway' /var/log/kit-deploy-web.cmd
 check "web: read-only, non-root, env from web.env" bash -c "grep -q -- '--read-only' /var/log/kit-deploy-web.cmd && grep -q -- \"--user \$(id -u kitdeploy):\" /var/log/kit-deploy-web.cmd && grep -q 'env-file /etc/kit-deploy/web.env' /var/log/kit-deploy-web.cmd"
 check "standalone web in the release" test -f "/opt/kit-deploy/releases/$SHA/web/server.js"
 check "no dashboard site while its DNS does not resolve" bash -c "[ ! -f /etc/caddy/sites/kit-deploy.caddy ] && grep -q 'does not resolve yet' /tmp/install1.log"

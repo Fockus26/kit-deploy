@@ -9,8 +9,8 @@
 #   1. group kit-deploy (may talk to kit-agent's socket) and system user kitdeploy (the web).
 #   2. /etc/kit-deploy 0710 root:kit-deploy (traverse only; master.key stays root 0400).
 #   3. cli.env (root:kit-deploy 0640) and web.env (root 0600) with kit_deploy's DATABASE_URL:
-#      the direct one (127.0.0.1:5432, session mode: the switch takes an advisory lock, which
-#      PgBouncer's transaction pooling would break). Written once; never printed.
+#      the same PgBouncer URL every project gets (`kit-db url`, TLS verify-full). The switch's
+#      lock is transaction-scoped, so transaction pooling is fine. Written once; never printed.
 #   4. Optional: docker login ghcr.io for root (kit-agent pulls private images). The token is
 #      read from stdin — César types or pipes it in his terminal, never in the chat.
 set -euo pipefail
@@ -56,13 +56,11 @@ say "Database URL files"
 if [ -f "$STATE/cli.env" ] && [ -f "$STATE/web.env" ]; then
   echo "Already there (not rewritten)."
 else
-  URL="$(kit-db url kit_deploy --direct)"
-  # kit-db's --direct URL is for an SSH tunnel (local 5433); on the VPS Postgres is on 5432.
+  URL="$(kit-db url kit_deploy)"
   case "$URL" in
-    postgresql://kit_deploy:*@127.0.0.1:5433/kit_deploy) ;;
+    postgresql://kit_deploy:*@*:6432/kit_deploy\?sslmode=*) ;;
     *) echo "Unexpected kit-db url format; nothing written." >&2; exit 1 ;;
   esac
-  URL="${URL/@127.0.0.1:5433\//@127.0.0.1:5432/}"
   # umask only for these two files: inherited by update.sh it made /run/kit-deploy 0700 and
   # locked the kit-deploy group out of the agent's socket (Docker test, 2026-11-12).
   (

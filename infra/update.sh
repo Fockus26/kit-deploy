@@ -50,7 +50,9 @@ chmod -R go-w "$REL"
 
 say "Migrate"
 # The URL stays in the file and in this process' environment: it is never printed.
-( set -a; . "$STATE/cli.env"; set +a; "$REL/bin/kit-deploy-migrate" "$REL/drizzle" )
+# Read as data, not sourced: a `$` or a backtick in the password must stay a character.
+DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' "$STATE/cli.env")" \
+  "$REL/bin/kit-deploy-migrate" "$REL/drizzle"
 
 say "Switch to ${SHA:0:12}"
 PREV="$(readlink "$BASE/current" 2>/dev/null || true)"
@@ -78,15 +80,18 @@ for _ in $(seq 1 20); do [ -S /run/kit-deploy/agent.sock ] && break; sleep 0.5; 
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"
 UID_WEB="$(id -u kitdeploy)"
 GID_KD="$(getent group kit-deploy | cut -d: -f3)"
-# --network host: the web reaches Postgres on the host's 127.0.0.1:5432 (session mode, needed by
-# the switch's advisory lock; PgBouncer pools by transaction). It listens on loopback only (D016).
+# Bridge network, published on loopback only (D016), like any site. Never --network host: the
+# host's loopback has Caddy's admin API (:2019, no auth), and a compromised web would rewrite
+# every site's routing through it (security review, 2026-11-12). Postgres through PgBouncer at
+# db.fockus.dev → host-gateway, the same way the projects reach it.
 # Not labelled as a kit-deploy site container: the agent never stops or prunes it.
 WEB_RUN=(docker run -d --name kit-deploy-web --restart unless-stopped
-  --network host --user "$UID_WEB:$GID_KD"
+  -p "127.0.0.1:$WEB_PORT:3000" --add-host db.fockus.dev:host-gateway
+  --user "$UID_WEB:$GID_KD"
   --read-only --tmpfs /tmp --tmpfs /app/.next/cache:uid="$UID_WEB"
   --cap-drop ALL --security-opt no-new-privileges --memory 512m --memory-swap 512m
   --log-opt max-size=10m --log-opt max-file=3
-  -e NODE_ENV=production -e HOSTNAME=127.0.0.1 -e PORT="$WEB_PORT" -e NEXT_TELEMETRY_DISABLED=1
+  -e NODE_ENV=production -e HOSTNAME=0.0.0.0 -e PORT=3000 -e NEXT_TELEMETRY_DISABLED=1
   -e GIT_SHA="$SHA" --env-file "$STATE/web.env"
   -v "$REL/web:/app:ro" -v /run/kit-deploy:/run/kit-deploy -w /app
   "$WEB_IMAGE" node server.js)

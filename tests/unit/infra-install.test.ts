@@ -30,10 +30,12 @@ describe("infra/install.sh and update.sh", () => {
     expect(unit).toContain("RuntimeDirectoryPreserve=yes");
   });
 
-  test("the web never gets the Docker socket and listens on loopback only", () => {
+  test("the web: no Docker socket, no host network, published on loopback only", () => {
     const update = readFileSync("infra/update.sh", "utf8");
     expect(update).not.toContain("docker.sock");
-    expect(update).toContain("HOSTNAME=127.0.0.1");
+    // Host networking would hand it Caddy's admin API on the host's loopback (no auth).
+    expect(update).not.toMatch(/^\s*--network host/m);
+    expect(update).toContain('-p "127.0.0.1:$WEB_PORT:3000"');
   });
 
   // Builds a release and runs the whole install in Docker (minutes): opt-in, like server-ready.
