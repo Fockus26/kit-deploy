@@ -29,3 +29,9 @@ export const APP_USER = "1001:1001";
 
 /** Label every container kit-deploy creates carries: the agent only stops/removes those. */
 export const MANAGED_LABEL = "dev.fockus.kit-deploy";
+
+/** A project without its own domain answers on `<project>.fockus.dev` (César, 2026-11-12). */
+export const PROJECT_DOMAIN = "fockus.dev";
+
+/** Subdomains of fockus.dev that are the platform's, never a project's default host. */
+export const RESERVED_SUBDOMAINS = ["db", "deploy", "preview", "www"] as const;

@@ -10,6 +10,9 @@
 import type { ManagedContainer } from "../agent/ops";
 import type { Response } from "../agent/protocol";
 import { imageFor } from "../lib/api/deploy";
+import { defaultHost, MEMORY_MB } from "../lib/core";
+import { assertHost, CoreInputError } from "../lib/core/validate";
+import { AdminError, type AdminStore } from "../lib/db/admin";
 import type { DeployStore } from "../lib/db/store";
 import {
   processProject,
@@ -18,6 +21,7 @@ import {
   type SwitchDeps,
   SwitchError,
 } from "../lib/deploy/switch";
+import { generateDeployToken } from "../lib/tokens";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
 
@@ -25,6 +29,9 @@ import { type AgentClient, AgentUnreachable } from "./client";
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
 export type CliContext = {
   deploy?: () => DeployContext;
+  admin?: () => AdminStore;
+  /** Whether stdout is a terminal: a token is never printed to one without --show. */
+  stdoutIsTTY?: boolean;
   now?: () => number;
 };
 
@@ -47,6 +54,14 @@ Commands:
                      queue that commit (40 hex) if given, then run the project's switch
   rollback <project> back to the previous kept deployment (no build, no pull)
   regenerate         rewrite every live site's Caddy file; start its container if stopped
+  project add <project> <owner/repo> [--memory <mb>] [--domain <host>]... [--no-default-domain]
+                     register a project; it answers on <project>.fockus.dev unless told not to
+  domain add <project> <host>
+                     one more host for a project's production
+  token create <project> [--label <text>] [--show]
+                     a deploy token, printed once on stdout to pipe into
+                     'gh secret set KIT_DEPLOY_TOKEN -R <owner/repo>'; never to a terminal
+                     unless --show
   help               this text
 `;
 
@@ -277,6 +292,139 @@ async function doRegenerate(ctx: CliContext, json: boolean): Promise<Result> {
   return { code, out: `${out}\n`, err: "" };
 }
 
+const REPO =
+  /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$/;
+
+function needAdmin(ctx: CliContext): AdminStore {
+  if (!ctx.admin) throw new SwitchError("this command needs the database");
+  return ctx.admin();
+}
+
+/** `--flag value` pairs and bare words; a flag without its value is a usage error. */
+function parseFlags(
+  args: string[],
+  withValue: string[],
+  bare: string[],
+): { words: string[]; flags: Map<string, string[]>; error?: string } {
+  const words: string[] = [];
+  const flags = new Map<string, string[]>();
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (withValue.includes(a)) {
+      const v = args[i + 1];
+      if (v === undefined || v.startsWith("--"))
+        return { words, flags, error: `${a} needs a value` };
+      flags.set(a, [...(flags.get(a) ?? []), v]);
+      i++;
+    } else if (bare.includes(a)) flags.set(a, []);
+    else if (a.startsWith("--"))
+      return { words, flags, error: `unknown option ${a}` };
+    else words.push(a);
+  }
+  return { words, flags };
+}
+
+function checkHost(host: string): string {
+  const h = host.toLowerCase();
+  assertHost(h);
+  if (h === "db.fockus.dev" || h === "deploy.fockus.dev") {
+    throw new CoreInputError(`${h} is the platform's`);
+  }
+  return h;
+}
+
+async function projectAdd(
+  ctx: CliContext,
+  args: string[],
+  json: boolean,
+): Promise<Result> {
+  const usage =
+    "usage: kit-deploy project add <project> <owner/repo> [--memory <mb>] [--domain <host>]... [--no-default-domain]\n";
+  const f = parseFlags(args, ["--memory", "--domain"], ["--no-default-domain"]);
+  if (f.error) return fail(`${f.error}\n${usage}`, 2);
+  const [name, repo, extra] = f.words;
+  if (!name || !repo || extra) return fail(usage, 2);
+  if (!PROJECT.test(name)) return fail(`invalid project name "${name}"\n`, 2);
+  if (!REPO.test(repo))
+    return fail(`invalid repo "${repo}": expected owner/name\n`, 2);
+  const memoryRaw = f.flags.get("--memory")?.at(-1) ?? "512";
+  const memoryMb = Number(memoryRaw);
+  if (
+    !Number.isInteger(memoryMb) ||
+    memoryMb < MEMORY_MB.min ||
+    memoryMb > MEMORY_MB.max
+  ) {
+    return fail(
+      `--memory ${memoryRaw}: expected ${MEMORY_MB.min}-${MEMORY_MB.max}\n`,
+      2,
+    );
+  }
+  const hosts: string[] = [];
+  if (!f.flags.has("--no-default-domain")) {
+    const d = defaultHost(name);
+    if (!d)
+      return fail(
+        `${name} has no default domain (reserved): use --no-default-domain --domain <host>\n`,
+        2,
+      );
+    hosts.push(d);
+  }
+  for (const h of f.flags.get("--domain") ?? []) hosts.push(checkHost(h));
+  const unique = [...new Set(hosts)];
+  const { id } = await needAdmin(ctx).addProject({
+    name,
+    repo,
+    memoryMb,
+    hosts: unique,
+  });
+  if (json)
+    return ok(
+      `${JSON.stringify({ id, name, repo, memoryMb, hosts: unique })}\n`,
+    );
+  return ok(
+    `added ${name} (${repo}), ${memoryMb} MB, domains: ${unique.join(", ") || "none"}\n`,
+  );
+}
+
+async function domainAdd(ctx: CliContext, args: string[]): Promise<Result> {
+  const [project, host, extra] = args;
+  if (!project || !host || extra)
+    return fail("usage: kit-deploy domain add <project> <host>\n", 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  const h = checkHost(host);
+  await needAdmin(ctx).addDomain(project, h);
+  return ok(
+    `added ${h} to ${project}; \`kit-deploy regenerate\` puts it in Caddy\n`,
+  );
+}
+
+async function tokenCreate(ctx: CliContext, args: string[]): Promise<Result> {
+  const usage =
+    "usage: kit-deploy token create <project> [--label <text>] [--show]\n";
+  const f = parseFlags(args, ["--label"], ["--show"]);
+  if (f.error) return fail(`${f.error}\n${usage}`, 2);
+  const [project, extra] = f.words;
+  if (!project || extra) return fail(usage, 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  if (ctx.stdoutIsTTY && !f.flags.has("--show")) {
+    return fail(
+      `refusing to print a token to a terminal. Pipe it:\n  kit-deploy token create ${project} | gh secret set KIT_DEPLOY_TOKEN -R <owner/repo>\n(or add --show to see it once)\n`,
+      2,
+    );
+  }
+  const label = (f.flags.get("--label")?.at(-1) ?? "").slice(0, 100);
+  const { token, hash } = generateDeployToken();
+  const { id } = await needAdmin(ctx).addToken(project, hash, label);
+  // stdout carries the token and nothing else, so a pipe gets exactly the secret.
+  return {
+    code: 0,
+    out: `${token}\n`,
+    err: `deploy token ${id} for ${project} created; it is not stored and will not be shown again\n`,
+  };
+}
+
 export async function runCli(
   argv: string[],
   client: AgentClient,
@@ -299,6 +447,22 @@ export async function runCli(
         return await doRollback(ctx, args[0], json);
       case "regenerate":
         return await doRegenerate(ctx, json);
+      case "project":
+        if (args[0] === "add")
+          return await projectAdd(ctx, args.slice(1), json);
+        return fail(
+          "usage: kit-deploy project add <project> <owner/repo> [...]\n",
+          2,
+        );
+      case "domain":
+        if (args[0] === "add") return await domainAdd(ctx, args.slice(1));
+        return fail("usage: kit-deploy domain add <project> <host>\n", 2);
+      case "token":
+        if (args[0] === "create") return await tokenCreate(ctx, args.slice(1));
+        return fail(
+          "usage: kit-deploy token create <project> [--label <text>] [--show]\n",
+          2,
+        );
       case undefined:
       case "help":
       case "--help":
@@ -312,7 +476,12 @@ export async function runCli(
         };
     }
   } catch (e) {
-    if (e instanceof AgentUnreachable || e instanceof SwitchError) {
+    if (e instanceof CoreInputError) return fail(`${e.message}\n`, 2);
+    if (
+      e instanceof AgentUnreachable ||
+      e instanceof SwitchError ||
+      e instanceof AdminError
+    ) {
       return fail(`${e.message}\n`);
     }
     // DATABASE_URL missing or the database down: the reason, never a stack.

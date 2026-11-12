@@ -1,4 +1,8 @@
-import { PREVIEW_DOMAIN } from "./constants";
+import {
+  PREVIEW_DOMAIN,
+  PROJECT_DOMAIN,
+  RESERVED_SUBDOMAINS,
+} from "./constants";
 import { assertIntInRange, assertProject, assertSha } from "./validate";
 
 /** What a deployment serves: a project's production, or one of its PR previews. */
@@ -37,4 +41,14 @@ export function containerName(target: Target, sha: string): string {
 export function previewHost(project: string, pr: number): string {
   siteName({ project, env: "preview", pr });
   return `${project.replace(/_/g, "-")}-pr-${pr}.${PREVIEW_DOMAIN}`;
+}
+
+/** `<project>.fockus.dev`, with the kit-db name's `_` as `-`. Null for a reserved subdomain. */
+export function defaultHost(project: string): string | null {
+  assertProject(project);
+  const label = project.replace(/_/g, "-");
+  if (/^-|-$/.test(label)) return null;
+  return (RESERVED_SUBDOMAINS as readonly string[]).includes(label)
+    ? null
+    : `${label}.${PROJECT_DOMAIN}`;
 }

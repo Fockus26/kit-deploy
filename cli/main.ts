@@ -5,6 +5,7 @@
  *   KIT_AGENT_SOCKET  default /run/kit-deploy/agent.sock
  *   DATABASE_URL      else read from /etc/kit-deploy/cli.env (deploy, rollback, regenerate)
  */
+import { drizzleAdminStore } from "../lib/db/admin";
 import { db, drizzleStore } from "../lib/db/store";
 import { drizzleSwitchRepo } from "../lib/deploy/drizzle-repo";
 import { socketClient } from "./client";
@@ -14,6 +15,11 @@ import { loadCliEnv } from "./env";
 const socket = process.env.KIT_AGENT_SOCKET ?? "/run/kit-deploy/agent.sock";
 const agent = socketClient(socket);
 const { code, out, err } = await runCli(process.argv.slice(2), agent, {
+  stdoutIsTTY: process.stdout.isTTY === true,
+  admin: () => {
+    loadCliEnv();
+    return drizzleAdminStore(db());
+  },
   deploy: () => {
     loadCliEnv();
     const database = db();
