@@ -23,6 +23,7 @@ useradd -m cesar
 useradd -m other
 PW="$(kit-db url kit_deploy | sed 's#.*://kit_deploy:\([^@]*\)@.*#\1#')"
 extract
+echo "kit-db url (redacted): $(kit-db url kit_deploy | sed 's#:[^:@/]*@#:***@#')"
 
 echo "== 1. First install"
 if bash /tmp/rel/infra/install.sh /release.tgz --admin-user cesar --test > /tmp/install1.log 2>&1; then

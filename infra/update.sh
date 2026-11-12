@@ -50,9 +50,16 @@ chmod -R go-w "$REL"
 
 say "Migrate"
 # The URL stays in the file and in this process' environment: it is never printed.
-# Read as data, not sourced: a `$` or a backtick in the password must stay a character.
-DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' "$STATE/cli.env")" \
-  "$REL/bin/kit-deploy-migrate" "$REL/drizzle"
+# Migrations go straight to Postgres, not through PgBouncer (the kit's rule: `kit-db url
+# --direct` is the migrations URL). On the VPS that is 127.0.0.1:5432, not the tunnel's 5433.
+# The URL lives only in this process' environment: never in a file, never printed.
+DIRECT="$(kit-db url kit_deploy --direct)"
+case "$DIRECT" in
+  postgresql://kit_deploy:*@127.0.0.1:5433/kit_deploy) ;;
+  *) echo "Unexpected kit-db --direct url format." >&2; exit 1 ;;
+esac
+DATABASE_URL="${DIRECT/@127.0.0.1:5433\//@127.0.0.1:5432/}" "$REL/bin/kit-deploy-migrate" "$REL/drizzle"
+unset DIRECT
 
 say "Switch to ${SHA:0:12}"
 PREV="$(readlink "$BASE/current" 2>/dev/null || true)"

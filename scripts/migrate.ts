@@ -30,7 +30,11 @@ try {
   console.log(`migrations applied: ${row?.n ?? 0}`);
 } catch (e) {
   // The message only: a postgres error never carries the password, the URL is never printed.
-  console.error(`migration failed: ${(e as Error).message}`);
+  // Drizzle wraps the driver's error: the cause is the part that says why.
+  const err = e as Error & { cause?: Error };
+  console.error(
+    `migration failed: ${err.message}${err.cause ? ` — ${err.cause.message}` : ""}`,
+  );
   process.exitCode = 1;
 } finally {
   await client.end();
