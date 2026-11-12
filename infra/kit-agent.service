@@ -1,0 +1,24 @@
+# kit-deploy · kit-agent: the only process that touches Docker and Caddy's site files (D011).
+# Installed by infra/install.sh to /etc/systemd/system/kit-agent.service.
+[Unit]
+Description=kit-agent (kit-deploy root daemon)
+After=network-online.target docker.service caddy.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/kit-agent
+Environment=KIT_AGENT_SOCKET=/run/kit-deploy/agent.sock
+Environment=KIT_AGENT_GROUP=kit-deploy
+# /run/kit-deploy survives agent restarts: the web container bind-mounts it.
+RuntimeDirectory=kit-deploy
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+Restart=always
+RestartSec=2
+# The agent never needs more than this; a runaway one must not compete with Postgres.
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
