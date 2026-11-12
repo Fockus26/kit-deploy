@@ -1,0 +1,69 @@
+# kit-deploy · copied to the project as `.github/workflows/deploy-vps.yml`.
+# On every push to the production branch: build the image, push it to GHCR, and ask kit-deploy
+# to deploy that commit. kit-deploy derives the image from the repo and the commit; the token
+# only decides which project (`KIT_DEPLOY_TOKEN`, a repository secret César pastes in GitHub).
+name: Deploy (VPS)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy per branch at a time; a newer push replaces a queued one.
+concurrency:
+  group: deploy-vps-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  KIT_DEPLOY_URL: https://deploy.fockus.dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR needs a lowercase path; github.repository keeps the owner's case.
+      - name: Image name
+        id: image
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.ref }}
+          build-args: GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy
+        env:
+          KIT_DEPLOY_TOKEN: ${{ secrets.KIT_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$KIT_DEPLOY_TOKEN" ]; then
+            echo "::error::KIT_DEPLOY_TOKEN is not set in this repository's secrets"
+            exit 1
+          fi
+          # The header goes through stdin, not argv: the token never shows in the process list.
+          printf 'Authorization: Bearer %s\n' "$KIT_DEPLOY_TOKEN" |
+            curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+              --max-time 30 \
+              --header @- \
+              --header 'content-type: application/json' \
+              --data "{\"sha\":\"${GITHUB_SHA}\"}" \
+              "${KIT_DEPLOY_URL}/api/v1/deploy"
+          echo

@@ -1,0 +1,16 @@
+# kit-deploy · copied to the project as `.dockerignore`.
+# Nothing local, nothing secret, enters the image: runtime variables come from kit-agent.
+.git
+.github
+node_modules
+.next
+out
+build
+coverage
+.env*
+!.env.example
+*.log
+.DS_Store
+.vercel
+.claude
+context
