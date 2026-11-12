@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# kit-deploy · installs a release built by scripts/release.sh: unpack, migrate, switch, restart.
+# Never through kit-deploy itself (CLAUDE.md). Run as root on the VPS, after infra/install.sh.
+#
+#   bash update.sh /tmp/kit-deploy-<sha12>.tgz          # on the VPS
+#   bash update.sh <tgz> --test                         # in the Docker test (no systemd, no Docker)
+#
+# Order: unpack to releases/<sha> → migrate (with the new migrations, before anything restarts)
+# → `current` points at it → kit-agent restarts → the web container is recreated → the dashboard's
+# Caddy site is written if its host resolves → only the last 3 releases are kept.
+# The sites never stop: their containers and Caddy are not touched.
+set -euo pipefail
+# Whatever the caller's umask: releases and /run/kit-deploy must be readable by the web user.
+umask 022
+
+TEST=0
+TGZ=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --test) TEST=1; shift ;;
+    -*) echo "Unknown option: $1" >&2; exit 1 ;;
+    *) TGZ="$1"; shift ;;
+  esac
+done
+[ "$(id -u)" = 0 ] || { echo "Run it as root." >&2; exit 1; }
+[ -f "$TGZ" ] || { echo "Usage: update.sh <kit-deploy-<sha>.tgz> [--test]" >&2; exit 1; }
+
+BASE=/opt/kit-deploy
+STATE=/etc/kit-deploy
+WEB_PORT=3100
+WEB_IMAGE="${WEB_IMAGE:-node:22-alpine}"
+DASHBOARD_HOST="${DASHBOARD_HOST:-deploy.fockus.dev}"
+KEEP_RELEASES=3
+say() { echo "== $*"; }
+
+[ -f "$STATE/cli.env" ] && [ -f "$STATE/web.env" ] || { echo "Run infra/install.sh first." >&2; exit 1; }
+getent group kit-deploy >/dev/null || { echo "Run infra/install.sh first (no kit-deploy group)." >&2; exit 1; }
+# server-ready.sh re-run puts it back to root 0700, and the CLI would lose cli.env: heal it.
+chown root:kit-deploy "$STATE" && chmod 0710 "$STATE"
+
+say "Unpack"
+TMP="$(mktemp -d "$BASE/releases/.new-XXXXXX")"
+tar -xzf "$TGZ" -C "$TMP"
+SHA="$(tr -dc 0-9a-f < "$TMP/VERSION")"
+[ "${#SHA}" = 40 ] || { rm -rf "$TMP"; echo "Bad release: VERSION is not a commit." >&2; exit 1; }
+REL="$BASE/releases/$SHA"
+if [ -d "$REL" ]; then echo "Release ${SHA:0:12} already unpacked."; rm -rf "$TMP"; else mv "$TMP" "$REL"; fi
+chown -R root:root "$REL"
+chmod -R go-w "$REL"
+
+say "Migrate"
+# The URL stays in the file and in this process' environment: it is never printed.
+# Migrations go straight to Postgres, not through PgBouncer (the kit's rule: `kit-db url
+# --direct` is the migrations URL). On the VPS that is 127.0.0.1:5432, not the tunnel's 5433.
+# The URL lives only in this process' environment: never in a file, never printed.
+DIRECT="$(kit-db url kit_deploy --direct)"
+case "$DIRECT" in
+  postgresql://kit_deploy:*@127.0.0.1:5433/kit_deploy) ;;
+  *) echo "Unexpected kit-db --direct url format." >&2; exit 1 ;;
+esac
+DATABASE_URL="${DIRECT/@127.0.0.1:5433\//@127.0.0.1:5432/}" "$REL/bin/kit-deploy-migrate" "$REL/drizzle"
+unset DIRECT
+
+say "Switch to ${SHA:0:12}"
+PREV="$(readlink "$BASE/current" 2>/dev/null || true)"
+ln -sfn "$REL" "$BASE/current.new" && mv -Tf "$BASE/current.new" "$BASE/current"
+install -m 0755 -o root -g root "$REL/bin/kit-agent" /usr/local/sbin/kit-agent.new
+mv -f /usr/local/sbin/kit-agent.new /usr/local/sbin/kit-agent
+install -m 0755 -o root -g root "$REL/bin/kit-deploy" /usr/local/bin/kit-deploy.new
+mv -f /usr/local/bin/kit-deploy.new /usr/local/bin/kit-deploy
+
+say "Restart kit-agent"
+if [ "$TEST" = 1 ]; then
+  pkill -x kit-agent 2>/dev/null || true
+  sleep 0.5
+  mkdir -p /run/kit-deploy && chmod 0755 /run/kit-deploy
+  KIT_AGENT_GROUP=kit-deploy nohup /usr/local/sbin/kit-agent >/var/log/kit-agent.log 2>&1 &
+else
+  install -m 0644 "$REL/infra/kit-agent.service" /etc/systemd/system/kit-agent.service
+  systemctl daemon-reload
+  systemctl enable -q kit-agent
+  systemctl restart kit-agent
+fi
+for _ in $(seq 1 20); do [ -S /run/kit-deploy/agent.sock ] && break; sleep 0.5; done
+[ -S /run/kit-deploy/agent.sock ] || { echo "kit-agent did not open its socket." >&2; exit 1; }
+
+say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"
+UID_WEB="$(id -u kitdeploy)"
+GID_KD="$(getent group kit-deploy | cut -d: -f3)"
+# Bridge network, published on loopback only (D016), like any site. Never --network host: the
+# host's loopback has Caddy's admin API (:2019, no auth), and a compromised web would rewrite
+# every site's routing through it (security review, 2026-11-12). Postgres through PgBouncer at
+# db.fockus.dev → host-gateway, the same way the projects reach it.
+# Not labelled as a kit-deploy site container: the agent never stops or prunes it.
+WEB_RUN=(docker run -d --name kit-deploy-web --restart unless-stopped
+  -p "127.0.0.1:$WEB_PORT:3000" --add-host db.fockus.dev:host-gateway
+  --user "$UID_WEB:$GID_KD"
+  --read-only --tmpfs /tmp --tmpfs /app/.next/cache:uid="$UID_WEB"
+  --cap-drop ALL --security-opt no-new-privileges --memory 512m --memory-swap 512m
+  --log-opt max-size=10m --log-opt max-file=3
+  -e NODE_ENV=production -e HOSTNAME=0.0.0.0 -e PORT=3000 -e NEXT_TELEMETRY_DISABLED=1
+  -e GIT_SHA="$SHA" --env-file "$STATE/web.env"
+  -v "$REL/web:/app:ro" -v /run/kit-deploy:/run/kit-deploy -w /app
+  "$WEB_IMAGE" node server.js)
+if [ "$TEST" = 1 ]; then
+  printf '%q ' "${WEB_RUN[@]}" > /var/log/kit-deploy-web.cmd
+  echo "TEST: web container not started (no Docker here); command in /var/log/kit-deploy-web.cmd"
+else
+  docker pull -q "$WEB_IMAGE" >/dev/null
+  docker rm -f kit-deploy-web >/dev/null 2>&1 || true
+  "${WEB_RUN[@]}" >/dev/null
+  for _ in $(seq 1 30); do
+    curl -fs -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break; sleep 1
+  done
+  curl -fs -o /dev/null "http://127.0.0.1:$WEB_PORT/" || {
+    echo "The web did not answer on :$WEB_PORT. Logs: docker logs kit-deploy-web" >&2; exit 1; }
+fi
+
+say "Dashboard site ($DASHBOARD_HOST)"
+SITE=/etc/caddy/sites/kit-deploy.caddy
+if getent ahosts "$DASHBOARD_HOST" >/dev/null 2>&1; then
+  NEW="$(printf '# Written by kit-deploy infra/update.sh.\n%s {\n\timport kit_access_log\n\treverse_proxy 127.0.0.1:%s\n}\n' "$DASHBOARD_HOST" "$WEB_PORT")"
+  if [ "$(cat "$SITE" 2>/dev/null)" != "$NEW" ]; then
+    printf '%s\n' "$NEW" > "$SITE.tmp" && chmod 644 "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
+    if caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+      if [ "$TEST" = 1 ]; then echo "TEST: caddy reload skipped."; else systemctl reload caddy; fi
+    else
+      rm -f "$SITE"; echo "caddy validate failed with the dashboard site: removed it." >&2; exit 1
+    fi
+  else
+    echo "Unchanged."
+  fi
+else
+  # Without DNS, Caddy would retry the certificate forever (and count against Let's Encrypt).
+  echo "$DASHBOARD_HOST does not resolve yet: site not written (CONTENT_CHECKLIST #2)."
+fi
+
+say "Old releases"
+ls -1dt "$BASE"/releases/*/ 2>/dev/null | tail -n +$((KEEP_RELEASES + 1)) | while read -r old; do
+  [ "${old%/}" = "$REL" ] || [ "${old%/}" = "${PREV%/}" ] || { rm -rf "${old%/}"; echo "removed $(basename "$old")"; }
+done
+
+echo
+echo "kit-deploy ${SHA:0:12} installed (previous: ${PREV:+$(basename "$PREV" | cut -c1-12)}${PREV:-none})."

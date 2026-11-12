@@ -18,18 +18,19 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
 
   return {
     async withProjectLock(projectId, fn) {
-      // A session-level advisory lock on one reserved connection: held for the whole switch
-      // (minutes, with a pull) without keeping a transaction open. Another process (the CLI)
-      // waiting on the same project blocks here until this one is done.
+      // A transaction-level advisory lock, in a transaction open on one reserved connection for
+      // the whole switch (minutes, with a pull). Not a session lock: the URL is PgBouncer's, which
+      // pools by transaction, so only inside a transaction is the server connection ours. The
+      // transaction does no writes (the switch's own queries use the pool); ending it frees the
+      // lock even if this process dies. Another process (the CLI) on the same project waits here.
       const conn = await db.$client.reserve();
       const key = `kit-deploy:switch:${projectId}`;
       try {
-        await conn`select pg_advisory_lock(hashtext(${key}))`;
+        await conn`begin`;
+        await conn`select pg_advisory_xact_lock(hashtext(${key}))`;
         return await fn();
       } finally {
-        await conn`select pg_advisory_unlock(hashtext(${key}))`.catch(
-          () => undefined,
-        );
+        await conn`rollback`.catch(() => undefined);
         conn.release();
       }
     },
