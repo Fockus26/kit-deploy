@@ -15,7 +15,8 @@ if (!url) {
   console.error("DATABASE_URL is not set");
   process.exit(1);
 }
-const folder = process.argv[2] ?? join(dirname(process.execPath), "..", "drizzle");
+const folder =
+  process.argv[2] ?? join(dirname(process.execPath), "..", "drizzle");
 if (!existsSync(join(folder, "meta", "_journal.json"))) {
   console.error(`no migrations in ${folder}`);
   process.exit(1);

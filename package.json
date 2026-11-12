@@ -17,6 +17,8 @@
     "build:cli": "bun build --compile --target=bun-linux-x64 cli/main.ts --outfile build/kit-deploy",
     "db:generate": "drizzle-kit generate",
     "test:infra": "bash infra/test/server-ready.test.sh",
+    "test:infra:install": "bash infra/test/install.test.sh",
+    "release": "bash scripts/release.sh",
     "shots": "node scripts/pr-screenshots.ts .pr-shots.json",
     "context:backup": "bash scripts/context-backup.sh",
     "context:restore": "bash scripts/context-backup.sh --restore"
