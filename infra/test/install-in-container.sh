@@ -23,6 +23,12 @@ useradd -m cesar
 useradd -m other
 PW="$(kit-db url kit_deploy | sed 's#.*://kit_deploy:\([^@]*\)@.*#\1#')"
 extract
+# bootstrap --test points the URL at this machine's public IP, unreachable from inside the
+# container. On the VPS it is db.fockus.dev (its own address); here PgBouncer on 127.0.0.1.
+sed -i 's/^KIT_VPS_HOST=.*/KIT_VPS_HOST=127.0.0.1/' /etc/kit-vps/vps.env
+# Its certificate is self-signed (sslmode=no-verify, which postgres.js 4 verifies anyway): TLS
+# without verification here. The VPS has verify-full with db.fockus.dev's real certificate.
+sed -i 's/^KIT_VPS_SSLMODE=.*/KIT_VPS_SSLMODE=require/' /etc/kit-vps/vps.env
 echo "kit-db url (redacted): $(kit-db url kit_deploy | sed 's#:[^:@/]*@#:***@#')"
 
 echo "== 1. First install"
