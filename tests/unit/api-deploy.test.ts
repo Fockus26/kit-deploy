@@ -78,6 +78,42 @@ describe("tokens", () => {
 });
 
 describe("POST /api/v1/deploy", () => {
+  test("starts the switch for a new deployment, and again for a retry still queued", async () => {
+    const { store } = memoryStore();
+    const kicked: string[] = [];
+    const hooks = { onQueued: (p: string) => kicked.push(p) };
+    expect((await handleDeploy(post({ sha: SHA }), store, hooks)).status).toBe(
+      202,
+    );
+    expect((await handleDeploy(post({ sha: SHA }), store, hooks)).status).toBe(
+      200,
+    );
+    expect(kicked).toEqual(["p1", "p1"]);
+  });
+
+  test("a retry of a commit already live does not start a switch", async () => {
+    const { store } = memoryStore();
+    store.findOpenDeployment = async () => ({
+      id: "d1",
+      status: "live",
+      image: "x",
+    });
+    const kicked: string[] = [];
+    await handleDeploy(post({ sha: SHA }), store, {
+      onQueued: (p) => kicked.push(p),
+    });
+    expect(kicked).toEqual([]);
+  });
+
+  test("an unauthorized request never starts a switch", async () => {
+    const { store } = memoryStore();
+    const kicked: string[] = [];
+    await handleDeploy(post({ sha: SHA }, null), store, {
+      onQueued: (p) => kicked.push(p),
+    });
+    expect(kicked).toEqual([]);
+  });
+
   test("queues a production deployment of the token's own repo", async () => {
     const { store, created, touched } = memoryStore();
     const res = await handleDeploy(post({ sha: SHA }), store);

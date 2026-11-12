@@ -126,3 +126,27 @@ export const deployTokens = pgTable(
     check("deploy_tokens_hash_format", sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
   ],
 );
+
+/** The hosts a project's production answers on. A preview's host is derived (D001), not stored. */
+export const domains = pgTable(
+  "domains",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Lowercase DNS name; one project per host. */
+    host: text("host").notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      "domains_host_format",
+      sql`${t.host} ~ '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'`,
+    ),
+    check(
+      "domains_not_platform",
+      sql`${t.host} not in ('db.fockus.dev', 'deploy.fockus.dev')`,
+    ),
+  ],
+);

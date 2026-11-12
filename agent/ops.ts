@@ -141,6 +141,8 @@ export class Agent {
         );
       case "container.remove":
         return this.serial(() => this.remove(req.params.name));
+      case "container.start":
+        return this.serial(() => this.start(req.params.name));
       case "site.write":
         return this.serial(() =>
           this.writeSite(req.params.target, req.params.hosts, req.params.port),
@@ -245,6 +247,13 @@ export class Agent {
       ["docker", "stop", `--time=${timeoutS}`, name],
       "docker stop",
     );
+    return { name };
+  }
+
+  /** A kept container back up (rollback, regenerate): same image, port and limits it was run with. */
+  private async start(name: string) {
+    await this.assertManaged(name);
+    await must(this.deps, ["docker", "start", name], "docker start");
     return { name };
   }
 
