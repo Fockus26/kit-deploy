@@ -23,6 +23,8 @@ export type KeptDeployment = {
 export type ProjectInfo = {
   id: string;
   name: string;
+  /** GitHub `owner/name`: the image of a commit is derived from it. */
+  repo: string;
   memoryMb: number;
   hosts: string[];
 };

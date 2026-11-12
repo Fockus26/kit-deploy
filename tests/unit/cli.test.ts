@@ -188,9 +188,9 @@ describe("help and unknown commands", () => {
 
   test("an unknown command exits 2", async () => {
     const { client } = fakeClient({});
-    const r = await runCli(["deploy", "kd_hello"], client);
+    const r = await runCli(["nope", "kd_hello"], client);
     expect(r.code).toBe(2);
-    expect(r.err).toContain('unknown command "deploy"');
+    expect(r.err).toContain('unknown command "nope"');
   });
 });
 

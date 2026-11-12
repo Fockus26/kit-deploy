@@ -132,6 +132,7 @@ describe.skipIf(!url)("drizzle switch repo (Postgres)", () => {
     expect(await repo.projectByName("kd_hello")).toEqual({
       id: projectId,
       name: "kd_hello",
+      repo: "Fockus26/kd-hello",
       memoryMb: 256,
       hosts: ["hello.fockus.dev", "www.hello.fockus.dev"],
     });
