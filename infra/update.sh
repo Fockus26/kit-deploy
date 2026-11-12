@@ -10,6 +10,8 @@
 # Caddy site is written if its host resolves → only the last 3 releases are kept.
 # The sites never stop: their containers and Caddy are not touched.
 set -euo pipefail
+# Whatever the caller's umask: releases and /run/kit-deploy must be readable by the web user.
+umask 022
 
 TEST=0
 TGZ=""
@@ -62,7 +64,7 @@ say "Restart kit-agent"
 if [ "$TEST" = 1 ]; then
   pkill -x kit-agent 2>/dev/null || true
   sleep 0.5
-  mkdir -p /run/kit-deploy
+  mkdir -p /run/kit-deploy && chmod 0755 /run/kit-deploy
   KIT_AGENT_GROUP=kit-deploy nohup /usr/local/sbin/kit-agent >/var/log/kit-agent.log 2>&1 &
 else
   install -m 0644 "$REL/infra/kit-agent.service" /etc/systemd/system/kit-agent.service

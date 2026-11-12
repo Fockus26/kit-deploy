@@ -42,8 +42,10 @@ check "migrations applied (4 tables)" bash -c "[ \"\$(su postgres -c \"psql -tA 
 check "current -> releases/<sha>" bash -c "[ \"\$(readlink /opt/kit-deploy/current)\" = /opt/kit-deploy/releases/$SHA ]"
 check "binaries installed" bash -c "[ -x /usr/local/sbin/kit-agent ] && [ -x /usr/local/bin/kit-deploy ]"
 check "release root-owned, not writable by others" bash -c "[ -z \"\$(find /opt/kit-deploy/releases/$SHA ! -user root -o -perm -o+w ! -type l)\" ]"
+check "/run/kit-deploy 0755 (the group can reach the socket)" bash -c "[ \"$(stat -c %a /run/kit-deploy)\" = 755 ]"
 check "agent socket root:kit-deploy 0660" bash -c "[ \"\$(stat -c '%U:%G %a' /run/kit-deploy/agent.sock)\" = 'root:kit-deploy 660' ]"
-check "cesar: kit-deploy version reaches the agent" bash -c "su cesar -c 'kit-deploy version' | grep -qx 'kit-agent 0.1.0'"
+check "cesar: kit-deploy version reaches the agent" bash -c "su cesar -c 'kit-deploy version' | grep -qx 'kit-agent 0.1.0'" || true
+su cesar -c 'kit-deploy version' > /tmp/v.out 2>&1 || { echo "--- version as cesar:"; cat /tmp/v.out; echo "--- agent log:"; tail -20 /var/log/kit-agent.log; pgrep -a kit-agent || echo "agent not running"; }
 check "cesar: the CLI reads cli.env and reaches the database" bash -c "su cesar -c 'kit-deploy rollback kd_hello' 2>&1 | grep -qx 'no project kd_hello'"
 check "other: no agent" bash -c "su other -c 'kit-deploy version' 2>&1 | grep -q 'EACCES'"
 check "other: cannot read cli.env" bash -c "! su other -c 'cat /etc/kit-deploy/cli.env' 2>/dev/null"

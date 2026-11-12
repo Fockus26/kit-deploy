@@ -63,9 +63,13 @@ else
     *) echo "Unexpected kit-db url format; nothing written." >&2; exit 1 ;;
   esac
   URL="${URL/@127.0.0.1:5433\//@127.0.0.1:5432/}"
-  umask 077
-  printf '# kit-deploy CLI (deploy, rollback, regenerate). Written by infra/install.sh.\nDATABASE_URL=%s\n' "$URL" > "$STATE/cli.env.tmp"
-  printf '# kit-deploy web (docker --env-file). Written by infra/install.sh.\nDATABASE_URL=%s\nKIT_AGENT_SOCKET=/run/kit-deploy/agent.sock\n' "$URL" > "$STATE/web.env.tmp"
+  # umask only for these two files: inherited by update.sh it made /run/kit-deploy 0700 and
+  # locked the kit-deploy group out of the agent's socket (Docker test, 2026-11-12).
+  (
+    umask 077
+    printf '# kit-deploy CLI (deploy, rollback, regenerate). Written by infra/install.sh.\nDATABASE_URL=%s\n' "$URL" > "$STATE/cli.env.tmp"
+    printf '# kit-deploy web (docker --env-file). Written by infra/install.sh.\nDATABASE_URL=%s\nKIT_AGENT_SOCKET=/run/kit-deploy/agent.sock\n' "$URL" > "$STATE/web.env.tmp"
+  )
   unset URL
   chown root:kit-deploy "$STATE/cli.env.tmp" && chmod 0640 "$STATE/cli.env.tmp"
   chown root:root "$STATE/web.env.tmp" && chmod 0600 "$STATE/web.env.tmp"
