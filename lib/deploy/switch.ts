@@ -27,6 +27,11 @@ export type SwitchDeps = {
   drainMs?: number;
 };
 
+/** How one deployment ended; `error` is what `deployments.error` got. */
+export type SwitchOutcome =
+  | { result: "live" }
+  | { result: "failed"; error: string };
+
 export class SwitchError extends Error {
   constructor(message: string) {
     super(message);
@@ -136,7 +141,7 @@ async function cutOver(
 async function deployOne(
   ctx: Ctx,
   c: ClaimedDeployment,
-): Promise<"live" | "failed"> {
+): Promise<SwitchOutcome> {
   const target: Target = { project: c.project.name, env: "production" };
   const name = containerName(target, c.sha);
   let started: string | null = null;
@@ -187,7 +192,7 @@ async function deployOne(
       container: name,
       port,
     });
-    return "live";
+    return { result: "live" };
   } catch (e) {
     const message =
       e instanceof SwitchError
@@ -207,7 +212,7 @@ async function deployOne(
       }
     }
     await ctx.repo.markFailed(c.id, message);
-    return "failed";
+    return { result: "failed", error: message };
   }
 }
 
@@ -215,16 +220,16 @@ async function deployOne(
 export async function processProject(
   deps: SwitchDeps,
   projectId: string,
-): Promise<Array<{ id: string; result: "live" | "failed" }>> {
+): Promise<Array<{ id: string } & SwitchOutcome>> {
   const ctx = withDefaults(deps);
   return ctx.repo.withProjectLock(projectId, async () => {
-    const done: Array<{ id: string; result: "live" | "failed" }> = [];
+    const done: Array<{ id: string } & SwitchOutcome> = [];
     for (
       let c = await ctx.repo.claimNext(projectId);
       c;
       c = await ctx.repo.claimNext(projectId)
     ) {
-      done.push({ id: c.id, result: await deployOne(ctx, c) });
+      done.push({ id: c.id, ...(await deployOne(ctx, c)) });
     }
     return done;
   });

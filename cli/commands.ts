@@ -3,14 +3,30 @@
  * so they are tested without a socket. Output is English and plain (agents parse it); `--json`
  * prints the data as-is.
  *
- * deploy, rollback and regenerate arrive with the switch, once the database exists (D012: Caddy
- * files and containers are generated from it).
+ * deploy, rollback and regenerate also need the database (D012: Caddy files and containers are
+ * generated from it); they get it through `CliContext.deploy`, opened only when used.
  */
 
 import type { ManagedContainer } from "../agent/ops";
 import type { Response } from "../agent/protocol";
+import { imageFor } from "../lib/api/deploy";
+import type { DeployStore } from "../lib/db/store";
+import {
+  processProject,
+  regenerate,
+  rollback,
+  type SwitchDeps,
+  SwitchError,
+} from "../lib/deploy/switch";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
+
+/** What the database-backed commands need; built lazily so `version` works without a database. */
+export type DeployContext = { switch: SwitchDeps; store: DeployStore };
+export type CliContext = {
+  deploy?: () => DeployContext;
+  now?: () => number;
+};
 
 export const CLI_VERSION: string = pkg.version;
 
@@ -27,6 +43,10 @@ Commands:
   version            CLI and kit-agent versions
   list               every site: environment, state, commit, port, kept deployments
   status <project>   a project's containers and the health of the running ones
+  deploy <project> [<sha>]
+                     queue that commit (40 hex) if given, then run the project's switch
+  rollback <project> back to the previous kept deployment (no build, no pull)
+  regenerate         rewrite every live site's Caddy file; start its container if stopped
   help               this text
 `;
 
@@ -170,9 +190,97 @@ async function status(
   );
 }
 
+const SHA = /^[0-9a-f]{40}$/;
+
+function needDeploy(ctx: CliContext): DeployContext {
+  if (!ctx.deploy) throw new SwitchError("this command needs the database");
+  return ctx.deploy();
+}
+
+async function deploy(
+  ctx: CliContext,
+  project: string | undefined,
+  sha: string | undefined,
+  json: boolean,
+): Promise<Result> {
+  if (!project) return fail("usage: kit-deploy deploy <project> [<sha>]\n", 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  if (sha !== undefined && !SHA.test(sha)) {
+    return fail(
+      `invalid commit "${sha}": expected 40 lowercase hex chars\n`,
+      2,
+    );
+  }
+  const d = needDeploy(ctx);
+  const p = await d.switch.repo.projectByName(project);
+  if (!p) return fail(`no project ${project}\n`);
+
+  const lines: string[] = [];
+  if (sha) {
+    const open = await d.store.findOpenDeployment(p.id, sha);
+    if (open)
+      lines.push(`already ${open.status}: ${open.id} (${sha.slice(0, 12)})`);
+    else {
+      const created = await d.store.createDeployment({
+        projectId: p.id,
+        environment: "production",
+        sha,
+        image: imageFor(p.repo, sha),
+      });
+      lines.push(
+        created
+          ? `queued ${created.id} (${sha.slice(0, 12)})`
+          : "queued by someone else",
+      );
+    }
+  }
+  const results = await processProject(d.switch, p.id);
+  const code = results.some((r) => r.result === "failed") ? 1 : 0;
+  if (json) return { code, out: `${JSON.stringify(results)}\n`, err: "" };
+  if (results.length === 0) lines.push(`nothing queued for ${project}`);
+  for (const r of results) {
+    lines.push(
+      r.result === "live" ? `live ${r.id}` : `failed ${r.id}: ${r.error}`,
+    );
+  }
+  return { code, out: `${lines.join("\n")}\n`, err: "" };
+}
+
+async function doRollback(
+  ctx: CliContext,
+  project: string | undefined,
+  json: boolean,
+): Promise<Result> {
+  if (!project) return fail("usage: kit-deploy rollback <project>\n", 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  const now = ctx.now ?? Date.now;
+  const t0 = now();
+  const r = await rollback(needDeploy(ctx).switch, project);
+  const seconds = ((now() - t0) / 1000).toFixed(1);
+  if (json)
+    return ok(`${JSON.stringify({ ...r, seconds: Number(seconds) })}\n`);
+  return ok(
+    `rolled back ${project}: ${r.from ?? "-"} -> ${r.to} in ${seconds}s\n`,
+  );
+}
+
+async function doRegenerate(ctx: CliContext, json: boolean): Promise<Result> {
+  const results = await regenerate(needDeploy(ctx).switch);
+  const code = results.some((r) => !r.ok) ? 1 : 0;
+  if (json) return { code, out: `${JSON.stringify(results)}\n`, err: "" };
+  if (results.length === 0) return ok("no live sites\n");
+  const out = results
+    .map((r) => (r.ok ? `ok ${r.project}` : `failed ${r.project}: ${r.error}`))
+    .join("\n");
+  return { code, out: `${out}\n`, err: "" };
+}
+
 export async function runCli(
   argv: string[],
   client: AgentClient,
+  ctx: CliContext = {},
 ): Promise<Result> {
   const json = argv.includes("--json");
   const [cmd, ...args] = argv.filter((a) => a !== "--json");
@@ -185,6 +293,12 @@ export async function runCli(
         return await list(client, json);
       case "status":
         return await status(client, args[0], json);
+      case "deploy":
+        return await deploy(ctx, args[0], args[1], json);
+      case "rollback":
+        return await doRollback(ctx, args[0], json);
+      case "regenerate":
+        return await doRegenerate(ctx, json);
       case undefined:
       case "help":
       case "--help":
@@ -198,7 +312,16 @@ export async function runCli(
         };
     }
   } catch (e) {
-    if (e instanceof AgentUnreachable) return fail(`${e.message}\n`);
+    if (e instanceof AgentUnreachable || e instanceof SwitchError) {
+      return fail(`${e.message}\n`);
+    }
+    // DATABASE_URL missing or the database down: the reason, never a stack.
+    if (
+      e instanceof Error &&
+      /DATABASE_URL|ECONNREFUSED|password authentication/.test(e.message)
+    ) {
+      return fail(`database: ${e.message}\n`);
+    }
     throw e;
   }
 }

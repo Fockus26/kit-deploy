@@ -1,154 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import type { OpName, Response } from "../../agent/protocol";
-import type { AgentClient } from "../../cli/client";
-import type {
-  ClaimedDeployment,
-  KeptDeployment,
-  SwitchRepo,
-} from "../../lib/deploy/repo";
 import {
   KEEP,
   processProject,
   regenerate,
   rollback,
-  type SwitchDeps,
 } from "../../lib/deploy/switch";
-
-const sha = (c: string) => c.repeat(40);
-const name = (c: string) => `kd_hello-prod-${c.repeat(12)}`;
-
-type Row = {
-  id: string;
-  sha: string;
-  status: KeptDeployment["status"];
-  container: string | null;
-  port: number | null;
-  createdAt: Date;
-  error?: string;
-};
-
-/** An in-memory kit_deploy for one project, kd_hello. */
-function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
-  const repo: SwitchRepo = {
-    async withProjectLock(_id, fn) {
-      return fn();
-    },
-    async claimNext() {
-      const queued = rows
-        .filter((r) => r.status === "queued")
-        .sort((a, b) => +b.createdAt - +a.createdAt);
-      const [next, ...older] = queued;
-      if (!next) return null;
-      for (const o of older) o.status = "superseded";
-      next.status = "starting";
-      const c: ClaimedDeployment = {
-        id: next.id,
-        sha: next.sha,
-        image: `ghcr.io/fockus26/kd-hello:${next.sha}`,
-        project: { id: "p1", name: "kd_hello", memoryMb: 512 },
-        hosts,
-      };
-      return c;
-    },
-    async markLive(id, container, port) {
-      const prev = rows.find((r) => r.status === "live" && r.id !== id) ?? null;
-      if (prev) prev.status = "superseded";
-      const me = rows.find((r) => r.id === id);
-      if (me) Object.assign(me, { status: "live", container, port });
-      return prev ? { id: prev.id, container: prev.container } : null;
-    },
-    async markFailed(id, error) {
-      const me = rows.find((r) => r.id === id);
-      if (me) Object.assign(me, { status: "failed", error });
-    },
-    async listKept() {
-      return rows
-        .filter((r): r is Row & { container: string } => r.container !== null)
-        .sort((a, b) => +b.createdAt - +a.createdAt)
-        .map(({ id, sha, status, container, port, createdAt }) => ({
-          id,
-          sha,
-          status,
-          container,
-          port,
-          createdAt,
-        }));
-    },
-    async clearContainer(id) {
-      const me = rows.find((r) => r.id === id);
-      if (me) Object.assign(me, { container: null, port: null });
-    },
-    async projectByName(n) {
-      return n === "kd_hello"
-        ? { id: "p1", name: n, memoryMb: 512, hosts }
-        : null;
-    },
-    async liveSites() {
-      return rows
-        .filter((r) => r.status === "live" && r.container && r.port)
-        .map((r) => ({
-          deploymentId: r.id,
-          project: "kd_hello",
-          hosts,
-          container: r.container as string,
-          port: r.port as number,
-        }));
-    },
-  };
-  return repo;
-}
-
-type Answer = (params: Record<string, unknown>) => Response;
-const ok = (result: unknown): Response => ({ id: "x", ok: true, result });
-const err = (message: string): Response => ({
-  id: "x",
-  ok: false,
-  error: { code: "command_failed", message },
-});
-
-function fakeAgent(overrides: Partial<Record<OpName, Answer>> = {}) {
-  const calls: Array<{ op: OpName; params: Record<string, unknown> }> = [];
-  const defaults: Partial<Record<OpName, Answer>> = {
-    "image.pull": (p) => ok({ image: p.image }),
-    "ports.allocate": () => ok({ name: "ignored", port: 20500 }),
-    "container.run": () => ok({ name: "x", id: "abc" }),
-    "container.start": (p) => ok({ name: p.name }),
-    "container.stop": (p) => ok({ name: p.name }),
-    "container.remove": (p) => ok({ name: p.name }),
-    "health.check": () => ok({ ok: true, status: 200 }),
-    "site.write": () =>
-      ok({ path: "/etc/caddy/sites/kd_hello.caddy", changed: true }),
-    "container.list": () => ok([]),
-  };
-  const agent: AgentClient = {
-    async call(op, params) {
-      calls.push({ op, params: params as Record<string, unknown> });
-      const a = overrides[op] ?? defaults[op];
-      if (!a) throw new Error(`unexpected op ${op}`);
-      return a(params as Record<string, unknown>);
-    },
-  };
-  return { agent, calls, ops: () => calls.map((c) => c.op) };
-}
-
-function deps(agent: AgentClient, repo: SwitchRepo) {
-  const sleeps: number[] = [];
-  const logs: Record<string, unknown>[] = [];
-  const d: SwitchDeps = {
-    agent,
-    repo,
-    sleep: async (ms) => {
-      sleeps.push(ms);
-    },
-    log: (e) => logs.push(e),
-    healthTimeoutMs: 3_000,
-    healthIntervalMs: 1_000,
-    drainMs: 10_000,
-  };
-  return { d, sleeps, logs };
-}
-
-const at = (n: number) => new Date(2026, 10, 11, 12, n);
+import {
+  at,
+  deps,
+  err,
+  fakeAgent,
+  memoryRepo,
+  name,
+  ok,
+  type Row,
+  sha,
+} from "./deploy-fakes";
 
 describe("processProject (deploy)", () => {
   test("pull → port → run → health → site → live → drain → stop the old one", async () => {
@@ -229,7 +96,11 @@ describe("processProject (deploy)", () => {
     const { d } = deps(agent, memoryRepo(rows));
 
     expect(await processProject(d, "p1")).toEqual([
-      { id: "new", result: "failed" },
+      {
+        id: "new",
+        result: "failed",
+        error: "/api/health did not answer 2xx in 3s",
+      },
     ]);
     expect(ops()).not.toContain("site.write");
     expect(ops().filter((o) => o === "health.check")).toHaveLength(3);
@@ -383,7 +254,11 @@ describe("processProject (deploy)", () => {
     const { agent, ops } = fakeAgent();
     const { d } = deps(agent, memoryRepo(rows));
     expect(await processProject(d, "p1")).toEqual([
-      { id: "again", result: "failed" },
+      {
+        id: "again",
+        result: "failed",
+        error: `${"a".repeat(12)} is already live`,
+      },
     ]);
     expect(ops()).toEqual([]);
     expect(rows.find((r) => r.id === "live")?.status).toBe("live");
