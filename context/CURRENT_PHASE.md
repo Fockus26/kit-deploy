@@ -11,7 +11,7 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | Unit | PR | Status |
 |---|---|---|
 | U1 wildcard site `*.preview.fockus.dev` (DNS-01, 404 page, noindex) | #17 | merged · on the VPS (f8632b5), cert issued, verified |
-| U1b update.sh restarts Caddy without the token; bounded reload | #18 | in review · ships with the next release |
+| U1b update.sh restarts Caddy without the token; bounded reload | #18 | merged (e7f4855) · ships with the next release |
 | U2–U10 | — | pending (see plan) |
 
 Log: `PHASE_LOG/03-previews.md`.
