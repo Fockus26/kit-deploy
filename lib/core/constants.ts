@@ -39,3 +39,6 @@ export const PROJECT_DOMAIN = "fockus.dev";
 
 /** Subdomains of fockus.dev that are the platform's, never a project's default host. */
 export const RESERVED_SUBDOMAINS = ["db", "deploy", "preview", "www"] as const;
+
+/** The dashboard's own host (D001); its session cookie never leaves it (D013). */
+export const DASHBOARD_HOST = "deploy.fockus.dev";

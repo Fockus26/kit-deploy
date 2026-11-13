@@ -10,10 +10,17 @@
 import type { ManagedContainer } from "../agent/ops";
 import type { Response } from "../agent/protocol";
 import { imageFor } from "../lib/api/deploy";
+import {
+  ENROL_LINK_TTL_MS,
+  enrolmentLink,
+  generateEnrolmentToken,
+} from "../lib/auth/enrolment";
 import { defaultHost, MEMORY_MB } from "../lib/core";
+import { DASHBOARD_HOST } from "../lib/core/constants";
 import { assertHost, CoreInputError } from "../lib/core/validate";
 import { AdminError, type AdminStore } from "../lib/db/admin";
 import type { DeployStore } from "../lib/db/store";
+import type { UserStore } from "../lib/db/users";
 import {
   processProject,
   regenerate,
@@ -30,6 +37,7 @@ export type DeployContext = { switch: SwitchDeps; store: DeployStore };
 export type CliContext = {
   deploy?: () => DeployContext;
   admin?: () => AdminStore;
+  users?: () => UserStore;
   /** Whether stdout is a terminal: a token is never printed to one without --show. */
   stdoutIsTTY?: boolean;
   now?: () => number;
@@ -62,6 +70,11 @@ Commands:
                      a deploy token, printed once on stdout to pipe into
                      'gh secret set KIT_DEPLOY_TOKEN -R <owner/repo>'; never to a terminal
                      unless --show
+  user create <email>
+                     the dashboard's account (one in v1); prints a one-time enrolment link,
+                     valid 15 minutes, to register the passkey and TOTP. Terminal only:
+                     ssh -t kit-vps kit-deploy user create <email>
+  user enrol <email> a new enrolment link for the account (the previous ones stop working)
   help               this text
 `;
 
@@ -425,6 +438,45 @@ async function tokenCreate(ctx: CliContext, args: string[]): Promise<Result> {
   };
 }
 
+const EMAIL = /^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+
+function needUsers(ctx: CliContext): UserStore {
+  if (!ctx.users) throw new SwitchError("this command needs the database");
+  return ctx.users();
+}
+
+/** `user create|enrol <email>`: the link goes to César's terminal and nowhere else — never to a
+ * pipe, a file or an agent's captured output (it is a credential for 15 minutes). */
+async function user(
+  ctx: CliContext,
+  sub: string | undefined,
+  args: string[],
+): Promise<Result> {
+  const usage = "usage: kit-deploy user create|enrol <email>\n";
+  if (sub !== "create" && sub !== "enrol") return fail(usage, 2);
+  const [raw, extra] = args;
+  if (!raw || extra) return fail(usage, 2);
+  const email = raw.trim().toLowerCase();
+  if (email.length > 254 || !EMAIL.test(email))
+    return fail(`invalid email "${raw}"\n`, 2);
+  if (!ctx.stdoutIsTTY) {
+    return fail(
+      `refusing to print an enrolment link anywhere but a terminal. Run it with a TTY:\n  ssh -t kit-vps kit-deploy user ${sub} ${email}\n`,
+      2,
+    );
+  }
+  const now = ctx.now ?? Date.now;
+  const expiresAt = new Date(now() + ENROL_LINK_TTL_MS);
+  const { token, hash } = generateEnrolmentToken();
+  const store = needUsers(ctx);
+  if (sub === "create") await store.createUser(email, hash, expiresAt);
+  else await store.issueEnrolment(email, hash, expiresAt);
+  const minutes = Math.round(ENROL_LINK_TTL_MS / 60000);
+  return ok(
+    `${sub === "create" ? "account created" : "new link"} for ${email}. Open this link within ${minutes} minutes, once, to register your passkey and TOTP:\n\n  ${enrolmentLink(DASHBOARD_HOST, token)}\n\nIt is not stored and will not be shown again.\n`,
+  );
+}
+
 export async function runCli(
   argv: string[],
   client: AgentClient,
@@ -463,6 +515,8 @@ export async function runCli(
           "usage: kit-deploy token create <project> [--label <text>] [--show]\n",
           2,
         );
+      case "user":
+        return await user(ctx, args[0], args.slice(1));
       case undefined:
       case "help":
       case "--help":
