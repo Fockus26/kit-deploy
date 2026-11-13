@@ -48,3 +48,30 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - 2026-11-13, César's OK: removed both leftover `/tmp/kit-deploy-ship.*` dirs (161 + 143 MB, only
   release tarballs already unpacked). Disk / 15 % of 96 G.
 - U2 (auth backend) handed to its own session.
+
+### U2 auth backend (2026-11-13, PR #19, branch feat/auth-backend)
+
+- Better Auth 1.7.23 + @better-auth/passkey: passkey (rpID deploy.fockus.dev, UV required),
+  TOTP + 10 recovery codes (two-factor, allowPasswordless), no password, no sign-up. Migration
+  0002_auth (auth_* tables, text ids; enrolment_tokens with sha256 like deploy_tokens).
+- TOTP as standalone backup: custom `POST /sign-in/totp {email}` opens the same challenge the
+  two-factor plugin opens after a password (two_factor cookie + verification rows); the code goes
+  through Better Auth's own verify-totp / verify-backup-code (per-challenge 5 tries, account
+  lockout 10 → 15 min).
+- Closed allowlist of 11 routes (lib/auth/handler.ts); register passkey / enable TOTP only from an
+  enrolment session (`enrolUntil`, 30 min, browser-session cookie). `requestUser()` /
+  `dashboardUser()` reject enrolment sessions. Dashboard session 24 h, updateAge 1 h.
+- Cookies `__Host-kd.*` (useSecureCookies false + cookiePrefix, Secure forced): host-only enforced
+  by the browser; unit test reads the real Set-Cookie of every flow (no Domain).
+- `kit-deploy user create|enrol <email>`: TTY only (`ssh -t`); link `https://deploy.fockus.dev/enrol#kde_…`
+  (fragment: never reaches Caddy's log), 15 min, one use; enrol invalidates earlier links.
+- update.sh: BETTER_AUTH_SECRET (openssl rand -hex 32) into web.env if missing/malformed, never
+  printed or replaced; web gets BETTER_AUTH_URL. install --test ALL PASS (81).
+- Failed sign-ins: `kit-deploy-auth: failed sign-in from <ip> path=… status=…` on the web's stdout.
+  fail2ban jail = own small infra unit (journald log driver or Caddy access log 401/429).
+- security-review: no high-confidence findings. Closed the one low observation: passkey
+  verify-registration with `createSession: true` would swap the enrolment session for a dashboard
+  one → 400.
+- Not verified: real WebAuthn ceremony (U3 page), host-only in the browser (phase close).
+- Gotcha: Python on Windows wrote a shell script with CRLF in the working copy (git normalizes the
+  repo, but the Docker test mounts the working copy) → `set: pipefail: invalid option`.

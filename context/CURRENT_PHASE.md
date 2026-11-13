@@ -12,7 +12,8 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 |---|---|---|
 | U1 wildcard site `*.preview.fockus.dev` (DNS-01, 404 page, noindex) | #17 | merged · on the VPS (f8632b5), cert issued, verified |
 | U1b update.sh restarts Caddy without the token; bounded reload | #18 | merged (e7f4855) · ships with the next release |
-| U2–U10 | — | pending (see plan) |
+| U2 auth backend (Better Auth, passkey + TOTP, `user create`) | #19 | PR open · ships with the next release (César's OK) |
+| U3–U10 | — | pending (see plan) |
 
 Log: `PHASE_LOG/03-previews.md`.
 
@@ -32,7 +33,8 @@ Log: `PHASE_LOG/03-previews.md`.
 
 ## Next
 
-- U2 (auth backend): in its own session.
+- fail2ban jail for `kit-deploy-auth: failed sign-in` (own small infra unit, D003).
+- César enrols (`ssh -t kit-vps kit-deploy user create <email>`) once U3's `/enrol` page is live.
 - Cosmetic, own unit: update.sh's last line prints the previous release twice.
 - Closed code to fix in its own unit: `infra/server-ready.sh` resets /etc/kit-deploy to 0700 (update.sh heals it).
 - Bump the templates' actions off Node 20 (phase 08, when they move into the kit).
