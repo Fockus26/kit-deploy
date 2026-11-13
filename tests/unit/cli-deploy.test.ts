@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CliContext, runCli } from "../../cli/commands";
-import { loadCliEnv, parseEnvFile } from "../../cli/env";
+import { loadCliEnv, loadGithubEnv, parseEnvFile } from "../../cli/env";
 import type { DeploymentRef, DeployStore } from "../../lib/db/store";
 import {
   at,
@@ -217,5 +217,23 @@ describe("cli.env", () => {
     const none: Record<string, string | undefined> = {};
     loadCliEnv(join(dir, "missing.env"), none);
     expect(none).toEqual({});
+  });
+
+  test("github.env gives only GITHUB_STATUS_TOKEN; cli.env never gives it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kit-cli-env-"));
+    const file = join(dir, "github.env");
+    writeFileSync(
+      file,
+      "GITHUB_STATUS_TOKEN=test-only-value\nDATABASE_URL=postgres://x/db\n",
+    );
+    const env: Record<string, string | undefined> = {};
+    loadGithubEnv(file, env);
+    expect(env).toEqual({ GITHUB_STATUS_TOKEN: "test-only-value" });
+    const fromCli: Record<string, string | undefined> = {};
+    loadCliEnv(file, fromCli);
+    expect(fromCli).toEqual({ DATABASE_URL: "postgres://x/db" });
+    const unreadable: Record<string, string | undefined> = {};
+    loadGithubEnv(join(dir, "missing.env"), unreadable);
+    expect(unreadable).toEqual({});
   });
 });

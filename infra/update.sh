@@ -86,6 +86,9 @@ for _ in $(seq 1 20); do [ -S /run/kit-deploy/agent.sock ] && break; sleep 0.5; 
 
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"
 UID_WEB="$(id -u kitdeploy)"
+# github.env (install.sh --github-token) is optional: without it, commit statuses are skipped.
+ENV_FILES=(--env-file "$STATE/web.env")
+[ -f "$STATE/github.env" ] && ENV_FILES+=(--env-file "$STATE/github.env")
 GID_KD="$(getent group kit-deploy | cut -d: -f3)"
 # Bridge network, published on loopback only (D016), like any site. Never --network host: the
 # host's loopback has Caddy's admin API (:2019, no auth), and a compromised web would rewrite
@@ -99,7 +102,7 @@ WEB_RUN=(docker run -d --name kit-deploy-web --restart unless-stopped
   --cap-drop ALL --security-opt no-new-privileges --memory 512m --memory-swap 512m
   --log-opt max-size=10m --log-opt max-file=3
   -e NODE_ENV=production -e HOSTNAME=0.0.0.0 -e PORT=3000 -e NEXT_TELEMETRY_DISABLED=1
-  -e GIT_SHA="$SHA" --env-file "$STATE/web.env"
+  -e GIT_SHA="$SHA" "${ENV_FILES[@]}"
   -v "$REL/web:/app:ro" -v /run/kit-deploy:/run/kit-deploy -w /app
   "$WEB_IMAGE" node server.js)
 if [ "$TEST" = 1 ]; then

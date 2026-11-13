@@ -3,9 +3,10 @@
 #
 #   bash scripts/ship.sh build/kit-deploy-<sha12>.tgz                 # update (install.sh ran)
 #   bash scripts/ship.sh build/kit-deploy-<sha12>.tgz --install [--admin-user u] [--ghcr-login u]
+#                                                    [--github-token]
 #
-# Env: KIT_VPS (ssh alias, default kit-vps). With --ghcr-login the token is read from this
-# terminal's stdin by the remote install.sh: type or paste it there, never in a chat.
+# Env: KIT_VPS (ssh alias, default kit-vps). With --ghcr-login or --github-token the token is read
+# from this terminal's stdin by the remote install.sh: type or paste it there, never in a chat.
 set -euo pipefail
 TGZ="${1:-}"; shift || true
 [ -f "$TGZ" ] || { echo "Usage: ship.sh <build/kit-deploy-<sha>.tgz> [--install [install.sh options]]" >&2; exit 1; }
@@ -19,9 +20,12 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --install) INSTALL=1; shift ;;
     --admin-user|--ghcr-login) EXTRA+=("$1" "$2"); shift 2 ;;
+    --github-token) EXTRA+=("$1"); shift ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+[ "$INSTALL" = 1 ] || [ "${#EXTRA[@]}" = 0 ] || { echo "Those options need --install." >&2; exit 1; }
 
 # A fresh private directory on the VPS, never a guessable /tmp path another user could plant.
 DIR="$(ssh "$VPS" 'mktemp -d /tmp/kit-deploy-ship.XXXXXX')"

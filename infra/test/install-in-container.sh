@@ -89,7 +89,22 @@ if echo 'ghp_test_token_never_shown' | bash /tmp/rel/infra/install.sh /release.t
 check "token read" grep -q 'token read (26 chars)' /tmp/install3.log
 check "token never printed" bash -c "! grep -q ghp_test_token_never_shown /tmp/install3.log"
 
-echo "== 5. Refusals"
+echo "== 5. The commit-status token: stdin, root 0600, never shown, given to the web"
+FAKE_GH='github_pat_TEST_ONLY_never_shown_0000'
+if echo "$FAKE_GH" | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test > /tmp/install4.log 2>&1; then
+  pass "install --github-token exits 0"; else fail "install --github-token exits 0"; tail -10 /tmp/install4.log; fi
+check "github.env 0600 root" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/kit-deploy/github.env)\" = 'root:root 600' ]"
+check "github.env has the token under GITHUB_STATUS_TOKEN" grep -qx "GITHUB_STATUS_TOKEN=$FAKE_GH" /etc/kit-deploy/github.env
+check "token never printed" bash -c "! grep -qF '$FAKE_GH' /tmp/install4.log"
+check "cesar (kit-deploy group) cannot read it" bash -c "! su cesar -c 'cat /etc/kit-deploy/github.env' 2>/dev/null"
+check "web gets it as a second env-file" grep -q 'env-file /etc/kit-deploy/web.env --env-file /etc/kit-deploy/github.env' /var/log/kit-deploy-web.cmd
+check "token not in the web command" bash -c "! grep -qF '$FAKE_GH' /var/log/kit-deploy-web.cmd"
+GH_SHA=$(sha256sum /etc/kit-deploy/github.env)
+check "a value that is not a token is refused" bash -c "! echo 'oops' | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test"
+check "odd characters are refused" bash -c "! echo 'ghp_a;rm -rf' | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test"
+check "a refused value leaves the old token" bash -c "[ \"\$(sha256sum /etc/kit-deploy/github.env)\" = '$GH_SHA' ]"
+
+echo "== 6. Refusals"
 check "update without install refuses" bash -c "mv /etc/kit-deploy/cli.env /tmp/cli.env.bak; ! bash /tmp/rel/infra/update.sh /release.tgz --test; r=\$?; mv /tmp/cli.env.bak /etc/kit-deploy/cli.env; exit \$r"
 check "a bad --admin-user is refused" bash -c "! bash /tmp/rel/infra/install.sh /release.tgz --admin-user 'a;b' --test"
 check "not root is refused" bash -c "! su other -c 'bash /tmp/rel/infra/update.sh /release.tgz --test'"

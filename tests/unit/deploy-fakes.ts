@@ -39,7 +39,12 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
         id: next.id,
         sha: next.sha,
         image: `ghcr.io/fockus26/kd-hello:${next.sha}`,
-        project: { id: "p1", name: "kd_hello", memoryMb: 512 },
+        project: {
+          id: "p1",
+          name: "kd_hello",
+          repo: "Fockus26/kd-hello",
+          memoryMb: 512,
+        },
         hosts,
       };
       return c;

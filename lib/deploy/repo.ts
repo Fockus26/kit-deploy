@@ -5,7 +5,8 @@ export type ClaimedDeployment = {
   id: string;
   sha: string;
   image: string;
-  project: { id: string; name: string; memoryMb: number };
+  /** `repo`: GitHub `owner/name`, where the commit status goes. */
+  project: { id: string; name: string; repo: string; memoryMb: number };
   /** The project's production hosts (`domains`). */
   hosts: string[];
 };
