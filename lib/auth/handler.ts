@@ -89,6 +89,26 @@ export async function handleAuth(
     if (!ok) return json(403, "ENROLMENT_SESSION_REQUIRED");
   }
 
+  // The passkey plugin accepts `createSession: true` on registration and answers with a new,
+  // full session: the enrolment session would leave as a dashboard one. Signing in is a separate
+  // step (security review, 2026-11-13).
+  if (path === "/passkey/verify-registration") {
+    let body: unknown;
+    try {
+      body = await request.clone().json();
+    } catch {
+      body = null;
+    }
+    if (
+      body !== null &&
+      typeof body === "object" &&
+      "createSession" in body &&
+      (body as { createSession?: unknown }).createSession !== false
+    ) {
+      return json(400, "CREATE_SESSION_NOT_ALLOWED");
+    }
+  }
+
   const response = await deps.auth.handler(request);
   if (SIGN_IN.has(path) && response.status >= 400 && response.status < 500) {
     log(

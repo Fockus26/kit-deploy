@@ -261,6 +261,15 @@ describe("passkey", () => {
     expect(o.authenticatorSelection.userVerification).toBe("required");
     expect(o.authenticatorSelection.residentKey).toBe("required");
     for (const c of b.setCookies) expect(attrs(c).has("domain")).toBe(false);
+
+    // Registering never hands out a dashboard session.
+    const create = await b.request("POST", "/passkey/verify-registration", {
+      response: {},
+      createSession: true,
+    });
+    expect(create.status).toBe(400);
+    expect(await create.json()).toEqual({ code: "CREATE_SESSION_NOT_ALLOWED" });
+    expect(await dashboardUser(t.auth, b.cookieHeader())).toBeNull();
   });
 
   test("sign-in options need no session", async () => {
