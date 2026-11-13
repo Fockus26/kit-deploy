@@ -57,10 +57,7 @@ describe("infra/install.sh and update.sh", () => {
   });
 
   test("the 404 page is Spanish, noindex and self-contained", () => {
-    const page = readFileSync(
-      "infra/caddy/pages/preview-missing.html",
-      "utf8",
-    );
+    const page = readFileSync("infra/caddy/pages/preview-missing.html", "utf8");
     expect(page).toContain('<html lang="es">');
     expect(page).toContain('content="noindex, nofollow"');
     expect(page).not.toMatch(/<(script|link)\b/);
