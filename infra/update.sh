@@ -35,6 +35,44 @@ DASHBOARD_HOST="${DASHBOARD_HOST:-deploy.fockus.dev}"
 PREVIEW_DOMAIN="${PREVIEW_DOMAIN:-preview.fockus.dev}"
 KEEP_RELEASES=3
 say() { echo "== $*"; }
+PSITE=/etc/caddy/sites/kit-previews.caddy
+CF_ENV=/etc/caddy/cloudflare.env
+# The Cloudflare token (CONTENT_CHECKLIST #1). Read, not sourced: the file is data. Never printed;
+# it only reaches `caddy validate`'s env. `|| true`: with no file yet, sed fails and pipefail +
+# set -e would end the update in silence.
+CF_TOKEN="$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' "$CF_ENV" 2>/dev/null | head -1 || true)"
+printf '%s' "$CF_TOKEN" | grep -Eq '^[A-Za-z0-9_-]{20,}$' || CF_TOKEN=""
+
+# Every validate gets the token: once the previews site exists, the whole config needs it.
+caddy_validate() { CLOUDFLARE_API_TOKEN="$CF_TOKEN" caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; }
+
+# A reload re-reads the Caddyfile but not the unit's EnvironmentFile: a Caddy started before
+# cloudflare.env existed has no token and refuses the previews site; only a restart (every site
+# pauses 1–2 s) gives it the token (VPS, 2026-11-13).
+caddy_lacks_token() {
+  [ -f "$PSITE" ] || return 1
+  local pid environ
+  pid="$(systemctl show -p MainPID --value caddy 2>/dev/null || true)"
+  environ="${KIT_TEST_CADDY_ENVIRON:-/proc/${pid:-0}/environ}"
+  ! tr '\0' '\n' < "$environ" 2>/dev/null | grep -q '^CLOUDFLARE_API_TOKEN=.'
+}
+
+# Applies Caddy's new config. A failed reload of a Type=notify unit hung systemctl for minutes
+# (and ship.sh with it): bounded, and the stuck job cancelled.
+caddy_apply() {
+  local action=reload
+  if caddy_lacks_token; then
+    action=restart
+    echo "Caddy started before $CF_ENV existed: restarting it (every site pauses 1–2 s)."
+  fi
+  if [ "$TEST" = 1 ]; then echo "TEST: caddy $action skipped."; return 0; fi
+  if ! timeout 90 systemctl "$action" caddy; then
+    systemctl list-jobs --no-legend 2>/dev/null | awk '$2 == "caddy.service" {print $1}' |
+      while read -r job; do systemctl cancel "$job" || true; done
+    echo "systemctl $action caddy failed or hung (job cancelled): see journalctl -u caddy." >&2
+    return 1
+  fi
+}
 
 [ -f "$STATE/cli.env" ] && [ -f "$STATE/web.env" ] || { echo "Run infra/install.sh first." >&2; exit 1; }
 getent group kit-deploy >/dev/null || { echo "Run infra/install.sh first (no kit-deploy group)." >&2; exit 1; }
@@ -128,8 +166,8 @@ if getent ahosts "$DASHBOARD_HOST" >/dev/null 2>&1; then
   NEW="$(printf '# Written by kit-deploy infra/update.sh.\n%s {\n\timport kit_access_log\n\treverse_proxy 127.0.0.1:%s\n}\n' "$DASHBOARD_HOST" "$WEB_PORT")"
   if [ "$(cat "$SITE" 2>/dev/null)" != "$NEW" ]; then
     printf '%s\n' "$NEW" > "$SITE.tmp" && chmod 644 "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
-    if caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
-      if [ "$TEST" = 1 ]; then echo "TEST: caddy reload skipped."; else systemctl reload caddy; fi
+    if caddy_validate; then
+      caddy_apply
     else
       rm -f "$SITE"; echo "caddy validate failed with the dashboard site: removed it." >&2; exit 1
     fi
@@ -145,12 +183,7 @@ say "Previews site (*.$PREVIEW_DOMAIN)"
 # One wildcard certificate by DNS-01 (D001). Written only once the Cloudflare token
 # (CONTENT_CHECKLIST #1) and the wildcard record both exist: without them Caddy would retry the
 # certificate forever. Its per-preview files live in /etc/caddy/previews/ (kit-agent writes them).
-PSITE=/etc/caddy/sites/kit-previews.caddy
-CF_ENV=/etc/caddy/cloudflare.env
-# Read, not sourced: the file is data. Never printed; it only reaches `caddy validate`'s env.
-# `|| true`: with no file yet, sed fails and pipefail + set -e would end the update in silence.
-CF_TOKEN="$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' "$CF_ENV" 2>/dev/null | head -1 || true)"
-if ! printf '%s' "$CF_TOKEN" | grep -Eq '^[A-Za-z0-9_-]{20,}$'; then
+if [ -z "$CF_TOKEN" ]; then
   echo "No Cloudflare token in $CF_ENV (CLOUDFLARE_API_TOKEN=…, CONTENT_CHECKLIST #1): previews site not written."
 elif ! getent ahosts "kit-probe.$PREVIEW_DOMAIN" >/dev/null 2>&1; then
   echo "*.$PREVIEW_DOMAIN does not resolve yet: previews site not written (CONTENT_CHECKLIST #2)."
@@ -160,14 +193,16 @@ else
   if [ "$(cat "$PSITE" 2>/dev/null)" != "$NEW" ]; then
     OLD=""; [ -f "$PSITE" ] && OLD="$(cat "$PSITE")"
     printf '%s\n' "$NEW" > "$PSITE.tmp" && chmod 644 "$PSITE.tmp" && mv "$PSITE.tmp" "$PSITE"
-    if CLOUDFLARE_API_TOKEN="$CF_TOKEN" caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
-      if [ "$TEST" = 1 ]; then echo "TEST: caddy reload skipped."; else systemctl reload caddy; fi
+    if caddy_validate; then
+      caddy_apply
       echo "Written; Caddy asks for the *.$PREVIEW_DOMAIN certificate by DNS-01."
     else
       # The previous file (if any) comes back: a bad template never takes the previews down.
       if [ -n "$OLD" ]; then printf '%s\n' "$OLD" > "$PSITE"; else rm -f "$PSITE"; fi
       echo "caddy validate failed with the previews site: left as it was." >&2; exit 1
     fi
+  elif caddy_lacks_token; then
+    caddy_apply   # unchanged file, but the running Caddy never got the token: restart it
   else
     echo "Unchanged."
   fi
