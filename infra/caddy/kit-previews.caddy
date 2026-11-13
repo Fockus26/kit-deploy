@@ -1,0 +1,22 @@
+# Written by kit-deploy infra/update.sh from infra/caddy/kit-previews.caddy — do not edit by hand.
+# Every preview answers under one wildcard certificate, by DNS-01 through Cloudflare (D001); the
+# token comes from /etc/caddy/cloudflare.env (systemd EnvironmentFile, CONTENT_CHECKLIST #1).
+# Each preview is one file in /etc/caddy/previews/ (a host matcher + its handle), written by
+# kit-agent; a host with no file gets the "preview no existe" page with a real 404 (D017).
+*.preview.fockus.dev {
+	import kit_access_log
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	# Deferred (>): set after the app answers, so an app's own X-Robots-Tag cannot undo it.
+	header >X-Robots-Tag "noindex, nofollow"
+	import /etc/caddy/previews/*.caddy
+	handle {
+		root * /opt/kit-deploy/current/infra/caddy/pages
+		rewrite * /preview-missing.html
+		header Cache-Control "no-store"
+		file_server {
+			status 404
+		}
+	}
+}

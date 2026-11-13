@@ -18,7 +18,14 @@ openssl rand -base64 32 > /etc/kit-deploy/master.key && chmod 400 /etc/kit-deplo
 KEY_SHA=$(sha256sum /etc/kit-deploy/master.key)
 # A stand-in caddy: update.sh only validates (and reloads through systemd, skipped in --test).
 mkdir -p /etc/caddy/sites
-printf '#!/bin/sh\necho "caddy $*" >> /tmp/caddy.log\nexit 0\n' > /usr/local/bin/caddy && chmod 755 /usr/local/bin/caddy
+# It logs whether the Cloudflare token reached its env (never the value); /tmp/caddy-fail fails it.
+cat > /usr/local/bin/caddy <<'FAKE'
+#!/bin/sh
+echo "caddy $* token=${CLOUDFLARE_API_TOKEN:+set}" >> /tmp/caddy.log
+[ -f /tmp/caddy-fail ] && [ "$1" = validate ] && exit 1
+exit 0
+FAKE
+chmod 755 /usr/local/bin/caddy
 useradd -m cesar
 useradd -m other
 PW="$(kit-db url kit_deploy | sed 's#.*://kit_deploy:\([^@]*\)@.*#\1#')"
@@ -84,6 +91,35 @@ check "dashboard site proxies 127.0.0.1:3100" grep -qP '^\treverse_proxy 127.0.0
 check "dashboard site imports the access log" grep -qP '^\timport kit_access_log$' /etc/caddy/sites/kit-deploy.caddy
 check "caddy validate ran before" grep -q '^caddy validate' /tmp/caddy.log
 check "migrations re-run: nothing new" grep -q 'migrations applied: 2' /tmp/update.log
+check "no previews site without the Cloudflare token" bash -c "[ ! -f /etc/caddy/sites/kit-previews.caddy ] && grep -q 'No Cloudflare token' /tmp/update.log"
+
+echo "== 3b. The previews' wildcard site: written once the token and the DNS exist"
+FAKE_CF='cf_TEST_ONLY_never_shown_0123456789abcdef'
+PSITE=/etc/caddy/sites/kit-previews.caddy
+TEMPLATE=/opt/kit-deploy/current/infra/caddy/kit-previews.caddy
+echo "127.0.0.1 kit-probe.preview.fockus.dev" >> /etc/hosts
+(umask 077; printf 'CLOUDFLARE_API_TOKEN=%s\n' "$FAKE_CF" > /etc/caddy/cloudflare.env)
+: > /tmp/caddy.log
+if bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update2.log 2>&1; then
+  pass "update with the token exits 0"; else fail "update with the token exits 0"; tail -20 /tmp/update2.log; fi
+check "previews site is the release's template" cmp -s "$PSITE" "$TEMPLATE"
+check "previews site 0644 root" bash -c "[ \"\$(stat -c '%U %a' $PSITE)\" = 'root 644' ]"
+check "/etc/caddy/previews 0755 root" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/caddy/previews)\" = 'root:root 755' ]"
+check "caddy validate got the token in its env" grep -q '^caddy validate .*token=set$' /tmp/caddy.log
+check "Cloudflare token never printed" bash -c "! grep -qF '$FAKE_CF' /tmp/update2.log"
+check "the 404 page is in the release, readable by others" su other -s /bin/sh -c 'test -r /opt/kit-deploy/current/infra/caddy/pages/preview-missing.html'
+if bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update3.log 2>&1; then
+  pass "re-run exits 0"; else fail "re-run exits 0"; tail -20 /tmp/update3.log; fi
+check "re-run leaves the previews site unchanged" bash -c "grep -A1 '^== Previews site' /tmp/update3.log | grep -qx 'Unchanged.'"
+echo "# an older version" > "$PSITE"
+touch /tmp/caddy-fail
+check "a failed caddy validate makes the update fail" bash -c "! bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update4.log 2>&1"
+rm -f /tmp/caddy-fail
+check "... and puts the previous previews site back" grep -qx '# an older version' "$PSITE"
+cp "$TEMPLATE" "$PSITE"
+printf 'CLOUDFLARE_API_TOKEN=%s\n' 'bad token;rm' > /etc/caddy/cloudflare.env
+bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update5.log 2>&1
+check "a token with odd characters is not used" grep -q 'No Cloudflare token' /tmp/update5.log
 
 echo "== 4. ghcr login reads the token from stdin and never shows it"
 if echo 'ghp_test_token_never_shown' | bash /tmp/rel/infra/install.sh /release.tgz --ghcr-login fockus26 --test > /tmp/install3.log 2>&1; then

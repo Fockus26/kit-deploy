@@ -9,6 +9,10 @@ export const CONTAINER_PORT = 3000;
 /** Where the base Caddyfile imports site files from (`import sites/*.caddy`). */
 export const CADDY_SITES_DIR = "/etc/caddy/sites";
 
+/** Each preview's file (a host matcher + its handle), imported inside the wildcard site
+ * `infra/caddy/kit-previews.caddy`. */
+export const CADDY_PREVIEWS_DIR = "/etc/caddy/previews";
+
 /** The snippet the base Caddyfile defines: one JSON access log for metrics (D015) and logs (D014). */
 export const CADDY_ACCESS_LOG_SNIPPET = "kit_access_log";
 
