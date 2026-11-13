@@ -72,7 +72,7 @@ Precise, calm, technical, trustworthy.
 
 ## Repo and deployment
 
-- Repo: https://github.com/Fockus26/kit-deploy (private) — mode `pr`
+- Repo: https://github.com/Fockus26/kit-deploy (private) — mode `pr` · `main` unprotected (403 on the free plan; CLAUDE.md forbids pushing to it)
 - Versioning: Changesets (D008)
 - Vercel: does not apply (D009)
 - Production: https://deploy.fockus.dev (from phase 03) · Previews: no (the platform itself has none)

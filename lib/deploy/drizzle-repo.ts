@@ -75,6 +75,7 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
           .select({
             id: projects.id,
             name: projects.name,
+            repo: projects.repo,
             memoryMb: projects.memoryMb,
           })
           .from(projects)

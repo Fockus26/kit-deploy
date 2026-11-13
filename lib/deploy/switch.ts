@@ -11,6 +11,7 @@
 import type { OpName } from "@/agent/protocol";
 import type { AgentClient, Params } from "@/cli/client";
 import { containerName, type Target } from "@/lib/core";
+import type { StatusPublisher } from "./commit-status";
 import type { ClaimedDeployment, KeptDeployment, SwitchRepo } from "./repo";
 
 export const KEEP = 5;
@@ -25,6 +26,8 @@ export type SwitchDeps = {
   healthIntervalMs?: number;
   /** Time the old container keeps serving in-flight requests after Caddy moved. */
   drainMs?: number;
+  /** Publishes the commit's status on GitHub after each deployment; null = no token, skipped. */
+  status?: StatusPublisher | null;
 };
 
 /** How one deployment ended; `error` is what `deployments.error` got. */
@@ -49,6 +52,7 @@ function withDefaults(d: SwitchDeps): Ctx {
     healthTimeoutMs: 60_000,
     healthIntervalMs: 1_000,
     drainMs: 10_000,
+    status: null,
     ...d,
   };
 }
@@ -216,6 +220,52 @@ async function deployOne(
   }
 }
 
+/** Best effort, after the switch is decided: GitHub being down never changes the outcome. */
+async function publishStatus(
+  ctx: Ctx,
+  c: ClaimedDeployment,
+  outcome: SwitchOutcome,
+) {
+  if (!ctx.status) {
+    ctx.log({
+      event: "switch.status_skipped",
+      deployment: c.id,
+      reason: "no GITHUB_STATUS_TOKEN",
+    });
+    return;
+  }
+  const host = c.hosts[0];
+  try {
+    await ctx.status(
+      outcome.result === "live"
+        ? {
+            repo: c.project.repo,
+            sha: c.sha,
+            state: "success",
+            description: host ? `Live at ${host}` : "Live",
+            ...(host ? { targetUrl: `https://${host}` } : {}),
+          }
+        : {
+            repo: c.project.repo,
+            sha: c.sha,
+            state: "failure",
+            description: `Deploy failed: ${outcome.error}`,
+          },
+    );
+    ctx.log({
+      event: "switch.status",
+      deployment: c.id,
+      state: outcome.result === "live" ? "success" : "failure",
+    });
+  } catch (e) {
+    ctx.log({
+      event: "switch.status_failed",
+      deployment: c.id,
+      error: (e as Error).message,
+    });
+  }
+}
+
 /** Deploys the project's newest queued deployment (and any queued while it ran). */
 export async function processProject(
   deps: SwitchDeps,
@@ -229,7 +279,9 @@ export async function processProject(
       c;
       c = await ctx.repo.claimNext(projectId)
     ) {
-      done.push({ id: c.id, ...(await deployOne(ctx, c)) });
+      const outcome = await deployOne(ctx, c);
+      await publishStatus(ctx, c, outcome);
+      done.push({ id: c.id, ...outcome });
     }
     return done;
   });

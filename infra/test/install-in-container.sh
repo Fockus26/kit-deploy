@@ -32,7 +32,9 @@ sed -i 's/^KIT_VPS_SSLMODE=.*/KIT_VPS_SSLMODE=require/' /etc/kit-vps/vps.env
 echo "kit-db url (redacted): $(kit-db url kit_deploy | sed 's#:[^:@/]*@#:***@#')"
 
 echo "== 1. First install"
-if bash /tmp/rel/infra/install.sh /release.tgz --admin-user cesar --test > /tmp/install1.log 2>&1; then
+# deploy.fockus.dev resolves for real since 2026-11-13: a `.invalid` host (RFC 2606, never
+# resolves) stands in for "DNS not created yet". Step 3 uses the real name via /etc/hosts.
+if DASHBOARD_HOST=deploy.kit-deploy.invalid bash /tmp/rel/infra/install.sh /release.tgz --admin-user cesar --test > /tmp/install1.log 2>&1; then
   pass "install exits 0"; else fail "install exits 0"; tail -30 /tmp/install1.log; fi
 SHA=$(tar -xzf /release.tgz -O ./VERSION)
 check "group kit-deploy" getent group kit-deploy
@@ -64,7 +66,7 @@ check "no dashboard site while its DNS does not resolve" bash -c "[ ! -f /etc/ca
 
 echo "== 2. Re-run: idempotent, nothing rewritten"
 ENV_SHA=$(sha256sum /etc/kit-deploy/cli.env /etc/kit-deploy/web.env)
-if bash /tmp/rel/infra/install.sh /release.tgz --test > /tmp/install2.log 2>&1; then
+if DASHBOARD_HOST=deploy.kit-deploy.invalid bash /tmp/rel/infra/install.sh /release.tgz --test > /tmp/install2.log 2>&1; then
   pass "re-run exits 0"; else fail "re-run exits 0"; tail -20 /tmp/install2.log; fi
 check "env files unchanged" bash -c "[ \"\$(sha256sum /etc/kit-deploy/cli.env /etc/kit-deploy/web.env)\" = '$ENV_SHA' ]"
 check "says so" grep -q 'Already there' /tmp/install2.log
@@ -89,7 +91,22 @@ if echo 'ghp_test_token_never_shown' | bash /tmp/rel/infra/install.sh /release.t
 check "token read" grep -q 'token read (26 chars)' /tmp/install3.log
 check "token never printed" bash -c "! grep -q ghp_test_token_never_shown /tmp/install3.log"
 
-echo "== 5. Refusals"
+echo "== 5. The commit-status token: stdin, root 0600, never shown, given to the web"
+FAKE_GH='github_pat_TEST_ONLY_never_shown_0000'
+if echo "$FAKE_GH" | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test > /tmp/install4.log 2>&1; then
+  pass "install --github-token exits 0"; else fail "install --github-token exits 0"; tail -10 /tmp/install4.log; fi
+check "github.env 0600 root" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/kit-deploy/github.env)\" = 'root:root 600' ]"
+check "github.env has the token under GITHUB_STATUS_TOKEN" grep -qx "GITHUB_STATUS_TOKEN=$FAKE_GH" /etc/kit-deploy/github.env
+check "token never printed" bash -c "! grep -qF '$FAKE_GH' /tmp/install4.log"
+check "cesar (kit-deploy group) cannot read it" bash -c "! su cesar -c 'cat /etc/kit-deploy/github.env' 2>/dev/null"
+check "web gets it as a second env-file" grep -q 'env-file /etc/kit-deploy/web.env --env-file /etc/kit-deploy/github.env' /var/log/kit-deploy-web.cmd
+check "token not in the web command" bash -c "! grep -qF '$FAKE_GH' /var/log/kit-deploy-web.cmd"
+GH_SHA=$(sha256sum /etc/kit-deploy/github.env)
+check "a value that is not a token is refused" bash -c "! echo 'oops' | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test"
+check "odd characters are refused" bash -c "! echo 'ghp_a;rm -rf' | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test"
+check "a refused value leaves the old token" bash -c "[ \"\$(sha256sum /etc/kit-deploy/github.env)\" = '$GH_SHA' ]"
+
+echo "== 6. Refusals"
 check "update without install refuses" bash -c "mv /etc/kit-deploy/cli.env /tmp/cli.env.bak; ! bash /tmp/rel/infra/update.sh /release.tgz --test; r=\$?; mv /tmp/cli.env.bak /etc/kit-deploy/cli.env; exit \$r"
 check "a bad --admin-user is refused" bash -c "! bash /tmp/rel/infra/install.sh /release.tgz --admin-user 'a;b' --test"
 check "not root is refused" bash -c "! su other -c 'bash /tmp/rel/infra/update.sh /release.tgz --test'"
