@@ -32,7 +32,7 @@ Log: `PHASE_LOG/03-previews.md`.
 
 ## Next
 
-- U2 (auth backend). VPS /tmp: two leftover ship dirs (~160 MB each), César decides.
+- U2 (auth backend): in its own session.
 - Cosmetic, own unit: update.sh's last line prints the previous release twice.
 - Closed code to fix in its own unit: `infra/server-ready.sh` resets /etc/kit-deploy to 0700 (update.sh heals it).
 - Bump the templates' actions off Node 20 (phase 08, when they move into the kit).

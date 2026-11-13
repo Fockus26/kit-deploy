@@ -45,3 +45,6 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - Fix PR #18 (fix/caddy-restart-token): restart when Caddy lacks the token, bounded reload + cancel,
   every validate with the token (else the dashboard's validate would fail once the previews site
   exists). Install --test 70/70. Ships with the next release.
+- 2026-11-13, César's OK: removed both leftover `/tmp/kit-deploy-ship.*` dirs (161 + 143 MB, only
+  release tarballs already unpacked). Disk / 15 % of 96 G.
+- U2 (auth backend) handed to its own session.
