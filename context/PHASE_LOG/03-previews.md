@@ -75,3 +75,11 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - Not verified: real WebAuthn ceremony (U3 page), host-only in the browser (phase close).
 - Gotcha: Python on Windows wrote a shell script with CRLF in the working copy (git normalizes the
   repo, but the Docker test mounts the working copy) → `set: pipefail: invalid option`.
+- PR #19 merged (ddeddee). 2026-11-13, César's OK ("Sí, súbelo"): release ddeddee0875a copied
+  (sha256 checked) and update.sh run detached (nohup, log /root/kit-deploy-update-ddeddee.log):
+  secret generated (web.env root 0600, one valid line), migrations applied: 3, web up with
+  BETTER_AUTH_URL, dashboard + previews sites unchanged (no Caddy reload), 7 new tables.
+  From outside: get-session 200, passkey authenticate options 200 with a `__Host-kd.*` cookie
+  (no Domain), sign-up/email 404, GET sign-out 405, deploy / 200, kd-hello 200, preview 404 page.
+  A wrong TOTP → 401 and the fail2ban line with the real client IPv4. Ports 80/443 untouched:
+  no certbot dry-run needed. Ship dir in /tmp removed. CONTENT_CHECKLIST #7 waits for U3's /enrol.
