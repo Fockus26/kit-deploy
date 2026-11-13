@@ -148,7 +148,8 @@ say "Previews site (*.$PREVIEW_DOMAIN)"
 PSITE=/etc/caddy/sites/kit-previews.caddy
 CF_ENV=/etc/caddy/cloudflare.env
 # Read, not sourced: the file is data. Never printed; it only reaches `caddy validate`'s env.
-CF_TOKEN="$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' "$CF_ENV" 2>/dev/null | head -1)"
+# `|| true`: with no file yet, sed fails and pipefail + set -e would end the update in silence.
+CF_TOKEN="$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' "$CF_ENV" 2>/dev/null | head -1 || true)"
 if ! printf '%s' "$CF_TOKEN" | grep -Eq '^[A-Za-z0-9_-]{20,}$'; then
   echo "No Cloudflare token in $CF_ENV (CLOUDFLARE_API_TOKEN=…, CONTENT_CHECKLIST #1): previews site not written."
 elif ! getent ahosts "kit-probe.$PREVIEW_DOMAIN" >/dev/null 2>&1; then

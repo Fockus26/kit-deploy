@@ -7,7 +7,7 @@
 #     bin/kit-deploy-migrate   applies drizzle/
 #     web/                     Next standalone (server.js, .next/static, public)
 #     drizzle/                 migrations
-#     infra/                   install.sh, update.sh, kit-agent.service
+#     infra/                   install.sh, update.sh, kit-agent.service, caddy/ (previews site + pages)
 # Only committed code ships (`git archive HEAD`): a dirty tree is refused.
 # Then: scripts/ship.sh build/kit-deploy-<sha12>.tgz   (needs César's OK: it changes the VPS)
 set -euo pipefail
@@ -42,6 +42,7 @@ docker run --rm -e SHA="$SHA" -e SHORT="$SHORT" -v "$(host "$ROOT/build"):/out" 
   mkdir -p /rel/web/.next/cache
   cp -r drizzle /rel/drizzle
   mkdir -p /rel/infra && cp infra/install.sh infra/update.sh infra/kit-agent.service /rel/infra/
+  cp -r infra/caddy /rel/infra/caddy
   echo "$SHA" > /rel/VERSION
   tar -C /rel -czf "/out/kit-deploy-$SHORT.tgz" .
 '
