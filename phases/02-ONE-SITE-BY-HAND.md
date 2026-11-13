@@ -2,7 +2,7 @@
 
 ## Goal
 
-A throwaway Next.js app (`kd-hello`, at `hello.fockus.dev`) deploys on merge, switches with no
+A throwaway Next.js app (`kd-hello`, at `kd-hello.fockus.dev`, D020) deploys on merge, switches with no
 downtime and rolls back — driven by kit-agent through the CLI, no dashboard yet.
 
 ## Scope
