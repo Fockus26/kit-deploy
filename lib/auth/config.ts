@@ -10,13 +10,12 @@
 import { passkey } from "@better-auth/passkey";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { twoFactor } from "better-auth/plugins/two-factor";
+import { COOKIE_PREFIX } from "./cookie";
 import type { EnrolmentStore } from "./enrolment";
 import { kitAuth } from "./plugin";
 
+export { COOKIE_PREFIX, SESSION_COOKIE } from "./cookie";
 export const AUTH_BASE_PATH = "/api/auth";
-/** `__Host-` makes the browser refuse the cookie if it ever carried a Domain or lacked Secure. */
-export const COOKIE_PREFIX = "__Host-kd";
-export const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
 export const SESSION_TTL_SECONDS = 24 * 60 * 60;
 export const MIN_SECRET_LENGTH = 32;
 
