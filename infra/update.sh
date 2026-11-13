@@ -7,7 +7,8 @@
 #
 # Order: unpack to releases/<sha> → migrate (with the new migrations, before anything restarts)
 # → `current` points at it → kit-agent restarts → the web container is recreated → the dashboard's
-# Caddy site is written if its host resolves → only the last 3 releases are kept.
+# Caddy site is written if its host resolves → the previews' wildcard site, once the Cloudflare
+# token and *.preview DNS exist → only the last 3 releases are kept.
 # The sites never stop: their containers and Caddy are not touched.
 set -euo pipefail
 # Whatever the caller's umask: releases and /run/kit-deploy must be readable by the web user.
@@ -30,6 +31,8 @@ STATE=/etc/kit-deploy
 WEB_PORT=3100
 WEB_IMAGE="${WEB_IMAGE:-node:22-alpine}"
 DASHBOARD_HOST="${DASHBOARD_HOST:-deploy.fockus.dev}"
+# lib/core/constants.ts PREVIEW_DOMAIN; infra/caddy/kit-previews.caddy names it too.
+PREVIEW_DOMAIN="${PREVIEW_DOMAIN:-preview.fockus.dev}"
 KEEP_RELEASES=3
 say() { echo "== $*"; }
 
@@ -137,6 +140,38 @@ else
   # Without DNS, Caddy would retry the certificate forever (and count against Let's Encrypt).
   echo "$DASHBOARD_HOST does not resolve yet: site not written (CONTENT_CHECKLIST #2)."
 fi
+
+say "Previews site (*.$PREVIEW_DOMAIN)"
+# One wildcard certificate by DNS-01 (D001). Written only once the Cloudflare token
+# (CONTENT_CHECKLIST #1) and the wildcard record both exist: without them Caddy would retry the
+# certificate forever. Its per-preview files live in /etc/caddy/previews/ (kit-agent writes them).
+PSITE=/etc/caddy/sites/kit-previews.caddy
+CF_ENV=/etc/caddy/cloudflare.env
+# Read, not sourced: the file is data. Never printed; it only reaches `caddy validate`'s env.
+CF_TOKEN="$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' "$CF_ENV" 2>/dev/null | head -1)"
+if ! printf '%s' "$CF_TOKEN" | grep -Eq '^[A-Za-z0-9_-]{20,}$'; then
+  echo "No Cloudflare token in $CF_ENV (CLOUDFLARE_API_TOKEN=…, CONTENT_CHECKLIST #1): previews site not written."
+elif ! getent ahosts "kit-probe.$PREVIEW_DOMAIN" >/dev/null 2>&1; then
+  echo "*.$PREVIEW_DOMAIN does not resolve yet: previews site not written (CONTENT_CHECKLIST #2)."
+else
+  install -d -m 0755 -o root -g root /etc/caddy/previews
+  NEW="$(cat "$REL/infra/caddy/kit-previews.caddy")"
+  if [ "$(cat "$PSITE" 2>/dev/null)" != "$NEW" ]; then
+    OLD=""; [ -f "$PSITE" ] && OLD="$(cat "$PSITE")"
+    printf '%s\n' "$NEW" > "$PSITE.tmp" && chmod 644 "$PSITE.tmp" && mv "$PSITE.tmp" "$PSITE"
+    if CLOUDFLARE_API_TOKEN="$CF_TOKEN" caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+      if [ "$TEST" = 1 ]; then echo "TEST: caddy reload skipped."; else systemctl reload caddy; fi
+      echo "Written; Caddy asks for the *.$PREVIEW_DOMAIN certificate by DNS-01."
+    else
+      # The previous file (if any) comes back: a bad template never takes the previews down.
+      if [ -n "$OLD" ]; then printf '%s\n' "$OLD" > "$PSITE"; else rm -f "$PSITE"; fi
+      echo "caddy validate failed with the previews site: left as it was." >&2; exit 1
+    fi
+  else
+    echo "Unchanged."
+  fi
+fi
+unset CF_TOKEN
 
 say "Old releases"
 ls -1dt "$BASE"/releases/*/ 2>/dev/null | tail -n +$((KEEP_RELEASES + 1)) | while read -r old; do
