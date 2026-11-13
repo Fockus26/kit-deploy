@@ -32,7 +32,9 @@ sed -i 's/^KIT_VPS_SSLMODE=.*/KIT_VPS_SSLMODE=require/' /etc/kit-vps/vps.env
 echo "kit-db url (redacted): $(kit-db url kit_deploy | sed 's#:[^:@/]*@#:***@#')"
 
 echo "== 1. First install"
-if bash /tmp/rel/infra/install.sh /release.tgz --admin-user cesar --test > /tmp/install1.log 2>&1; then
+# deploy.fockus.dev resolves for real since 2026-11-13: a `.invalid` host (RFC 2606, never
+# resolves) stands in for "DNS not created yet". Step 3 uses the real name via /etc/hosts.
+if DASHBOARD_HOST=deploy.kit-deploy.invalid bash /tmp/rel/infra/install.sh /release.tgz --admin-user cesar --test > /tmp/install1.log 2>&1; then
   pass "install exits 0"; else fail "install exits 0"; tail -30 /tmp/install1.log; fi
 SHA=$(tar -xzf /release.tgz -O ./VERSION)
 check "group kit-deploy" getent group kit-deploy
@@ -64,7 +66,7 @@ check "no dashboard site while its DNS does not resolve" bash -c "[ ! -f /etc/ca
 
 echo "== 2. Re-run: idempotent, nothing rewritten"
 ENV_SHA=$(sha256sum /etc/kit-deploy/cli.env /etc/kit-deploy/web.env)
-if bash /tmp/rel/infra/install.sh /release.tgz --test > /tmp/install2.log 2>&1; then
+if DASHBOARD_HOST=deploy.kit-deploy.invalid bash /tmp/rel/infra/install.sh /release.tgz --test > /tmp/install2.log 2>&1; then
   pass "re-run exits 0"; else fail "re-run exits 0"; tail -20 /tmp/install2.log; fi
 check "env files unchanged" bash -c "[ \"\$(sha256sum /etc/kit-deploy/cli.env /etc/kit-deploy/web.env)\" = '$ENV_SHA' ]"
 check "says so" grep -q 'Already there' /tmp/install2.log
