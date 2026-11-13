@@ -42,8 +42,8 @@ Units, each its own PR, merged by the agent after green CI (César's authorizati
 - Release aea0ee6d3374 on the VPS (update, César's OK): version 0.1.0/0.1.0, web up, dashboard and
   kd-hello 200, kd-hello untouched.
 
-## Not done
-
-- The token itself: César creates it (fine-grained, Commit statuses only) and runs
-  `ship.sh build/kit-deploy-aea0ee6d3374.tgz --install --github-token`. Then a push to kd-hello
-  must show the status on its commit.
+- Token: César created it (fine-grained, Commit statuses only, kd-hello) and installed it with
+  `ship.sh … --install --github-token` (from PowerShell `bash` is WSL's: use Git's bash.exe).
+  Checked on the VPS without printing it: github.env root 0600, web loaded it, GitHub read 200.
+- End to end: empty commit d740b30 pushed to kd-hello → Action 16:43:31–16:44:41 UTC → live →
+  status `success` "Live at kd-hello.fockus.dev" at 16:44:48. **Phase 02 closed.**

@@ -30,6 +30,7 @@ send carries it with the new count). What repeats is what is most worth fixing.
 | 2 | 2026-11-10 | Repetition | 1 | project-kickoff skill › Block C, personality | César asked to *see* the directions instead of reading them, then a mix and variations | Render the 3 directions as a quick Design canvas (same screen each) before asking him to choose |
 | 4 | 2026-11-11 | Friction | 1 | `biome-templates` / kit biome.json › `files.includes` | `!**/.claude/worktrees` also matches the worktree root, so `bun run lint` inside a pool slot ignores every file and exits 1 | Exclude worktrees relative to the root (`!.claude/worktrees`) or document `--config-path` for slots |
 | 5 | 2026-11-11 | Gap | 1 | `reference/vps/bootstrap.sh` + VPS-POSTGRES.md | The kit leaves db.<domain> on certbot standalone; any later web server on :80 breaks its renewal silently (brief Trap) and each project solves it alone | bootstrap.sh: issue by webroot from day one (`/var/www/acme`), or ship the standalone→webroot migration kit-deploy wrote |
+| 6 | 2026-11-13 | Gap | 1 | kit docs/scripts for César on Windows (`bash <script>.sh` commands) | `bash scripts/ship.sh …` from PowerShell ran WSL's bash.exe (no distro: `execvpe(/bin/bash) failed`); César had to ask | Give César's commands as `& "C:\Program Files\Git\bin\bash.exe" …` (or "open Git Bash"), or ship a `.ps1` wrapper |
 
 ## Sending it to the kit
 
