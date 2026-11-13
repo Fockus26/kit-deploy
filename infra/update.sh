@@ -5,7 +5,8 @@
 #   bash update.sh /tmp/kit-deploy-<sha12>.tgz          # on the VPS
 #   bash update.sh <tgz> --test                         # in the Docker test (no systemd, no Docker)
 #
-# Order: unpack to releases/<sha> → migrate (with the new migrations, before anything restarts)
+# Order: the auth secret in web.env if missing → unpack to releases/<sha> → migrate (with the new
+# migrations, before anything restarts)
 # → `current` points at it → kit-agent restarts → the web container is recreated → the dashboard's
 # Caddy site is written if its host resolves → the previews' wildcard site, once the Cloudflare
 # token and *.preview DNS exist → only the last 3 releases are kept.
@@ -79,6 +80,25 @@ getent group kit-deploy >/dev/null || { echo "Run infra/install.sh first (no kit
 # server-ready.sh re-run puts it back to root 0700, and the CLI would lose cli.env: heal it.
 chown root:kit-deploy "$STATE" && chmod 0710 "$STATE"
 
+say "Auth secret"
+# Better Auth's secret (D003): signs the dashboard's cookies and encrypts the TOTP secret and the
+# recovery codes. Generated here once, into web.env (root 0600); never printed. Changing it signs
+# everyone out and makes the stored TOTP unreadable, so an existing one is never replaced.
+if grep -Eq '^BETTER_AUTH_SECRET=[0-9a-f]{64}$' "$STATE/web.env"; then
+  echo "Already there (not rewritten)."
+else
+  # A line that is there but malformed is replaced, never left beside the new one.
+  ( umask 077
+    grep -v '^BETTER_AUTH_SECRET=' "$STATE/web.env" > "$STATE/web.env.tmp" || true
+    # openssl's output goes straight into the file: the secret is never in an argument or a log.
+    { printf 'BETTER_AUTH_SECRET='; openssl rand -hex 32; } >> "$STATE/web.env.tmp" )
+  grep -Eq '^BETTER_AUTH_SECRET=[0-9a-f]{64}$' "$STATE/web.env.tmp" || {
+    rm -f "$STATE/web.env.tmp"; echo "Could not generate the auth secret; web.env left as it was." >&2; exit 1; }
+  chown root:root "$STATE/web.env.tmp" && chmod 0600 "$STATE/web.env.tmp"
+  mv "$STATE/web.env.tmp" "$STATE/web.env"
+  echo "Generated into web.env (0600 root)."
+fi
+
 say "Unpack"
 TMP="$(mktemp -d "$BASE/releases/.new-XXXXXX")"
 tar -xzf "$TGZ" -C "$TMP"
@@ -143,7 +163,7 @@ WEB_RUN=(docker run -d --name kit-deploy-web --restart unless-stopped
   --cap-drop ALL --security-opt no-new-privileges --memory 512m --memory-swap 512m
   --log-opt max-size=10m --log-opt max-file=3
   -e NODE_ENV=production -e HOSTNAME=0.0.0.0 -e PORT=3000 -e NEXT_TELEMETRY_DISABLED=1
-  -e GIT_SHA="$SHA" "${ENV_FILES[@]}"
+  -e GIT_SHA="$SHA" -e BETTER_AUTH_URL="https://$DASHBOARD_HOST" "${ENV_FILES[@]}"
   -v "$REL/web:/app:ro" -v /run/kit-deploy:/run/kit-deploy -w /app
   "$WEB_IMAGE" node server.js)
 if [ "$TEST" = 1 ]; then

@@ -68,6 +68,13 @@ check "other: cannot read cli.env" bash -c "! su other -c 'cat /etc/kit-deploy/c
 check "web: bridge, published on loopback only, no Docker socket" bash -c "grep -q -- '-p 127.0.0.1:3100:3000' /var/log/kit-deploy-web.cmd && ! grep -q -- '--network' /var/log/kit-deploy-web.cmd && ! grep -q docker.sock /var/log/kit-deploy-web.cmd"
 check "web: db.fockus.dev through host-gateway" grep -q -- '--add-host db.fockus.dev:host-gateway' /var/log/kit-deploy-web.cmd
 check "web: read-only, non-root, env from web.env" bash -c "grep -q -- '--read-only' /var/log/kit-deploy-web.cmd && grep -q -- \"--user \$(id -u kitdeploy):\" /var/log/kit-deploy-web.cmd && grep -q 'env-file /etc/kit-deploy/web.env' /var/log/kit-deploy-web.cmd"
+check "auth secret in web.env: 64 hex, one line" bash -c "[ \"\$(grep -c '^BETTER_AUTH_SECRET=' /etc/kit-deploy/web.env)\" = 1 ] && grep -Eq '^BETTER_AUTH_SECRET=[0-9a-f]{64}\$' /etc/kit-deploy/web.env"
+AUTH_SECRET="$(sed -n 's/^BETTER_AUTH_SECRET=//p' /etc/kit-deploy/web.env)"
+check "auth secret never printed" bash -c "[ -n '$AUTH_SECRET' ] && ! grep -qF '$AUTH_SECRET' /tmp/install1.log"
+check "auth secret not in the web command (it rides in web.env)" bash -c "! grep -qF '$AUTH_SECRET' /var/log/kit-deploy-web.cmd"
+check "web.env keeps DATABASE_URL beside the secret" grep -q '^DATABASE_URL=postgresql://kit_deploy:' /etc/kit-deploy/web.env
+check "web: BETTER_AUTH_URL is the dashboard's origin" grep -q -- '-e BETTER_AUTH_URL=https://deploy.kit-deploy.invalid' /var/log/kit-deploy-web.cmd
+check "migrations: Better Auth's tables and enrolment_tokens" bash -c "[ \"\$(su postgres -c \"psql -tA -d kit_deploy -c \\\"select count(*) from information_schema.tables where table_schema='public' and table_name in ('auth_user','auth_session','auth_account','auth_verification','auth_passkey','auth_two_factor','enrolment_tokens')\\\"\")\" = 7 ]"
 check "standalone web in the release" test -f "/opt/kit-deploy/releases/$SHA/web/server.js"
 check "no dashboard site while its DNS does not resolve" bash -c "[ ! -f /etc/caddy/sites/kit-deploy.caddy ] && grep -q 'does not resolve yet' /tmp/install1.log"
 
@@ -77,6 +84,7 @@ if DASHBOARD_HOST=deploy.kit-deploy.invalid bash /tmp/rel/infra/install.sh /rele
   pass "re-run exits 0"; else fail "re-run exits 0"; tail -20 /tmp/install2.log; fi
 check "env files unchanged" bash -c "[ \"\$(sha256sum /etc/kit-deploy/cli.env /etc/kit-deploy/web.env)\" = '$ENV_SHA' ]"
 check "says so" grep -q 'Already there' /tmp/install2.log
+check "auth secret kept" bash -c "grep -A1 '^== Auth secret' /tmp/install2.log | grep -qx 'Already there (not rewritten).'"
 check "release not unpacked twice" grep -q 'already unpacked' /tmp/install2.log
 check "agent back after the restart" bash -c "su cesar -c 'kit-deploy version' | grep -qx 'kit-agent 0.1.0'"
 
@@ -90,7 +98,7 @@ check "/etc/kit-deploy back to 0710 root:kit-deploy" bash -c "[ \"\$(stat -c '%U
 check "dashboard site proxies 127.0.0.1:3100" grep -qP '^\treverse_proxy 127.0.0.1:3100$' /etc/caddy/sites/kit-deploy.caddy
 check "dashboard site imports the access log" grep -qP '^\timport kit_access_log$' /etc/caddy/sites/kit-deploy.caddy
 check "caddy validate ran before" grep -q '^caddy validate' /tmp/caddy.log
-check "migrations re-run: nothing new" grep -q 'migrations applied: 2' /tmp/update.log
+check "migrations re-run: nothing new" grep -q 'migrations applied: 3' /tmp/update.log
 check "no previews site without the Cloudflare token" bash -c "[ ! -f /etc/caddy/sites/kit-previews.caddy ] && grep -q 'No Cloudflare token' /tmp/update.log"
 
 echo "== 3b. The previews' wildcard site: written once the token and the DNS exist"
@@ -134,6 +142,14 @@ printf 'CLOUDFLARE_API_TOKEN=%s\n' 'bad token;rm' > /etc/caddy/cloudflare.env
 bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update5.log 2>&1
 check "a token with odd characters is not used" grep -q 'No Cloudflare token' /tmp/update5.log
 unset KIT_TEST_CADDY_ENVIRON
+
+echo "== 3c. A malformed auth secret is replaced; the rest of web.env is kept"
+sed -i 's/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=short/' /etc/kit-deploy/web.env
+bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update6.log 2>&1
+check "regenerated: one valid line" bash -c "[ \"\$(grep -c '^BETTER_AUTH_SECRET=' /etc/kit-deploy/web.env)\" = 1 ] && grep -Eq '^BETTER_AUTH_SECRET=[0-9a-f]{64}\$' /etc/kit-deploy/web.env"
+check "says so" grep -qx 'Generated into web.env (0600 root).' /tmp/update6.log
+check "web.env still 0600 root, DATABASE_URL kept" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/kit-deploy/web.env)\" = 'root:root 600' ] && grep -q '^DATABASE_URL=' /etc/kit-deploy/web.env && grep -q '^KIT_AGENT_SOCKET=' /etc/kit-deploy/web.env"
+check "new secret never printed" bash -c "! grep -qF \"\$(sed -n 's/^BETTER_AUTH_SECRET=//p' /etc/kit-deploy/web.env)\" /tmp/update6.log"
 
 echo "== 4. ghcr login reads the token from stdin and never shows it"
 if echo 'ghp_test_token_never_shown' | bash /tmp/rel/infra/install.sh /release.tgz --ghcr-login fockus26 --test > /tmp/install3.log 2>&1; then

@@ -4,6 +4,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -148,5 +149,150 @@ export const domains = pgTable(
       "domains_not_platform",
       sql`${t.host} not in ('db.fockus.dev', 'deploy.fockus.dev')`,
     ),
+  ],
+);
+
+// ── Better Auth (D003) ──────────────────────────────────────────────────────────────────────
+// Better Auth's tables, by its field names (the Drizzle adapter maps by these keys) and with
+// snake_case columns. `tests/unit/auth-schema.test.ts` checks them against what Better Auth asks
+// for with the plugins in `lib/auth/config.ts`. Ids are text: Better Auth generates them.
+
+const authTimestamps = () => ({
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const authUser = pgTable("auth_user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  /** Lowercase; there is no sign-up: rows come from `kit-deploy user create`. */
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  ...authTimestamps(),
+});
+
+export const authSession = pgTable(
+  "auth_session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** The cookie's value. */
+    token: text("token").notNull().unique(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUser.id, { onDelete: "cascade" }),
+    /** Set only on a session opened by an enrolment link: until then it may register a passkey
+     * and TOTP, and it is never a dashboard session (`lib/auth/session.ts`). */
+    enrolUntil: timestamp("enrol_until", { withTimezone: true }),
+    ...authTimestamps(),
+  },
+  (t) => [index("auth_session_user").on(t.userId)],
+);
+
+/** Unused (no password, no social login) but Better Auth reads it. */
+export const authAccount = pgTable(
+  "auth_account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUser.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      withTimezone: true,
+    }),
+    scope: text("scope"),
+    password: text("password"),
+    ...authTimestamps(),
+  },
+  (t) => [index("auth_account_user").on(t.userId)],
+);
+
+/** Better Auth's short-lived values: the TOTP sign-in challenge, its attempt counter, WebAuthn
+ * challenges. */
+export const authVerification = pgTable(
+  "auth_verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ...authTimestamps(),
+  },
+  (t) => [index("auth_verification_identifier").on(t.identifier)],
+);
+
+export const authPasskey = pgTable(
+  "auth_passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUser.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull().unique(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at", { withTimezone: true }),
+    aaguid: text("aaguid"),
+  },
+  (t) => [index("auth_passkey_user").on(t.userId)],
+);
+
+/** The TOTP secret and the recovery codes, both encrypted by Better Auth with the auth secret. */
+export const authTwoFactor = pgTable(
+  "auth_two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUser.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  },
+  (t) => [index("auth_two_factor_user").on(t.userId)],
+);
+
+/** One-time enrolment links (`kit-deploy user create|enrol`). Like deploy_tokens, only the sha256
+ * of the token is stored; it is used once and expires in minutes. */
+export const enrolmentTokens = pgTable(
+  "enrolment_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUser.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      "enrolment_tokens_hash_format",
+      sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    index("enrolment_tokens_user").on(t.userId),
   ],
 );
