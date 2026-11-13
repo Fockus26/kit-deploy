@@ -10,7 +10,8 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 
 | Unit | PR | Status |
 |---|---|---|
-| U1 wildcard site `*.preview.fockus.dev` (DNS-01, 404 page, noindex) | feat/preview-wildcard | in review · VPS run needs César's OK |
+| U1 wildcard site `*.preview.fockus.dev` (DNS-01, 404 page, noindex) | #17 | merged · on the VPS (f8632b5), cert issued, verified |
+| U1b update.sh restarts Caddy without the token; bounded reload | #18 | in review · ships with the next release |
 | U2–U10 | — | pending (see plan) |
 
 Log: `PHASE_LOG/03-previews.md`.
@@ -31,7 +32,7 @@ Log: `PHASE_LOG/03-previews.md`.
 
 ## Next
 
-- U1 on the VPS (ship.sh update) after César's OK; then U2 (auth backend).
+- U2 (auth backend). VPS /tmp: two leftover ship dirs (~160 MB each), César decides.
 - Cosmetic, own unit: update.sh's last line prints the previous release twice.
 - Closed code to fix in its own unit: `infra/server-ready.sh` resets /etc/kit-deploy to 0700 (update.sh heals it).
 - Bump the templates' actions off Node 20 (phase 08, when they move into the kit).
