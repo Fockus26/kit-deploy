@@ -126,3 +126,6 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   passkey stays registered (his; removal needs a route → phase 05).
 - Pending: ship #21 (César's OK), César adds a passkey in his manager and signs in with it,
   cookie Domain check in the browser.
+- #21 shipped with César's OK ("Sí, súbelo"): release 71127994296e (sha256 checked), update.sh
+  detached (/root/kit-deploy-update-7112799.log): migrations 3, web switched, sites unchanged. From
+  outside: same answers as #20; a malformed token → 401 INVALID_ENROLMENT_LINK.
