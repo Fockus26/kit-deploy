@@ -3,6 +3,27 @@
 # token comes from /etc/caddy/cloudflare.env (systemd EnvironmentFile, CONTENT_CHECKLIST #1).
 # Each preview is one file in /etc/caddy/previews/ (a host matcher + its handle), written by
 # kit-agent; a host with no file gets the "preview no existe" page with a real 404 (D017).
+
+# Every preview's handle is exactly `import kit_preview 127.0.0.1:<port>` (D013, lib/preview/access.ts).
+# The order is fixed by `route`:
+#   1. /__kit-deploy/exchange → the dashboard's web (keeps the client's Host): the one-time grant
+#      becomes the kd_preview cookie. The app never sees this path or the grant.
+#   2. forward_auth → /api/v1/preview-auth: 204 lets the request through; anything else (302 to
+#      deploy.fockus.dev/preview-access) goes back to the browser as it is.
+#   3. the preview's app.
+(kit_preview) {
+	route {
+		handle /__kit-deploy/exchange {
+			rewrite * /api/v1/preview-exchange
+			reverse_proxy 127.0.0.1:3100
+		}
+		forward_auth 127.0.0.1:3100 {
+			uri /api/v1/preview-auth
+		}
+		reverse_proxy {args[0]}
+	}
+}
+
 *.preview.fockus.dev {
 	import kit_access_log
 	tls {
