@@ -296,3 +296,51 @@ export const enrolmentTokens = pgTable(
     index("enrolment_tokens_user").on(t.userId),
   ],
 );
+
+/** D013 step 1: a one-time grant /preview-access issues to a signed-in dashboard user, carried to
+ * the preview host in a form POST (never in a URL, so never in Caddy's access log). Bound to the
+ * preview host it was issued for; used once, within a minute. */
+export const previewGrants = pgTable(
+  "preview_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUser.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    /** `kd-hello-pr-7.preview.fockus.dev`: the exchange must arrive on this host. */
+    host: text("host").notNull(),
+    /** Path + query to land on after the exchange (same host). */
+    path: text("path").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check("preview_grants_hash_format", sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    index("preview_grants_expires").on(t.expiresAt),
+  ],
+);
+
+/** D013 step 2: the `kd_preview` cookie (Domain .preview.fockus.dev, 12 h). Only its sha256 is
+ * stored; Caddy's forward_auth asks /api/v1/preview-auth about it on every preview request. */
+export const previewSessions = pgTable(
+  "preview_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUser.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      "preview_sessions_hash_format",
+      sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    index("preview_sessions_user").on(t.userId),
+    index("preview_sessions_expires").on(t.expiresAt),
+  ],
+);
