@@ -98,7 +98,9 @@ check "/etc/kit-deploy back to 0710 root:kit-deploy" bash -c "[ \"\$(stat -c '%U
 check "dashboard site proxies 127.0.0.1:3100" grep -qP '^\treverse_proxy 127.0.0.1:3100$' /etc/caddy/sites/kit-deploy.caddy
 check "dashboard site imports the access log" grep -qP '^\timport kit_access_log$' /etc/caddy/sites/kit-deploy.caddy
 check "caddy validate ran before" grep -q '^caddy validate' /tmp/caddy.log
-check "migrations re-run: nothing new" grep -q 'migrations applied: 3' /tmp/update.log
+# As many as the release ships (each new migration bumped a hard-coded number here).
+MIGRATIONS=$(ls /opt/kit-deploy/current/drizzle/*.sql | wc -l)
+check "migrations re-run: nothing new ($MIGRATIONS)" grep -q "migrations applied: $MIGRATIONS\$" /tmp/update.log
 check "no previews site without the Cloudflare token" bash -c "[ ! -f /etc/caddy/sites/kit-previews.caddy ] && grep -q 'No Cloudflare token' /tmp/update.log"
 
 echo "== 3b. The previews' wildcard site: written once the token and the DNS exist"
