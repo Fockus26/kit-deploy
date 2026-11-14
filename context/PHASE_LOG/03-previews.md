@@ -129,3 +129,6 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - #21 shipped with César's OK ("Sí, súbelo"): release 71127994296e (sha256 checked), update.sh
   detached (/root/kit-deploy-update-7112799.log): migrations 3, web switched, sites unchanged. From
   outside: same answers as #20; a malformed token → 401 INVALID_ENROLMENT_LINK.
+- 2026-11-14: César re-enrolled with #21 (passkey-only path worked: 2nd passkey 18:49, TOTP kept)
+  but it again went outside his password manager ("es culpa mía, luego lo arreglamos"). U3 closed;
+  pending for César: passkey in his manager, passkey sign-in, cookie Domain check (phase close).
