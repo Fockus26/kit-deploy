@@ -121,6 +121,18 @@ export function EnrolFlow() {
     void open();
   });
 
+  // A new link pasted into this same tab only changes the fragment: no reload, so start over.
+  useEffect(() => {
+    const onHash = () => {
+      if (!window.location.hash) return;
+      token.current = null;
+      setStep({ name: "opening" });
+      void open();
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  });
+
   // Each new step moves the focus to its heading, so a screen reader hears where it is.
   useEffect(() => {
     if (step.name !== "opening") heading.current?.focus();
