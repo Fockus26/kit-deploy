@@ -22,14 +22,19 @@ import { LOGIN_PATH } from "@/lib/auth/next-path";
 
 type Step =
   | { name: "opening" }
-  | { name: "unavailable"; why: "link" | "expired" | "busy" }
+  | { name: "unavailable"; why: "link" | "cut" | "expired" | "busy" }
   | { name: "offline" }
-  | { name: "passkey"; email: string }
+  /** hasTotp: a later link (TOTP already on) only adds a passkey. */
+  | { name: "passkey"; email: string; hasTotp: boolean }
   | { name: "totp"; email: string; uri: string; codes: string[] }
   | { name: "codes"; codes: string[] }
-  | { name: "done" };
+  | { name: "done"; passkeyOnly: boolean };
 
 const TOTAL = 3;
+/** Same shape as lib/auth/enrolment.ts ENROL_TOKEN (not imported: that module is server-only).
+ * A shorter one is a link cut on its way to the browser (wrapped in the terminal, 2026-11-14):
+ * said as such, and not posted, so the link stays usable. */
+const ENROL_TOKEN = /^kde_[A-Za-z0-9_-]{43}$/;
 
 /** Reads the token from the fragment once and wipes it from the address bar and history. */
 function takeToken(): string {
@@ -89,8 +94,17 @@ export function EnrolFlow() {
     const t = token.current;
     try {
       if (t) {
+        if (!ENROL_TOKEN.test(t)) {
+          return setStep({ name: "unavailable", why: "cut" });
+        }
         const { data, error } = await redeemEnrolment(t);
-        if (data) return setStep({ name: "passkey", email: data.email });
+        if (data) {
+          return setStep({
+            name: "passkey",
+            email: data.email,
+            hasTotp: data.twoFactorEnabled === true,
+          });
+        }
         const e = error as CallError;
         if (e?.status === 429)
           return setStep({ name: "unavailable", why: "busy" });
@@ -105,7 +119,13 @@ export function EnrolFlow() {
         data?.session as { enrolUntil?: string | null } | undefined
       )?.enrolUntil;
       if (data && until && new Date(until).getTime() > Date.now()) {
-        return setStep({ name: "passkey", email: data.user.email });
+        return setStep({
+          name: "passkey",
+          email: data.user.email,
+          hasTotp:
+            (data.user as { twoFactorEnabled?: boolean | null })
+              .twoFactorEnabled === true,
+        });
       }
       setStep({ name: "unavailable", why: "link" });
     } catch {
@@ -146,7 +166,7 @@ export function EnrolFlow() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [step.name, saved]);
 
-  async function registerPasskey(email: string) {
+  async function registerPasskey(email: string, hasTotp: boolean) {
     setBusy(true);
     setNotice(null);
     try {
@@ -163,6 +183,8 @@ export function EnrolFlow() {
           );
           setNotice(passkeyRegisterError(e));
         }
+      } else if (hasTotp) {
+        await finish(true);
       } else {
         await startTotp(email);
       }
@@ -215,7 +237,7 @@ export function EnrolFlow() {
     setBusy(false);
   }
 
-  async function finish() {
+  async function finish(passkeyOnly = false) {
     setBusy(true);
     try {
       // The enrolment session has done its job; signing in is a separate step.
@@ -224,7 +246,7 @@ export function EnrolFlow() {
       // Not fatal: the enrolment session expires on its own and cannot reach the dashboard.
     }
     setBusy(false);
-    setStep({ name: "done" });
+    setStep({ name: "done", passkeyOnly });
   }
 
   const h1 = "mb-2 font-semibold text-foreground text-h1 outline-none";
@@ -249,25 +271,31 @@ export function EnrolFlow() {
         <h1 ref={heading} tabIndex={-1} className={h1}>
           {offline
             ? "No se pudo abrir el enlace"
-            : step.why === "expired"
-              ? "El alta caducó"
-              : "Este enlace ya no sirve"}
+            : step.why === "cut"
+              ? "El enlace llegó incompleto"
+              : step.why === "expired"
+                ? "El alta caducó"
+                : "Este enlace ya no sirve"}
         </h1>
         <Alert variant="destructive" className="my-6">
           <TriangleAlert aria-hidden="true" />
           <AlertTitle>
             {offline
               ? "Sin conexión con el panel"
-              : step.why === "busy"
-                ? "Demasiados intentos"
-                : step.why === "expired"
-                  ? "Pasaron más de 30 minutos"
-                  : "Enlace caducado o ya usado"}
+              : step.why === "cut"
+                ? "Le faltan caracteres al final"
+                : step.why === "busy"
+                  ? "Demasiados intentos"
+                  : step.why === "expired"
+                    ? "Pasaron más de 30 minutos"
+                    : "Enlace caducado o ya usado"}
           </AlertTitle>
           <AlertDescription>
             {offline
               ? "Revisa tu conexión y vuelve a intentarlo: el enlace sigue sin usarse."
-              : "Cada enlace de alta dura 15 minutos y sirve una sola vez; el alta se completa en 30 minutos."}
+              : step.why === "cut"
+                ? "Suele pasar al hacer clic en un enlace que la terminal partió en dos líneas. El enlace sigue sin usarse: cópialo entero, desde https:// hasta el final, y pégalo en la barra de direcciones."
+                : "Cada enlace de alta dura 15 minutos y sirve una sola vez; el alta se completa en 30 minutos."}
           </AlertDescription>
         </Alert>
         {offline ? (
@@ -277,8 +305,9 @@ export function EnrolFlow() {
         ) : (
           <>
             <p className="mb-2">
-              Pide un enlace nuevo desde tu terminal y ábrelo en este
-              dispositivo:
+              {step.why === "cut"
+                ? "Si ya pasaron 15 minutos, pide uno nuevo desde tu terminal:"
+                : "Pide un enlace nuevo desde tu terminal y ábrelo en este dispositivo:"}
             </p>
             <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded-sm bg-raised px-3 py-2 font-mono text-mono">
               <code>{ENROL_COMMAND}</code>
@@ -297,8 +326,9 @@ export function EnrolFlow() {
           Alta completada
         </h1>
         <p className="mb-6 text-muted-foreground">
-          Tu cuenta ya tiene passkey y app de autenticación. Inicia sesión con
-          la passkey para entrar al panel.
+          {step.passkeyOnly
+            ? "Passkey añadida. Tu app de autenticación y tus códigos de recuperación siguen igual. Inicia sesión con la passkey nueva para entrar al panel."
+            : "Tu cuenta ya tiene passkey y app de autenticación. Inicia sesión con la passkey para entrar al panel."}
         </p>
         <a
           href={LOGIN_PATH}
@@ -313,21 +343,34 @@ export function EnrolFlow() {
   if (step.name === "passkey") {
     return (
       <>
-        <p className={eyebrow}>Paso 1 de {TOTAL} · Passkey</p>
+        <p className={eyebrow}>
+          {step.hasTotp ? "Passkey nueva" : `Paso 1 de ${TOTAL} · Passkey`}
+        </p>
         <h1 ref={heading} tabIndex={-1} className={h1}>
           Registra tu passkey
         </h1>
         <p className="mb-2 text-muted-foreground">
           Alta para <span className="font-mono text-mono">{step.email}</span>.
         </p>
-        <p className="mb-6 text-muted-foreground">
+        <p className="mb-2 text-muted-foreground">
           La passkey es tu forma principal de entrar: tu dispositivo te pedirá
           la huella, la cara o el PIN.
         </p>
+        <p className="mb-6 text-muted-foreground">
+          ¿La quieres en tu gestor de contraseñas? Abre sesión en él antes de
+          pulsar el botón, y elígelo cuando el navegador pregunte dónde
+          guardarla.
+        </p>
+        {step.hasTotp && (
+          <p className="mb-6 text-muted-foreground">
+            Tu app de autenticación ya está configurada: este enlace solo añade
+            una passkey y no cambia tus códigos.
+          </p>
+        )}
         <FormAlert notice={notice} />
         <Button
           className="w-full"
-          onClick={() => void registerPasskey(step.email)}
+          onClick={() => void registerPasskey(step.email, step.hasTotp)}
           disabled={busy}
           aria-busy={busy}
         >
@@ -342,14 +385,15 @@ export function EnrolFlow() {
             onClick={async () => {
               setBusy(true);
               try {
-                await startTotp(step.email);
+                if (step.hasTotp) await finish(true);
+                else await startTotp(step.email);
               } catch {
                 setNotice(NETWORK);
               }
               setBusy(false);
             }}
           >
-            Seguir al paso 2
+            {step.hasTotp ? "Terminar" : "Seguir al paso 2"}
           </Button>
         )}
       </>

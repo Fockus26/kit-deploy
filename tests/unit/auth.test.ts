@@ -96,6 +96,10 @@ describe("enrolment link", () => {
     const b = t.browser();
     const res = await b.request("POST", "/kit/enrol", { token: t.token });
     expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      email: "cesar@example.com",
+      twoFactorEnabled: false,
+    });
     const session = b.setCookies.find((c) =>
       c.startsWith(`${SESSION_COOKIE}=`),
     );
@@ -196,6 +200,18 @@ describe("TOTP: enrol, then sign in with it", () => {
     expect(user).toEqual({ userId: t.user.id, email: "cesar@example.com" });
     for (const c of phone.setCookies)
       expect(attrs(c).has("domain")).toBe(false);
+
+    // A later link says TOTP is on: /enrol then only adds a passkey.
+    const again = generateEnrolmentToken();
+    t.enrolments.links.push({
+      userId: t.user.id,
+      hash: again.hash,
+      expiresAt: new Date(Date.now() + ENROL_LINK_TTL_MS),
+    });
+    const reEnrol = await t
+      .browser()
+      .request("POST", "/kit/enrol", { token: again.token });
+    expect(await reEnrol.json()).toMatchObject({ twoFactorEnabled: true });
 
     // A dashboard session may not add a factor: only an enrolment one.
     expect(

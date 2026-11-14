@@ -22,7 +22,12 @@ export type ClientError = {
   message?: string;
 } | null;
 
-export type EnrolStart = { email: string; enrolUntil: string };
+export type EnrolStart = {
+  email: string;
+  enrolUntil: string;
+  /** TOTP already on: this link only adds a passkey. */
+  twoFactorEnabled?: boolean;
+};
 
 /** POST /kit/enrol {token}: the one-time link → an enrolment session (lib/auth/plugin.ts). */
 export function redeemEnrolment(token: string) {
