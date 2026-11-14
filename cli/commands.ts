@@ -473,7 +473,7 @@ async function user(
   else await store.issueEnrolment(email, hash, expiresAt);
   const minutes = Math.round(ENROL_LINK_TTL_MS / 60000);
   return ok(
-    `${sub === "create" ? "account created" : "new link"} for ${email}. Open this link within ${minutes} minutes, once, to register your passkey and TOTP:\n\n  ${enrolmentLink(DASHBOARD_HOST, token)}\n\nIt is not stored and will not be shown again.\n`,
+    `${sub === "create" ? "account created" : "new link"} for ${email}. Open this link within ${minutes} minutes, once, to register your passkey (and TOTP, if not set yet):\n\n${enrolmentLink(DASHBOARD_HOST, token)}\n\nCopy it whole into the browser's address bar: a link wrapped over two lines opens cut.\nIt is not stored and will not be shown again.\n`,
   );
 }
 

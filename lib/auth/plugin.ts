@@ -85,6 +85,10 @@ export const kitAuth = (options: KitAuthOptions) => {
           return ctx.json({
             email: user.email,
             enrolUntil: until.toISOString(),
+            // A later link only adds a passkey: /enrol keeps the TOTP and recovery codes.
+            twoFactorEnabled:
+              (user as { twoFactorEnabled?: boolean | null })
+                .twoFactorEnabled === true,
           });
         },
       ),

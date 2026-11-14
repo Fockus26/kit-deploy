@@ -61,6 +61,14 @@ describe("kit-deploy user create", () => {
     expect(JSON.stringify(c.links)).not.toContain(token);
   });
 
+  test("the link sits alone on its line and fits an 80-column terminal", async () => {
+    // A wrapped link opened by a click lost its last characters (César, 2026-11-14).
+    const r = await cli().run(["user", "create", "cesar@example.com"]);
+    const line = r.out.split("\n").find((l) => LINK.test(l)) ?? "";
+    expect(line).toMatch(/^https:\/\/deploy\.fockus\.dev\/enrol#kde_\S{43}$/);
+    expect(line.length).toBeLessThan(80);
+  });
+
   test("never to a pipe: the link is a credential", async () => {
     const c = cli(false);
     const r = await c.run(["user", "create", "cesar@example.com"]);
