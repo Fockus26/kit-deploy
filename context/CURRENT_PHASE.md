@@ -13,7 +13,8 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | U1 wildcard site `*.preview.fockus.dev` (DNS-01, 404 page, noindex) | #17 | merged · on the VPS (f8632b5), cert issued, verified |
 | U1b update.sh restarts Caddy without the token; bounded reload | #18 | merged (e7f4855) · on the VPS with ddeddee |
 | U2 auth backend (Better Auth, passkey + TOTP, `user create`) | #19 | merged (ddeddee) · on the VPS 2026-11-13, verified |
-| U3–U10 | — | pending (see plan) |
+| U3 `/login` + `/enrol` pages (passkey, TOTP, recovery codes; proxy to /login) | #20 | CI green; merge, then ship with César's OK and his enrolment |
+| U4–U10 | — | pending (see plan) |
 
 Log: `PHASE_LOG/03-previews.md`.
 

@@ -83,3 +83,25 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   (no Domain), sign-up/email 404, GET sign-out 405, deploy / 200, kd-hello 200, preview 404 page.
   A wrong TOTP → 401 and the fail2ban line with the real client IPv4. Ports 80/443 untouched:
   no certbot dry-run needed. Ship dir in /tmp removed. CONTENT_CHECKLIST #7 waits for U3's /enrol.
+
+### U3 login + enrol pages (2026-11-14, PR #20, branch feat/login-enrol-pages)
+
+- Worktree `.claude/worktrees/u3-login` (shared main folder left untouched).
+- `/enrol`: token from the fragment, wiped with replaceState (never in a request URL, `no-referrer`),
+  POST /kit/enrol, 3 steps (passkey → TOTP with a local `uqr` QR + typed key → 10 recovery codes,
+  copy/.txt, mandatory checkbox, beforeunload guard). Used/expired → Spanish error + copyable
+  `ssh -t kit-vps kit-deploy user enrol <tu-email>`. Reload inside 30 min resumes (get-session
+  enrolUntil). Pasting a new link in the same tab = hashchange only → handled (found in QA).
+- `/login`: passkey button; email + code (6 digits → verify-totp, else verify-backup-code); one
+  message for unknown email / wrong code / lockout. `next` via `lib/auth/next-path.ts`.
+- `proxy.ts` (optimistic cookie check → `/login?next=`); `/` real check (requestUser, Suspense).
+  noindex: meta + X-Robots-Tag (next.config headers). Tokens in globals.css (dark default).
+  shadcn primitives written from new-york source (CLI too slow on this network).
+- security-review: 1 finding, open redirect `/.//evil` → `//evil` after URL parsing (dot segments
+  keep empty segments). Fixed by validating the parsed URL (+ encoded %2F/%5C/control rejected);
+  re-review fuzzed 508,621 inputs: none. 37 next-path tests.
+- QA: Docker Desktop was off after a restart → `qa:local --offline` + faked /api/auth + CDP virtual
+  WebAuthn authenticator: 39/39 (axe AA dark+light every state, focus, 320 px, announcements).
+  Full suite 282 pass. Gotcha: biome's `!**/.claude/worktrees` makes `bun run lint` check nothing
+  inside a worktree; pass paths explicitly. qa:local needed a `db:migrate` script (added).
+- Not verified locally: the real ceremony against Postgres → verified at César's enrolment.
