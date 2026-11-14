@@ -105,3 +105,24 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   Full suite 282 pass. Gotcha: biome's `!**/.claude/worktrees` makes `bun run lint` check nothing
   inside a worktree; pass paths explicitly. qa:local needed a `db:migrate` script (added).
 - Not verified locally: the real ceremony against Postgres → verified at César's enrolment.
+
+### U3 shipped + enrolment + U3b (2026-11-14, PR #21, branch fix/enrol-passkey-only)
+
+- #20 shipped with César's OK ("Sí, súbelo"): release 87be67cba848 copied (sha256 checked),
+  update.sh detached (nohup, /root/kit-deploy-update-87be67c.log): secret kept, migrations 3,
+  web switched, dashboard + previews sites unchanged (no Caddy reload, no 80/443 change). From
+  outside: / 307 → /login, /login /enrol 200 with X-Robots-Tag, sign-up 404, kd-hello 200,
+  preview 404. Gotcha: a Monitor with `ssh … pgrep -f "infra/update.sh"` matches its own command
+  line and never ends: tail the log instead.
+- César's enrolment: links 1–2 failed with 401 — Caddy showed a 55-byte body instead of 59: the
+  token arrived 4 chars short (PowerShell wrapped the indented link; the click opened the first
+  line). Server and page fine (same standalone build + full link → 200 locally). Link 3 pasted
+  whole: passkey registered (multiDevice, backed up: saved by Chrome/Windows, not his manager),
+  TOTP confirmed, sign-in with email + TOTP OK (17:19 UTC). Passkey sign-in tried twice, not
+  completed: he wants it in his password manager.
+- U3b (#21, merged 7112799): /enrol says "El enlace llegó incompleto" for a malformed token and
+  does not post it; CLI prints the link alone (79 cols); /kit/enrol returns twoFactorEnabled and a
+  later link only adds a passkey (no /two-factor/* call). Offline QA 18/18, CI green. The first
+  passkey stays registered (his; removal needs a route → phase 05).
+- Pending: ship #21 (César's OK), César adds a passkey in his manager and signs in with it,
+  cookie Domain check in the browser.
