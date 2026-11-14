@@ -10,9 +10,11 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import { drizzleEnrolmentStore } from "../../lib/auth/store";
 import * as schema from "../../lib/db/schema";
 import { deployments, deployTokens, projects } from "../../lib/db/schema";
 import { drizzleStore } from "../../lib/db/store";
+import { drizzlePreviewStore } from "../../lib/preview/store";
 import { generateDeployToken } from "../../lib/tokens";
 
 const url = process.env.KIT_DB_TEST_URL;
@@ -103,5 +105,81 @@ describe.skipIf(!url)("drizzle store (Postgres)", () => {
         image: "x",
       }),
     );
+  });
+});
+
+describe.skipIf(!url)("preview access + enrolment stores (Postgres)", () => {
+  const client = postgres(url ?? "", { max: 4, onnotice: () => {} });
+  const db = drizzle(client, { schema });
+  const previews = drizzlePreviewStore(db);
+  const enrolments = drizzleEnrolmentStore(db);
+  const HOST = "kd-hello-pr-7.preview.fockus.dev";
+  const T = new Date("2026-11-14T12:00:00Z");
+  const later = (ms: number) => new Date(T.getTime() + ms);
+
+  beforeAll(async () => {
+    await migrate(db, { migrationsFolder: "drizzle" }); // no-op after the suite above
+    await db
+      .insert(schema.authUser)
+      .values({ id: "u-prev", email: "p@example.com", name: "p" });
+  });
+  afterAll(() => client.end());
+
+  test("a grant is redeemed once, for its host, before it expires", async () => {
+    const hash = "a".repeat(64);
+    await previews.createGrant({
+      userId: "u-prev",
+      tokenHash: hash,
+      host: HOST,
+      path: "/x?y=1",
+      expiresAt: later(60_000),
+    });
+    expect(
+      await previews.redeemGrant(hash, "other.preview.fockus.dev", T),
+    ).toBeNull();
+    expect(await previews.redeemGrant(hash, HOST, later(61_000))).toBeNull();
+    // Two at once: exactly one wins.
+    const both = await Promise.all([
+      previews.redeemGrant(hash, HOST, T),
+      previews.redeemGrant(hash, HOST, T),
+    ]);
+    expect(both.filter(Boolean)).toEqual([
+      { userId: "u-prev", path: "/x?y=1" },
+    ]);
+  });
+
+  test("a session is found until it expires, and goes with its user", async () => {
+    const hash = "b".repeat(64);
+    await previews.createSession({
+      userId: "u-prev",
+      tokenHash: hash,
+      expiresAt: later(3_600_000),
+    });
+    const found = await previews.findSession(hash, T);
+    expect(found?.userId).toBe("u-prev");
+    expect(found?.expiresAt.getTime()).toBe(later(3_600_000).getTime());
+    expect(await previews.findSession(hash, later(3_600_001))).toBeNull();
+    expect(await previews.findSession("c".repeat(64), T)).toBeNull();
+  });
+
+  test("enrolment links redeem once against real Postgres", async () => {
+    const hash = "d".repeat(64);
+    await db.insert(schema.enrolmentTokens).values({
+      userId: "u-prev",
+      tokenHash: hash,
+      expiresAt: later(900_000),
+    });
+    expect(await enrolments.redeem(hash, later(900_001))).toBeNull();
+    expect(await enrolments.redeem(hash, T)).toBe("u-prev");
+    expect(await enrolments.redeem(hash, T)).toBeNull();
+  });
+
+  test("deleting the account removes its grants and sessions", async () => {
+    await db.delete(schema.authUser).where(sql`id = 'u-prev'`);
+    expect(await previews.findSession("b".repeat(64), T)).toBeNull();
+    const left = await db.execute(
+      sql`select (select count(*) from preview_grants) + (select count(*) from preview_sessions) as n`,
+    );
+    expect(Number((left as unknown as { n: string }[])[0]?.n)).toBe(0);
   });
 });
