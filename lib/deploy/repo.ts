@@ -23,6 +23,16 @@ export type KeptDeployment = {
   createdAt: Date;
 };
 
+/** A preview whose container still exists: live, or asleep with a container a failed stop left. */
+export type RunningPreview = {
+  id: string;
+  pr: number;
+  status: "live" | "asleep";
+  container: string;
+  /** When the PR was last pushed: its newest deployment's `createdAt`. */
+  lastPushAt: Date;
+};
+
 export type ProjectInfo = {
   id: string;
   name: string;
@@ -46,8 +56,8 @@ export interface SwitchRepo {
   /** The project's newest queued deployment (production or any PR), now `starting`; older queued
    * ones of the same scope (production, or that PR) → `superseded`. */
   claimNext(projectId: string): Promise<ClaimedDeployment | null>;
-  /** `live` with its container and port; the previous live one of the same scope → `superseded`,
-   * and returned. */
+  /** `live` with its container and port; the previous live (or asleep) one of the same scope →
+   * `superseded`, and returned. */
   markLive(
     id: string,
     container: string,
@@ -61,7 +71,13 @@ export interface SwitchRepo {
   projectByName(name: string): Promise<ProjectInfo | null>;
   /** Every live production deployment, for `regenerate`. */
   liveSites(): Promise<LiveSite[]>;
-  /** The PR was closed: its open (queued, starting, live) preview deployments → `superseded`. Returns every
+  /** The project's previews that still have a container (live, or asleep whose container was not
+   * removed yet), each PR once. Read under the project lock: it is what the limit counts. */
+  runningPreviews(projectId: string): Promise<RunningPreview[]>;
+  /** A live preview → `asleep` (D017); false if it was not live any more. Keeps its container
+   * until `clearContainer`. */
+  markAsleep(id: string): Promise<boolean>;
+  /** The PR was closed: its open (queued, starting, live) and asleep preview deployments → `superseded`. Returns every
    * deployment of that PR that still has a container, for the switch to remove. */
   closePreview(
     projectId: string,

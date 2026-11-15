@@ -1,0 +1,2 @@
+ALTER TABLE "deployments" DROP CONSTRAINT "deployments_status";--> statement-breakpoint
+ALTER TABLE "deployments" ADD CONSTRAINT "deployments_status" CHECK (status in ('queued', 'starting', 'live', 'failed', 'superseded', 'asleep'));

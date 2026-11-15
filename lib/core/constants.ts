@@ -34,6 +34,9 @@ export const PREVIEW_DOMAIN = "preview.fockus.dev";
 /** D017: production 256–512 MB, previews 384 MB. The bounds a caller may ask for. */
 export const MEMORY_MB = { min: 128, max: 2048, preview: 384 } as const;
 
+/** Previews running at once per project (D017): a fifth puts the least recently pushed to sleep. */
+export const PREVIEW_LIMIT = 4;
+
 /** Same limits as `daemon.json`, set per container so they hold even if the default changes. */
 export const LOG_OPTS = { maxSize: "10m", maxFile: 3 } as const;
 

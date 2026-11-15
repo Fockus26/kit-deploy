@@ -1,10 +1,13 @@
 /** `SwitchRepo` on kit_deploy (Drizzle + postgres.js). */
-import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, max, ne } from "drizzle-orm";
 import { deployments, domains, OPEN_STATUSES, projects } from "@/lib/db/schema";
 import { type Db, scopeIs } from "@/lib/db/store";
-import type { SwitchRepo } from "./repo";
+import type { RunningPreview, SwitchRepo } from "./repo";
 
 const production = eq(deployments.environment, "production");
+const preview = eq(deployments.environment, "preview");
+/** A preview that serves, or that sleeps (D017): the one row of its PR a new live one replaces. */
+const CURRENT = ["live", "asleep"] as const;
 
 export function drizzleSwitchRepo(db: Db): SwitchRepo {
   const hostsOf = async (projectId: string) =>
@@ -100,7 +103,8 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
             and(
               eq(deployments.projectId, me.projectId),
               scopeIs({ pr: me.pr }),
-              eq(deployments.status, "live"),
+              // A preview that slept is replaced by its wake-up like a live one.
+              inArray(deployments.status, [...CURRENT]),
               ne(deployments.id, id),
             ),
           )
@@ -201,6 +205,67 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
       return out;
     },
 
+    async runningPreviews(projectId) {
+      const rows = await db
+        .select({
+          id: deployments.id,
+          pr: deployments.pr,
+          status: deployments.status,
+          container: deployments.container,
+        })
+        .from(deployments)
+        .where(
+          and(
+            eq(deployments.projectId, projectId),
+            preview,
+            inArray(deployments.status, [...CURRENT]),
+            isNotNull(deployments.container),
+          ),
+        );
+      const prs = [
+        ...new Set(rows.flatMap((r) => (r.pr === null ? [] : [r.pr]))),
+      ];
+      if (prs.length === 0) return [];
+      const pushes = await db
+        .select({ pr: deployments.pr, at: max(deployments.createdAt) })
+        .from(deployments)
+        .where(
+          and(
+            eq(deployments.projectId, projectId),
+            preview,
+            inArray(deployments.pr, prs),
+          ),
+        )
+        .groupBy(deployments.pr);
+      const lastPush = new Map(pushes.map((p) => [p.pr, p.at]));
+      const byPr = new Map<number, RunningPreview>();
+      for (const r of rows) {
+        if (r.pr === null || !r.container) continue;
+        if (r.status !== "live" && r.status !== "asleep") continue;
+        // One per PR; the live one wins over an asleep one still holding a container.
+        if (byPr.get(r.pr)?.status === "live") continue;
+        byPr.set(r.pr, {
+          id: r.id,
+          pr: r.pr,
+          status: r.status,
+          container: r.container,
+          lastPushAt: lastPush.get(r.pr) ?? new Date(0),
+        });
+      }
+      return [...byPr.values()];
+    },
+
+    async markAsleep(id) {
+      const rows = await db
+        .update(deployments)
+        .set({ status: "asleep" })
+        .where(
+          and(eq(deployments.id, id), preview, eq(deployments.status, "live")),
+        )
+        .returning({ id: deployments.id });
+      return rows.length > 0;
+    },
+
     async closePreview(projectId, pr) {
       return db.transaction(async (tx) => {
         const scope = and(
@@ -210,7 +275,12 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
         await tx
           .update(deployments)
           .set({ status: "superseded", finishedAt: new Date() })
-          .where(and(scope, inArray(deployments.status, [...OPEN_STATUSES])));
+          .where(
+            and(
+              scope,
+              inArray(deployments.status, [...OPEN_STATUSES, "asleep"]),
+            ),
+          );
         const rows = await tx
           .select({ id: deployments.id, container: deployments.container })
           .from(deployments)
