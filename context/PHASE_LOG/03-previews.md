@@ -233,3 +233,24 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - kd-hello: `.github/workflows/deploy-vps.yml` is identical to the old template; to test the phase,
   replace it with this one (needs César's OK; its KIT_DEPLOY_TOKEN stays).
 - CI green; squash-merged by the agent as d1ef8c5 (2026-11-15).
+
+### U9 limit 4 + dormido (2026-11-15, PR #29, branch claude/preview-limit-3d8411)
+
+- `PREVIEW_LIMIT = 4` (lib/core/constants.ts). `deployPreview` calls `makeRoom` before `runNew`:
+  `runningPreviews` (preview rows live/asleep with a container, one per PR, `lastPushAt` = max
+  createdAt of the PR) minus the PR being deployed; leftovers asleep first, then live by oldest
+  push; sleeps until 3 others remain. Never 5 running at once (sleep before start).
+- `sleepPreview`: preview.write asleep (Caddy refusing → deploy fails, nothing changed) →
+  `markAsleep` (live → asleep only) → container.stop (throws: the 5th never starts; the asleep row
+  keeps the container name and the next makeRoom retries it first) → remove + clearContainer
+  (quietly) → PR comment "dormida" (edit only, `asleepCommentBody`).
+- Status `asleep` (migration 0005: CHECK only). Not open: a push of the same sha re-queues and
+  wakes. `markLive` supersedes live or asleep of the scope; `closePreview` supersedes asleep too.
+- Commit status untouched on sleep (stays on the old sha); the wake-up push posts its own.
+- Concurrency: all under the existing `withProjectLock`; race test with a mutex fake (control
+  without the lock sees 5 running and fails).
+- Verified: suite 470 (0 fail); deploy-repo 9/9 + db-store 6/6 vs Postgres 17 in Docker (run per
+  file: together they race on the shared schema, pre-existing); typecheck, biome on explicit
+  paths, build green; security-review no findings.
+- Not on the VPS: needs César's OK (web release + migration 0005, with U6/U7).
+- CI green; squash-merged by the agent as 1178451 (2026-11-15). VPS pending César's OK.
