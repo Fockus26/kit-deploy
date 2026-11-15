@@ -10,6 +10,8 @@ export type Target =
   | { project: string; env: "production" }
   | { project: string; env: "preview"; pr: number };
 
+export type ProductionTarget = Extract<Target, { env: "production" }>;
+
 const MAX_PR = 999_999;
 
 function checkTarget(target: Target): void {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { renderSite } from "../../lib/core/caddy";
+import { renderPreviewSite, renderSite } from "../../lib/core/caddy";
 import { CoreInputError } from "../../lib/core/validate";
 
 const prod = { project: "kd_hello", env: "production" } as const;
@@ -24,14 +24,31 @@ describe("renderSite", () => {
     );
   });
 
-  test("a preview gets its own file", () => {
-    const site = renderSite({
-      target: { project: "kd_hello", env: "preview", pr: 12 },
-      hosts: ["kd-hello-pr-12.preview.fockus.dev"],
-      port: 21000,
-    });
-    expect(site.path).toBe("/etc/caddy/sites/kd_hello-pr-12.caddy");
-    expect(site.content).toContain("kd-hello-pr-12.preview.fockus.dev {");
+  test("a preview never gets a site block of its own (it would skip the login)", () => {
+    expect(() =>
+      renderSite({
+        target: { project: "kd_hello", env: "preview", pr: 12 },
+        hosts: ["kd-hello-pr-12.preview.fockus.dev"],
+        port: 21000,
+      }),
+    ).toThrow(CoreInputError);
+  });
+
+  test.each([
+    "kd-hello-pr-12.preview.fockus.dev",
+    "Preview.Fockus.dev",
+    "a.b.preview.fockus.dev",
+  ])("a production site cannot take preview host %p", (host) => {
+    expect(() =>
+      renderSite({ target: prod, hosts: ["ok.dev", host], port: 20000 }),
+    ).toThrow(CoreInputError);
+  });
+
+  test("a host that only ends like the preview domain is fine", () => {
+    expect(
+      renderSite({ target: prod, hosts: ["mypreview.fockus.dev"], port: 20000 })
+        .content,
+    ).toContain("mypreview.fockus.dev {");
   });
 
   test("several hosts, lowercased and deduplicated, in order", () => {
@@ -84,6 +101,128 @@ describe("renderSite", () => {
         hosts: ["a.dev"],
         port: 20000,
       }),
+    ).toThrow(CoreInputError);
+  });
+});
+
+describe("renderPreviewSite", () => {
+  test("running: a host matcher and the kit_preview gate to its port", () => {
+    const site = renderPreviewSite({
+      project: "kd_hello",
+      pr: 7,
+      state: "running",
+      port: 29007,
+    });
+    expect(site.path).toBe("/etc/caddy/previews/kd_hello-pr-7.caddy");
+    expect(site.content).toBe(
+      [
+        "# Written by kit-deploy for kd_hello-pr-7 (running) — do not edit by hand.",
+        "@kd_hello-pr-7 host kd-hello-pr-7.preview.fockus.dev",
+        "handle @kd_hello-pr-7 {",
+        "\timport kit_preview 127.0.0.1:29007",
+        "}",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("asleep (D017): the same gate, then the page, no proxy and no port", () => {
+    const site = renderPreviewSite({
+      project: "kd_hello",
+      pr: 7,
+      state: "asleep",
+    });
+    expect(site.path).toBe("/etc/caddy/previews/kd_hello-pr-7.caddy");
+    expect(site.content).toBe(
+      [
+        "# Written by kit-deploy for kd_hello-pr-7 (asleep) — do not edit by hand.",
+        "@kd_hello-pr-7 host kd-hello-pr-7.preview.fockus.dev",
+        "handle @kd_hello-pr-7 {",
+        "\timport kit_preview_asleep kd_hello 7",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    expect(site.content).not.toContain("reverse_proxy");
+    expect(site.content).not.toContain("127.0.0.1");
+  });
+
+  test("the handle is only ever an import of the gated snippets", () => {
+    for (const site of [
+      renderPreviewSite({ project: "a", pr: 1, state: "running", port: 20000 }),
+      renderPreviewSite({ project: "a", pr: 1, state: "asleep" }),
+    ]) {
+      expect(site.content).not.toContain("reverse_proxy");
+      expect(
+        site.content.match(/\timport kit_preview(_asleep)? /g),
+      ).toHaveLength(1);
+    }
+  });
+
+  test("is deterministic", () => {
+    const input = {
+      project: "kd_hello",
+      pr: 3,
+      state: "running",
+      port: 20001,
+    } as const;
+    expect(renderPreviewSite(input)).toEqual(renderPreviewSite(input));
+  });
+
+  test.each([
+    ["a traversal project", { project: "../etc", pr: 1 }],
+    ["a project with a slash", { project: "a/b", pr: 1 }],
+    ["a project with a brace", { project: "a{", pr: 1 }],
+    ["a project with a newline", { project: "a\nb", pr: 1 }],
+    ["a project with a space", { project: "a b", pr: 1 }],
+    ["an uppercase project", { project: "KD", pr: 1 }],
+    ["an empty project", { project: "", pr: 1 }],
+    ["PR 0", { project: "a", pr: 0 }],
+    ["a negative PR", { project: "a", pr: -1 }],
+    ["a fractional PR", { project: "a", pr: 1.5 }],
+    ["a PR too big", { project: "a", pr: 1_000_000 }],
+  ])("rejects %s", (_, partial) => {
+    expect(() => renderPreviewSite({ ...partial, state: "asleep" })).toThrow(
+      CoreInputError,
+    );
+    expect(() =>
+      renderPreviewSite({ ...partial, state: "running", port: 20000 }),
+    ).toThrow(CoreInputError);
+  });
+
+  test("underscores become hyphens in the host; the longest name still fits one label", () => {
+    expect(
+      renderPreviewSite({ project: "a_", pr: 1, state: "asleep" }).content,
+    ).toContain("@a_-pr-1 host a--pr-1.preview.fockus.dev\n");
+    // 40 + "-pr-999999" = 50 characters, under DNS's 63 per label.
+    expect(() =>
+      renderPreviewSite({
+        project: "a".repeat(40),
+        pr: 999_999,
+        state: "asleep",
+      }),
+    ).not.toThrow();
+  });
+
+  test.each([
+    3000,
+    19999,
+    30000,
+    20000.5,
+    Number.NaN,
+  ])("rejects port %p", (port) => {
+    expect(() =>
+      renderPreviewSite({ project: "a", pr: 1, state: "running", port }),
+    ).toThrow(CoreInputError);
+  });
+
+  test("rejects an unknown state", () => {
+    expect(() =>
+      renderPreviewSite({
+        project: "a",
+        pr: 1,
+        state: "public",
+      } as unknown as Parameters<typeof renderPreviewSite>[0]),
     ).toThrow(CoreInputError);
   });
 });

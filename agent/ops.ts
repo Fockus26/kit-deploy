@@ -5,11 +5,19 @@
  */
 import {
   allocatePort,
+  CADDY_PREVIEW_ASLEEP_SNIPPET,
+  CADDY_PREVIEW_SNIPPET,
+  CADDY_PREVIEWS_DIR,
+  CADDY_PREVIEWS_SITE,
   CADDY_SITES_DIR,
   containerName,
   dockerRunArgs,
   MANAGED_LABEL,
+  PREVIEW_DOMAIN,
+  type PreviewSiteInput,
+  renderPreviewSite,
   renderSite,
+  type SiteFile,
   siteName,
   type Target,
 } from "../lib/core";
@@ -23,6 +31,42 @@ const HEALTH_TIMEOUT_MS = 3_000;
 /** A port handed out by `ports.allocate` stays reserved this long, so two deploys that allocate
  * before either has started its container do not get the same one. */
 export const RESERVATION_MS = 10 * 60_000;
+
+/** The only files preview.write/remove touch: `/etc/caddy/previews/<project>-pr-<n>.caddy`. */
+const PREVIEW_FILE = new RegExp(
+  `^${CADDY_PREVIEWS_DIR.replaceAll("/", "\\/")}\\/(([a-z0-9][a-z0-9_]{0,39})-pr-([1-9][0-9]{0,5}))\\.caddy$`,
+);
+
+/** Second check after the renderer: the path is exactly one preview file (no traversal, no other
+ * directory), and the content is exactly its own matcher plus one import of the login-gated
+ * snippets (`infra/caddy/kit-previews.caddy`). */
+export function assertPreviewFile(file: SiteFile): SiteFile {
+  const m = PREVIEW_FILE.exec(file.path);
+  const lines = file.content.split("\n");
+  const [, name, project, pr] = m ?? [];
+  const handle = lines[3] ?? "";
+  const ok =
+    m !== null &&
+    lines.length === 6 &&
+    lines[0]?.startsWith(`# Written by kit-deploy for ${name} (`) &&
+    !/[{}]/.test(lines[0]) &&
+    lines[1] ===
+      `@${name} host ${name?.replaceAll("_", "-")}.${PREVIEW_DOMAIN}` &&
+    lines[2] === `handle @${name} {` &&
+    (handle === `\timport ${CADDY_PREVIEW_ASLEEP_SNIPPET} ${project} ${pr}` ||
+      new RegExp(
+        `^\\timport ${CADDY_PREVIEW_SNIPPET} 127\\.0\\.0\\.1:[0-9]{5}$`,
+      ).test(handle)) &&
+    lines[4] === "}" &&
+    lines[5] === "";
+  if (!ok) {
+    throw new AgentError(
+      "bad_request",
+      `refusing to write ${JSON.stringify(file.path)}: not a preview file`,
+    );
+  }
+  return file;
+}
 
 export class AgentError extends Error {
   constructor(
@@ -149,6 +193,12 @@ export class Agent {
         );
       case "site.remove":
         return this.serial(() => this.removeSite(req.params.target));
+      case "preview.write":
+        return this.serial(() => this.writePreview(req.params));
+      case "preview.remove":
+        return this.serial(() =>
+          this.removePreview(req.params.project, req.params.pr),
+        );
     }
   }
 
@@ -319,6 +369,38 @@ export class Agent {
 
   private async removeSite(target: Target) {
     const path = `${CADDY_SITES_DIR}/${siteName(target)}.caddy`;
+    const previous = await this.deps.readFile(path);
+    if (previous === null) return { path, removed: false };
+    await this.applySiteChange(path, previous, () =>
+      this.deps.removeFile(path),
+    );
+    return { path, removed: true };
+  }
+
+  /** One preview's file, rendered here from validated values (never the caller's text), checked
+   * again, written atomically; then the same validate + bounded reload as site.write. */
+  private async writePreview(input: PreviewSiteInput) {
+    const file = assertPreviewFile(renderPreviewSite(input));
+    // Without the wildcard site nothing imports previews/: the file would validate and never serve.
+    if ((await this.deps.readFile(CADDY_PREVIEWS_SITE)) === null) {
+      throw new AgentError(
+        "invalid_config",
+        `${CADDY_PREVIEWS_SITE} is not installed (infra/update.sh writes it): no preview can be served`,
+      );
+    }
+    const previous = await this.deps.readFile(file.path);
+    if (previous === file.content)
+      return { path: file.path, state: input.state, changed: false };
+    await this.applySiteChange(file.path, previous, () =>
+      this.deps.writeFileAtomic(file.path, file.content),
+    );
+    return { path: file.path, state: input.state, changed: true };
+  }
+
+  private async removePreview(project: string, pr: number) {
+    const { path } = assertPreviewFile(
+      renderPreviewSite({ project, pr, state: "asleep" }),
+    );
     const previous = await this.deps.readFile(path);
     if (previous === null) return { path, removed: false };
     await this.applySiteChange(path, previous, () =>
