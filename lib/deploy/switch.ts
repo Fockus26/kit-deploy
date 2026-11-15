@@ -18,9 +18,20 @@ import {
   containerName,
   MEMORY_MB,
   type ProductionTarget,
+  previewHost,
   type Target,
 } from "@/lib/core";
-import type { StatusPublisher } from "./commit-status";
+import {
+  type CommitStatus,
+  STATUS_CONTEXTS,
+  type StatusPublisher,
+} from "./commit-status";
+import {
+  closedCommentBody,
+  liveCommentBody,
+  type PreviewCommenter,
+  previewMarker,
+} from "./pr-comment";
 import type { ClaimedDeployment, KeptDeployment, SwitchRepo } from "./repo";
 
 export const KEEP = 5;
@@ -37,6 +48,8 @@ export type SwitchDeps = {
   drainMs?: number;
   /** Publishes the commit's status on GitHub after each deployment; null = no token, skipped. */
   status?: StatusPublisher | null;
+  /** Creates or edits the PR's preview comment; null = no token, skipped. */
+  comments?: PreviewCommenter | null;
 };
 
 /** How one deployment ended; `error` is what `deployments.error` got. */
@@ -62,6 +75,7 @@ function withDefaults(d: SwitchDeps): Ctx {
     healthIntervalMs: 1_000,
     drainMs: 10_000,
     status: null,
+    comments: null,
     ...d,
   };
 }
@@ -296,14 +310,38 @@ async function deployOne(
   }
 }
 
+/** The status GitHub gets for this deployment: production's on its first domain, a preview's
+ * on its own host (`kit-deploy/preview`). */
+function statusFor(c: ClaimedDeployment, outcome: SwitchOutcome): CommitStatus {
+  const base = { repo: c.project.repo, sha: c.sha };
+  const host =
+    c.pr === null ? c.hosts[0] : previewHost(c.project.name, c.pr);
+  const context =
+    c.pr === null ? STATUS_CONTEXTS.production : STATUS_CONTEXTS.preview;
+  if (outcome.result === "failed") {
+    return {
+      ...base,
+      context,
+      state: "failure",
+      description: `Deploy failed: ${outcome.error}`,
+    };
+  }
+  const what = c.pr === null ? "Live" : "Preview";
+  return {
+    ...base,
+    context,
+    state: "success",
+    description: host ? `${what} at ${host}` : what,
+    ...(host ? { targetUrl: `https://${host}` } : {}),
+  };
+}
+
 /** Best effort, after the switch is decided: GitHub being down never changes the outcome. */
 async function publishStatus(
   ctx: Ctx,
   c: ClaimedDeployment,
   outcome: SwitchOutcome,
 ) {
-  // A preview's status (`kit-deploy/preview`, with its URL) and its PR comment are U7's.
-  if (c.pr !== null) return;
   if (!ctx.status) {
     ctx.log({
       event: "switch.status_skipped",
@@ -312,36 +350,87 @@ async function publishStatus(
     });
     return;
   }
-  const host = c.hosts[0];
+  const s = statusFor(c, outcome);
   try {
-    await ctx.status(
-      outcome.result === "live"
-        ? {
-            repo: c.project.repo,
-            sha: c.sha,
-            state: "success",
-            description: host ? `Live at ${host}` : "Live",
-            ...(host ? { targetUrl: `https://${host}` } : {}),
-          }
-        : {
-            repo: c.project.repo,
-            sha: c.sha,
-            state: "failure",
-            description: `Deploy failed: ${outcome.error}`,
-          },
-    );
+    await ctx.status(s);
     ctx.log({
       event: "switch.status",
       deployment: c.id,
-      state: outcome.result === "live" ? "success" : "failure",
+      context: s.context,
+      state: s.state,
     });
   } catch (e) {
     ctx.log({
       event: "switch.status_failed",
       deployment: c.id,
+      context: s.context,
       error: (e as Error).message,
     });
   }
+}
+
+/** Best effort, like the status: creates or edits the PR's comment. `live` creates it if it is
+ * not there yet; `closed` only edits it (a PR that never had a preview gets no comment). */
+async function upsertComment(
+  ctx: Ctx,
+  p: { repo: string; project: string; pr: number; deployment?: string },
+  body: string,
+  create: boolean,
+) {
+  const where = {
+    ...(p.deployment ? { deployment: p.deployment } : {}),
+    project: p.project,
+    pr: p.pr,
+  };
+  if (!ctx.comments) {
+    ctx.log({
+      event: "preview.comment_skipped",
+      ...where,
+      reason: "no GITHUB_STATUS_TOKEN",
+    });
+    return;
+  }
+  try {
+    const result = await ctx.comments({
+      repo: p.repo,
+      pr: p.pr,
+      marker: previewMarker(p.project),
+      body,
+      create,
+    });
+    if (result === "missing") {
+      ctx.log({ event: "preview.comment_skipped", ...where, reason: "no comment" });
+      return;
+    }
+    ctx.log({ event: "preview.comment", ...where, result });
+  } catch (e) {
+    ctx.log({
+      event: "preview.comment_failed",
+      ...where,
+      error: (e as Error).message,
+    });
+  }
+}
+
+/** After a preview's switch: its URL in the PR. A failed push leaves the comment as it was (it
+ * still points at the preview that serves); the failure is on the commit's status. */
+async function commentPreview(
+  ctx: Ctx,
+  c: ClaimedDeployment,
+  outcome: SwitchOutcome,
+) {
+  if (c.pr === null || outcome.result !== "live") return;
+  await upsertComment(
+    ctx,
+    {
+      repo: c.project.repo,
+      project: c.project.name,
+      pr: c.pr,
+      deployment: c.id,
+    },
+    liveCommentBody({ project: c.project.name, pr: c.pr, sha: c.sha }),
+    true,
+  );
 }
 
 /** Deploys the project's newest queued deployment (and any queued while it ran). */
@@ -359,6 +448,7 @@ export async function processProject(
     ) {
       const outcome = await deployOne(ctx, c);
       await publishStatus(ctx, c, outcome);
+      await commentPreview(ctx, c, outcome);
       done.push({ id: c.id, ...outcome });
     }
     return done;
@@ -372,7 +462,7 @@ export async function processProject(
  */
 export async function closePreview(
   deps: SwitchDeps,
-  project: { id: string; name: string },
+  project: { id: string; name: string; repo: string },
   pr: number,
 ): Promise<{ removed: string[] }> {
   const ctx = withDefaults(deps);
@@ -390,6 +480,12 @@ export async function closePreview(
       });
     }
     ctx.log({ event: "preview.closed", project: project.name, pr, removed });
+    await upsertComment(
+      ctx,
+      { repo: project.repo, project: project.name, pr },
+      closedCommentBody({ project: project.name, pr }),
+      false,
+    );
     return { removed };
   });
 }

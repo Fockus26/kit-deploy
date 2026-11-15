@@ -15,7 +15,7 @@ import {
 
 /** `kd_hello-pr-<n>-<sha12>`, as `containerName` names a preview's container. */
 const prName = (pr: number, c: string) => `kd_hello-pr-${pr}-${c.repeat(12)}`;
-const PROJECT = { id: "p1", name: "kd_hello" };
+const PROJECT = { id: "p1", name: "kd_hello", repo: "Fockus26/kd-hello" };
 
 const queued = (id: string, c: string, minute: number, pr?: number): Row => ({
   id,
@@ -77,9 +77,11 @@ describe("preview switch", () => {
       container: prName(7, "a"),
       port: 20500,
     });
-    // Production is not touched, and the production commit status is not posted for a preview.
+    // Production is not touched; the status goes out on the preview's own context.
     expect(rows.find((r) => r.id === "prod")).toMatchObject(productionLive());
-    expect(published).toEqual([]);
+    expect(published).toEqual([
+      expect.objectContaining({ context: "kit-deploy/preview" }),
+    ]);
   });
 
   test("the next push replaces the PR's container: new one healthy → file → drain → stop + remove", async () => {
