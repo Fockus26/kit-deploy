@@ -172,3 +172,24 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - Agent: version 0.1.0; preview.remove of a missing PR → removed:false (no-op); site.write with a
   preview host → bad_request. /etc/caddy/previews/ still empty (U6 writes the first one).
 - Ports 80/443 untouched: no certbot dry-run needed.
+
+### U6 API + preview switch (2026-11-15, PR #25, branch feat/u6-preview-api)
+
+- `POST /api/v1/deploy {sha, pr?}`: with pr → preview row (env preview, pr), response adds
+  `preview: {pr, url}`. `DELETE /api/v1/preview {pr}` → 202, then `closePreview` under the project
+  lock: preview.remove first (Caddy refusing → nothing changed, retry), open rows of the PR →
+  superseded, containers stop (0 s) + rm. Shared `authorize()` (token, size, strict zod, token →
+  project); the body can never name a project or an image.
+- Switch: `deployOne` split into deployProduction (unchanged behaviour) / deployPreview
+  (runNew 384 MB → health → preview.write running → markLive → drain → stop + rm the PR's old
+  one; nothing kept). claimNext takes the newest queued of any scope and supersedes only its own
+  scope (production or that PR); markLive likewise (`scopeIs` in lib/db/store.ts). Production
+  commit status is not posted for previews (U7 does `kit-deploy/preview`).
+- Migration 0004_preview_pr: open-commit unique index → (project, env, coalesce(pr,0), sha);
+  CHECK pr 1..999999. `onConflictDoNothing()` without target (expression index).
+- Verified: suite 397 pass; repo/store vs real Postgres 17 (Docker) 14 pass; build, typecheck,
+  lint green; security-review no findings.
+- Known gap: a build finishing after the `closed` event re-creates the preview → U10's sweep.
+- Gotchas: biome ignores `.claude/worktrees` (lint there with explicit paths or the exclusion
+  removed temporarily); Python on Windows writes CRLF (use newline='\n').
+- Not on the VPS: needs César's OK (release + migration 0004).

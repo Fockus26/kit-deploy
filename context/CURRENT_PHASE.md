@@ -16,7 +16,8 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | U3 `/login` + `/enrol` + U3b (cut link, passkey-only re-enrol) | #20, #21 | merged · on the VPS (7112799); César enrolled, TOTP sign-in verified |
 | U4 preview access (D013): `/preview-access`, one-time token, `kd_preview`, forward_auth + `kit_preview` gate | #22, #23 | merged (13d7641, 40a837c) · on the VPS with e134cca (2026-11-15) |
 | U5 core + agent: `renderPreviewSite` (running / asleep), `preview.write`/`preview.remove`; site.write production-only | #24 | merged (e134cca) · on the VPS 2026-11-15, verified |
-| U6–U10 | — | pending (see plan) |
+| U6 API + preview switch: `POST deploy {sha, pr}` → `pr-<n>` 384 MB, `DELETE /api/v1/preview`, migration 0004 | #25 | PR open · not on the VPS (needs César's OK) |
+| U7–U10 | — | pending (see plan) |
 
 Log: `PHASE_LOG/03-previews.md`.
 
