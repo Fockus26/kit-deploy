@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- Served by Caddy (infra/caddy/kit-previews.caddy, snippet kit_preview_asleep) with a 503 for a
-     sleeping preview (D017), behind the login. Caddy fills in the project and PR (`templates`,
+     sleeping preview (D017), behind the login. Caddy fills in the project and PR (`templates`, delimiters in kit-previews.caddy;
      values already validated by lib/core). Self-contained: no app, no external request. Colors, spacing, radii and type are
      the tokens of context/COLORS.md, DESIGN_TOKENS.md and TYPOGRAPHY.md (dark default, D007). -->
 <html lang="es">
@@ -80,7 +80,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">{{placeholder "http.vars.kd_project"}} · PR #{{placeholder "http.vars.kd_pr"}}</p>
+  <p class="eyebrow">%%placeholder "http.vars.kd_project"%% · PR #%%placeholder "http.vars.kd_pr"%%</p>
   <h1>Este preview está dormido</h1>
   <p>Se detuvo para dejar sitio a previews más recientes: solo cuatro pueden estar encendidos a la vez. Se despierta solo con el próximo push a su pull request.</p>
   <p><a href="https://deploy.fockus.dev/">Ir al panel de kit-deploy</a></p>

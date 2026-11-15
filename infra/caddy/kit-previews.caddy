@@ -40,7 +40,10 @@
 		root * /opt/kit-deploy/current/infra/caddy/pages
 		rewrite * /preview-asleep.html
 		header Cache-Control "no-store"
-		templates
+		# %% %% instead of {{ }}: the page stays plain HTML that biome can parse.
+		templates {
+			between %% %%
+		}
 		file_server {
 			status 503
 		}

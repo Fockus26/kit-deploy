@@ -120,7 +120,7 @@ check "... the page is not shown before the login" sh -c "! grep -q 'dormido' /t
 curl -sk -D /tmp/h -o /tmp/b --resolve "$S:443:127.0.0.1" -H 'Cookie: kd_preview=good' "https://$S/pricing?x=1"
 check "valid cookie: 503 with the 'preview dormido' page" sh -c "head -1 /tmp/h | grep -q ' 503' && grep -q 'Este preview está dormido' /tmp/b"
 check "... naming its project and PR (templates filled them in)" grep -qF 'kd_hello · PR #8' /tmp/b
-check "... no template syntax left over" sh -c "! grep -q '{{' /tmp/b"
+check "... no template syntax left over" sh -c "! grep -qF '%%' /tmp/b"
 check "... as HTML, noindex, not cached" sh -c "grep -qi '^content-type: text/html' /tmp/h && grep -qi '^x-robots-tag: noindex, nofollow' /tmp/h && grep -qi '^cache-control: no-store' /tmp/h"
 check "... never proxied: PR 7's app did not answer" sh -c "! grep -q 'hola desde el preview' /tmp/b"
 curl -sk -D /tmp/h -o /tmp/b --resolve "$S:443:127.0.0.1" -X POST -d "t=kdg_grant" "https://$S/__kit-deploy/exchange"
