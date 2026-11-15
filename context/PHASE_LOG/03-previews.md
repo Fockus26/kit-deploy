@@ -211,3 +211,4 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   `comments: commenterFromEnv()` with the same GITHUB_STATUS_TOKEN.
 - Verified: suite 420 pass; build, typecheck, lint green; security-review no findings.
 - Not on the VPS: needs César's OK (web release only, no migration, no agent change).
+- CI green; squash-merged by the agent as fac43e3 (2026-11-15). VPS pending César's OK.
