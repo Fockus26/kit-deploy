@@ -3,6 +3,7 @@ import type { AgentClient } from "../../cli/client";
 import type {
   ClaimedDeployment,
   KeptDeployment,
+  RunningPreview,
   SwitchRepo,
 } from "../../lib/deploy/repo";
 import type { SwitchDeps } from "../../lib/deploy/switch";
@@ -61,7 +62,7 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
       const prev =
         rows.find(
           (r) =>
-            r.status === "live" &&
+            (r.status === "live" || r.status === "asleep") &&
             r.id !== id &&
             me !== undefined &&
             same(r, me),
@@ -113,10 +114,35 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
           port: r.port as number,
         }));
     },
+    async runningPreviews() {
+      const out = new Map<number, RunningPreview>();
+      for (const r of rows) {
+        if (r.pr === undefined || !r.container) continue;
+        if (r.status !== "live" && r.status !== "asleep") continue;
+        if (out.get(r.pr)?.status === "live") continue;
+        const pushes = rows
+          .filter((o) => o.pr === r.pr)
+          .map((o) => +o.createdAt);
+        out.set(r.pr, {
+          id: r.id,
+          pr: r.pr,
+          status: r.status,
+          container: r.container,
+          lastPushAt: new Date(Math.max(...pushes)),
+        });
+      }
+      return [...out.values()];
+    },
+    async markAsleep(id) {
+      const me = rows.find((r) => r.id === id);
+      if (!me || me.pr === undefined || me.status !== "live") return false;
+      me.status = "asleep";
+      return true;
+    },
     async closePreview(_projectId, pr) {
       const mine = rows.filter((r) => r.pr === pr);
       for (const r of mine)
-        if (["queued", "starting", "live"].includes(r.status))
+        if (["queued", "starting", "live", "asleep"].includes(r.status))
           r.status = "superseded";
       return mine.flatMap((r) =>
         r.container ? [{ id: r.id, container: r.container }] : [],

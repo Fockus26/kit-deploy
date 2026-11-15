@@ -6,7 +6,9 @@
  *
  * A preview (a deployment with a PR) is the same switch with its own target `pr-<n>`: 384 MB
  * (D017), its file in `/etc/caddy/previews/` through `preview.write`, and nothing kept — a new
- * push replaces the PR's container, and closing the PR removes it (`closePreview`).
+ * push replaces the PR's container, and closing the PR removes it (`closePreview`). At most
+ * PREVIEW_LIMIT previews run per project: before a fifth starts, the least recently pushed one
+ * sleeps (`makeRoom`, D017) — its host says "dormido" and its next push wakes it.
  *
  * Everything goes through kit-agent (`AgentClient`) and the database (`SwitchRepo`); time is
  * injected, so it is tested without waiting.
@@ -17,6 +19,7 @@ import type { AgentClient, Params } from "@/cli/client";
 import {
   containerName,
   MEMORY_MB,
+  PREVIEW_LIMIT,
   type ProductionTarget,
   previewHost,
   type Target,
@@ -27,12 +30,18 @@ import {
   type StatusPublisher,
 } from "./commit-status";
 import {
+  asleepCommentBody,
   closedCommentBody,
   liveCommentBody,
   type PreviewCommenter,
   previewMarker,
 } from "./pr-comment";
-import type { ClaimedDeployment, KeptDeployment, SwitchRepo } from "./repo";
+import type {
+  ClaimedDeployment,
+  KeptDeployment,
+  RunningPreview,
+  SwitchRepo,
+} from "./repo";
 
 export const KEEP = 5;
 
@@ -241,6 +250,70 @@ async function deployProduction(
   });
 }
 
+/**
+ * Puts one preview to sleep (D017). Caddy first: if it refuses the "dormido" file, nothing changed
+ * and the new preview does not start. Then the row (asleep), then the container: a stop that fails
+ * throws, so the new one never starts beside it, and the asleep row keeps the container's name
+ * until it is gone — the next `makeRoom` retries it before putting anyone else to sleep.
+ */
+async function sleepPreview(
+  ctx: Ctx,
+  project: { name: string; repo: string },
+  v: RunningPreview,
+) {
+  if (v.status === "live") {
+    await call(ctx, "preview.write", {
+      project: project.name,
+      pr: v.pr,
+      state: "asleep",
+    });
+    if (!(await ctx.repo.markAsleep(v.id)))
+      throw new SwitchError(`pr-${v.pr} changed while putting it to sleep`);
+    ctx.log({
+      event: "preview.asleep",
+      project: project.name,
+      pr: v.pr,
+      container: v.container,
+    });
+  }
+  await call(ctx, "container.stop", { name: v.container });
+  await quietly(ctx, `remove ${v.container}`, async () => {
+    await call(ctx, "container.remove", { name: v.container });
+    await ctx.repo.clearContainer(v.id);
+  });
+  if (v.status === "live") {
+    await upsertComment(
+      ctx,
+      { repo: project.repo, project: project.name, pr: v.pr },
+      asleepCommentBody({ project: project.name, pr: v.pr }),
+      false,
+    );
+  }
+}
+
+/** Before PR `pr`'s new container starts: if that would make more than PREVIEW_LIMIT running,
+ * the others sleep, least recently pushed first (a leftover asleep container goes before any
+ * live one). Production never counts. Runs under the project lock, so it reads a count no other
+ * switch of the project is changing. */
+async function makeRoom(
+  ctx: Ctx,
+  project: { id: string; name: string; repo: string },
+  pr: number,
+) {
+  const others = (await ctx.repo.runningPreviews(project.id))
+    .filter((r) => r.pr !== pr)
+    .sort(
+      (a, b) =>
+        Number(a.status === "live") - Number(b.status === "live") ||
+        +a.lastPushAt - +b.lastPushAt,
+    );
+  // The new one makes others + 1: leave PREVIEW_LIMIT - 1 others running.
+  while (others.length > PREVIEW_LIMIT - 1) {
+    const v = others.shift();
+    if (v) await sleepPreview(ctx, project, v);
+  }
+}
+
 /** A PR's preview: a new container beside the PR's current one, health, its preview file points
  * at it, then the previous one drains and is removed (previews keep nothing for rollback). */
 async function deployPreview(
@@ -251,6 +324,7 @@ async function deployPreview(
 ) {
   const target: Target = { project: c.project.name, env: "preview", pr };
   const name = containerName(target, c.sha);
+  await makeRoom(ctx, c.project, pr);
   const port = await runNew(ctx, target, c, MEMORY_MB.preview, attempt);
   await mustBeHealthy(ctx, port);
 
@@ -459,7 +533,7 @@ export async function processProject(
 }
 
 /**
- * PR `pr` was closed: its preview file goes (the host answers "preview no existe" again), its
+ * PR `pr` was closed (live or asleep): its preview file goes (the host answers "preview no existe" again), its
  * queued and live deployments are superseded, and its containers are stopped and removed. Under
  * the project's lock, so it never races a switch of the same PR. Idempotent.
  */

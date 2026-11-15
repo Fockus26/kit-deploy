@@ -73,6 +73,20 @@ export function liveCommentBody(p: {
   ].join("\n");
 }
 
+/** The comment while the preview sleeps (D017): stopped to make room, its next push wakes it. */
+export function asleepCommentBody(p: { project: string; pr: number }): string {
+  assertPr(p.pr);
+  const url = `https://${previewHost(p.project, p.pr)}`;
+  return [
+    previewMarker(p.project),
+    `**Preview de ${p.project}** dormida: se detuvo para dejar sitio a previews más recientes (solo cuatro encendidas a la vez).`,
+    "",
+    `- URL: ${url}`,
+    "",
+    `Se despierta sola con el próximo push al PR #${p.pr}.`,
+  ].join("\n");
+}
+
 /** The comment after the PR was closed: the preview and its containers are gone. */
 export function closedCommentBody(p: { project: string; pr: number }): string {
   return [

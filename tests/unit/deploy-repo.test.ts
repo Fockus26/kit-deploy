@@ -227,6 +227,93 @@ describe.skipIf(!url)("drizzle switch repo (Postgres)", () => {
     );
   });
 
+  test("asleep (D017): runningPreviews, markAsleep, a wake-up replaces it, close supersedes it", async () => {
+    const livePr = async (
+      s: string,
+      pr: number,
+      minutesAgo: number,
+      container: string,
+    ) => {
+      const [d] = await db
+        .insert(deployments)
+        .values({
+          projectId,
+          environment: "preview",
+          pr,
+          sha: s,
+          image: `ghcr.io/fockus26/kd-hello:${s}`,
+          status: "live",
+          container,
+          port: 21000 + pr,
+          createdAt: new Date(Date.now() - minutesAgo * 60_000),
+        })
+        .returning();
+      if (!d) throw new Error("no row");
+      return d.id;
+    };
+    const p20 = await livePr(sha("6"), 20, 30, "kd_hello-pr-20-666666666666");
+    const p21 = await livePr(sha("7"), 21, 20, "kd_hello-pr-21-777777777777");
+    // An older failed push of PR 21 does not move its last push back.
+    await db.insert(deployments).values({
+      projectId,
+      environment: "preview",
+      pr: 21,
+      sha: sha("8"),
+      image: `ghcr.io/fockus26/kd-hello:${sha("8")}`,
+      status: "failed",
+      createdAt: new Date(Date.now() - 40 * 60_000),
+    });
+
+    const running = await repo.runningPreviews(projectId);
+    const mine = running.filter((r) => r.pr === 20 || r.pr === 21);
+    expect(mine.map((r) => [r.pr, r.status]).sort()).toEqual([
+      [20, "live"],
+      [21, "live"],
+    ]);
+    // Production never shows up.
+    expect(running.every((r) => r.container.includes("-pr-"))).toBe(true);
+    const at21 = mine.find((r) => r.pr === 21)?.lastPushAt;
+    const at20 = mine.find((r) => r.pr === 20)?.lastPushAt;
+    expect(at20 && at21 && at20 < at21).toBe(true);
+
+    expect(await repo.markAsleep(p20)).toBe(true);
+    expect(await repo.markAsleep(p20)).toBe(false); // not live any more
+    expect(await statusOf(p20)).toBe("asleep");
+    // Still holding its container until it is removed.
+    expect(
+      (await repo.runningPreviews(projectId)).find((r) => r.pr === 20)?.status,
+    ).toBe("asleep");
+    await repo.clearContainer(p20);
+    expect(
+      (await repo.runningPreviews(projectId)).some((r) => r.pr === 20),
+    ).toBe(false);
+
+    // Not open: the same commit can be queued again, and its wake-up replaces the asleep row.
+    const [wake] = await db
+      .insert(deployments)
+      .values({
+        projectId,
+        environment: "preview",
+        pr: 20,
+        sha: sha("6"),
+        image: `ghcr.io/fockus26/kd-hello:${sha("6")}`,
+      })
+      .returning();
+    if (!wake) throw new Error("no row");
+    await repo.claimNext(projectId);
+    expect(
+      await repo.markLive(wake.id, "kd_hello-pr-20-666666666666", 21020),
+    ).toEqual({ id: p20, container: null });
+    expect(await statusOf(p20)).toBe("superseded");
+
+    // Closing a sleeping PR supersedes its asleep row.
+    expect(await repo.markAsleep(p21)).toBe(true);
+    await repo.clearContainer(p21);
+    expect(await repo.closePreview(projectId, 21)).toEqual([]);
+    expect(await statusOf(p21)).toBe("superseded");
+    expect(await statusOf(wake.id)).toBe("live");
+  });
+
   test("the database refuses a preview without a PR, a PR out of range, a production PR", async () => {
     const base = {
       projectId,

@@ -48,6 +48,9 @@ export const DEPLOYMENT_STATUSES = [
   "live",
   "failed",
   "superseded",
+  /** A preview stopped to make room (D017): its container is gone, its host serves "dormido",
+   * and its next push wakes it. Not open: a push of the same commit deploys it again. */
+  "asleep",
 ] as const;
 export type DeploymentStatus = (typeof DEPLOYMENT_STATUSES)[number];
 /** A deployment that is or will be serving: a new request for the same commit gets it back. */
