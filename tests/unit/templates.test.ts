@@ -16,10 +16,21 @@ type Step = {
   with?: Record<string, unknown>;
   env?: Record<string, string>;
 };
-type Workflow = {
-  on: { push: { branches: string[] } };
+type Job = {
+  if?: string;
   permissions: Record<string, string>;
-  jobs: { deploy: { steps: Step[] } };
+  env?: Record<string, string>;
+  steps: Step[];
+};
+type Workflow = {
+  on: {
+    push: { branches: string[] };
+    pull_request: { types: string[] };
+    [event: string]: unknown;
+  };
+  concurrency: { group: string; "cancel-in-progress": boolean };
+  permissions: Record<string, string>;
+  jobs: { deploy: Job; "close-preview": Job; "no-preview": Job };
 };
 
 describe("templates/Dockerfile", () => {
@@ -63,40 +74,129 @@ describe("templates/dockerignore", () => {
 });
 
 describe("templates/deploy-vps.yml", () => {
-  const wf = Bun.YAML.parse(read("templates/deploy-vps.yml")) as Workflow;
-  const steps = wf.jobs.deploy.steps;
+  const raw = read("templates/deploy-vps.yml");
+  const wf = Bun.YAML.parse(raw) as Workflow;
+  const { deploy, "close-preview": close, "no-preview": skip } = wf.jobs;
+  const steps = deploy.steps;
+  const fromThisRepo =
+    "github.event.pull_request.head.repo.full_name == github.repository";
 
-  test("least privilege: read the code, write packages, nothing else", () => {
-    expect(wf.permissions).toEqual({ contents: "read", packages: "write" });
+  test("production: push to main and manual runs, as before", () => {
+    expect(wf.on.push.branches).toEqual(["main"]);
+    expect("workflow_dispatch" in wf.on).toBe(true);
+  });
+
+  test("previews: pull_request (never pull_request_target) with its four actions", () => {
+    expect(wf.on.pull_request.types).toEqual([
+      "opened",
+      "synchronize",
+      "reopened",
+      "closed",
+    ]);
+    expect(raw).not.toContain("pull_request_target:");
+    expect("pull_request_target" in wf.on).toBe(false);
+  });
+
+  test("one run per PR (or branch): a newer push cancels the build in course", () => {
+    expect(wf.concurrency["cancel-in-progress"]).toBe(true);
+    expect(wf.concurrency.group).toContain(
+      "format('pr-{0}', github.event.pull_request.number)",
+    );
+    expect(wf.concurrency.group).toContain("github.ref");
+  });
+
+  test("least privilege: nothing by default, packages only where the image is pushed", () => {
+    expect(wf.permissions).toEqual({});
+    expect(deploy.permissions).toEqual({ contents: "read", packages: "write" });
+    expect(close.permissions).toEqual({});
+    expect(skip.permissions).toEqual({});
+  });
+
+  test("forks and Dependabot get no secret: their PRs are skipped with a notice", () => {
+    for (const job of [deploy, close]) {
+      expect(job.if).toContain(fromThisRepo);
+      expect(job.if).toContain("github.actor != 'dependabot[bot]'");
+    }
+    expect(skip.if).toContain(
+      "github.event.pull_request.head.repo.full_name != github.repository",
+    );
+    expect(skip.if).toContain("github.actor == 'dependabot[bot]'");
+    expect(skip.steps[0]?.run).toContain("::notice");
+    expect(skip.steps[0]?.run).not.toContain("exit 1");
+    expect(JSON.stringify(skip)).not.toContain("secrets.");
+  });
+
+  test("deploy runs for pushes and open PRs; close-preview only when the PR closes", () => {
+    expect(deploy.if).toContain("github.event_name != 'pull_request'");
+    expect(deploy.if).toContain("github.event.action != 'closed'");
+    expect(close.if).toContain("github.event.action == 'closed'");
+  });
+
+  test("builds and names the PR's head commit, not GitHub's merge commit", () => {
+    expect(deploy.env?.SHA).toBe(
+      "${{ github.event.pull_request.head.sha || github.sha }}",
+    );
+    expect(deploy.env?.PR).toBe("${{ github.event.pull_request.number }}");
+    const checkout = steps.find((s) => s.uses?.startsWith("actions/checkout"));
+    expect(checkout?.with?.ref).toBe("${{ env.SHA }}");
   });
 
   test("pushes a lowercase ghcr.io/<repo>:<sha> image, built with GIT_SHA", () => {
     const image = steps.find((s) => s.name === "Image name");
-    expect(image?.run).toContain(
-      "ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}",
-    );
+    expect(image?.run).toContain("ghcr.io/${GITHUB_REPOSITORY,,}:${SHA}");
     const build = steps.find((s) =>
       s.uses?.startsWith("docker/build-push-action"),
     );
     expect(build?.with?.push).toBe(true);
-    expect(build?.with?.["build-args"]).toBe("GIT_SHA=${{ github.sha }}");
+    expect(build?.with?.["build-args"]).toBe("GIT_SHA=${{ env.SHA }}");
   });
 
-  test("posts only the sha, with the token from secrets and never in argv", () => {
-    const deploy = steps.find((s) => s.name === "Deploy");
-    expect(deploy?.env?.KIT_DEPLOY_TOKEN).toBe(
-      "${{ secrets.KIT_DEPLOY_TOKEN }}",
-    );
-    expect(deploy?.run).toContain("--header @-");
-    expect(deploy?.run).toContain('--data "{\\"sha\\":\\"${GITHUB_SHA}\\"}"');
-    expect(deploy?.run).toContain("/api/v1/deploy");
-    // The token is only ever piped through printf, never put on curl's command line.
-    expect(deploy?.run).not.toMatch(/curl[^|]*KIT_DEPLOY_TOKEN/);
+  test("the phase 04 gap (public variables) is marked, not filled", () => {
+    expect(raw).toMatch(/Phase 04 \(pending\)[\s\S]*NEXT_PUBLIC_\*/);
+  });
+
+  test("posts {sha} for production and {sha, pr} for a preview", () => {
+    const run = steps.find((s) => s.name === "Deploy")?.run ?? "";
+    expect(run).toContain('body="{\\"sha\\":\\"${SHA}\\",\\"pr\\":${PR}}"');
+    expect(run).toContain('body="{\\"sha\\":\\"${SHA}\\"}"');
+    expect(run).toContain('--data "$body"');
+    expect(run).toContain("/api/v1/deploy");
+  });
+
+  test("a closed PR deletes its preview with {pr}", () => {
+    const run = close.steps.find((s) => s.name === "Remove preview")?.run ?? "";
+    expect(run).toContain("--request DELETE");
+    expect(run).toContain('--data "{\\"pr\\":${PR}}"');
+    expect(run).toContain("/api/v1/preview");
+  });
+
+  test("the token comes from secrets, only through stdin, never echoed or in a URL", () => {
+    const tokenSteps = [
+      steps.find((s) => s.name === "Deploy"),
+      close.steps.find((s) => s.name === "Remove preview"),
+    ];
+    for (const s of tokenSteps) {
+      expect(s?.env?.KIT_DEPLOY_TOKEN).toBe("${{ secrets.KIT_DEPLOY_TOKEN }}");
+      const run = s?.run ?? "";
+      expect(run).toContain("--header @-");
+      expect(run).toContain(
+        "printf 'Authorization: Bearer %s\\n' \"$KIT_DEPLOY_TOKEN\" |",
+      );
+      // Never on curl's command line, in an echo, or in the URL.
+      expect(run).not.toMatch(/curl[^|]*KIT_DEPLOY_TOKEN/);
+      expect(run).not.toMatch(/echo[^\n]*\$\{?KIT_DEPLOY_TOKEN/);
+      expect(run).not.toMatch(/https?:\/\/[^\s"]*KIT_DEPLOY_TOKEN/);
+    }
+    // The secret is only read where it is used, never in a run line directly.
+    expect(raw.match(/secrets\.KIT_DEPLOY_TOKEN/g)).toHaveLength(2);
+    expect(raw).not.toMatch(/run:[^\n]*secrets\./);
   });
 
   test("every action is pinned to a major version", () => {
-    for (const s of steps.filter((s) => s.uses)) {
-      expect(s.uses).toMatch(/@v\d+$/);
+    for (const job of Object.values(wf.jobs)) {
+      for (const s of job.steps.filter((s) => s.uses)) {
+        expect(s.uses).toMatch(/@v\d+$/);
+      }
     }
   });
 });
