@@ -1,12 +1,29 @@
 /**
- * The commit's status on GitHub after the switch (brief, phase 02: "the commit gets its status").
- * `POST /repos/{owner}/{repo}/statuses/{sha}` with the platform's own token (fine-grained, only
- * "Commit statuses: read and write" on the projects' repos), from `/etc/kit-deploy/github.env`
- * (root 0600, written by `infra/install.sh --github-token`). The token is never logged or
- * returned; an error says only the HTTP status.
+ * The commit's status on GitHub after the switch (brief, phase 02: "the commit gets its status";
+ * phase 03: the preview's). `POST /repos/{owner}/{repo}/statuses/{sha}` with the platform's own
+ * token (fine-grained: "Commit statuses" and "Pull requests" read and write on the projects'
+ * repos), from `/etc/kit-deploy/github.env` (root 0600, written by `infra/install.sh
+ * --github-token`). The token is never logged or returned; an error says only the HTTP status.
  */
 
-export const STATUS_CONTEXT = "kit-deploy/production";
+import {
+  assertRepo,
+  discard,
+  GitHubError,
+  type GitHubOptions,
+  githubRequest,
+  githubTokenFromEnv,
+} from "./github";
+
+export { GitHubError as StatusError } from "./github";
+
+/** One status per environment, so a preview's never overwrites production's on the same sha. */
+export const STATUS_CONTEXTS = {
+  production: "kit-deploy/production",
+  preview: "kit-deploy/preview",
+} as const;
+export type StatusContext =
+  (typeof STATUS_CONTEXTS)[keyof typeof STATUS_CONTEXTS];
 /** GitHub's limit for `description`. */
 export const DESCRIPTION_MAX = 140;
 
@@ -14,32 +31,25 @@ export type CommitStatus = {
   /** GitHub `owner/name`. */
   repo: string;
   sha: string;
+  context: StatusContext;
   state: "success" | "failure";
   description: string;
-  /** https only; the site's URL on success. */
+  /** https only; the site's or the preview's URL on success. */
   targetUrl?: string;
 };
 
 export type StatusPublisher = (s: CommitStatus) => Promise<void>;
 
-// The same rule as `projects_repo_format` in the schema.
-const REPO =
-  /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$/;
 const SHA = /^[0-9a-f]{40}$/;
-
-export class StatusError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "StatusError";
-  }
-}
+const CONTEXTS: readonly string[] = Object.values(STATUS_CONTEXTS);
 
 /** The request body GitHub gets; validated, so nothing odd ends up in the URL or the payload. */
 export function statusRequest(s: CommitStatus): { path: string; body: string } {
-  if (!REPO.test(s.repo)) throw new StatusError(`bad repo "${s.repo}"`);
-  if (!SHA.test(s.sha)) throw new StatusError("bad sha");
+  assertRepo(s.repo);
+  if (!SHA.test(s.sha)) throw new GitHubError("bad sha");
+  if (!CONTEXTS.includes(s.context)) throw new GitHubError("bad context");
   if (s.targetUrl !== undefined && !/^https:\/\/[^\s]+$/.test(s.targetUrl))
-    throw new StatusError("target_url must be https");
+    throw new GitHubError("target_url must be https");
   const description =
     s.description.length > DESCRIPTION_MAX
       ? `${s.description.slice(0, DESCRIPTION_MAX - 1)}…`
@@ -48,7 +58,7 @@ export function statusRequest(s: CommitStatus): { path: string; body: string } {
     path: `/repos/${s.repo}/statuses/${s.sha}`,
     body: JSON.stringify({
       state: s.state,
-      context: STATUS_CONTEXT,
+      context: s.context,
       description,
       ...(s.targetUrl ? { target_url: s.targetUrl } : {}),
     }),
@@ -57,36 +67,13 @@ export function statusRequest(s: CommitStatus): { path: string; body: string } {
 
 export function githubStatusPublisher(
   token: string,
-  opts: { fetch?: typeof fetch; timeoutMs?: number; api?: string } = {},
+  opts: GitHubOptions = {},
 ): StatusPublisher {
-  const doFetch = opts.fetch ?? fetch;
-  const api = opts.api ?? "https://api.github.com";
-  const timeoutMs = opts.timeoutMs ?? 10_000;
+  const request = githubRequest(token, opts);
   return async (s) => {
     const { path, body } = statusRequest(s);
-    let res: Response;
-    try {
-      res = await doFetch(`${api}${path}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "Content-Type": "application/json",
-          "User-Agent": "kit-deploy",
-        },
-        body,
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (e) {
-      throw new StatusError(`github unreachable: ${(e as Error).name}`);
-    }
-    // 201 Created. The body is not read into the error: only the status code leaves here.
-    if (res.status !== 201) {
-      await res.body?.cancel().catch(() => undefined);
-      throw new StatusError(`github answered ${res.status}`);
-    }
-    await res.body?.cancel().catch(() => undefined);
+    // 201 Created; nothing in its body is needed.
+    await discard(await request("POST", path, [201], JSON.parse(body)));
   };
 }
 
@@ -94,6 +81,6 @@ export function githubStatusPublisher(
 export function statusPublisherFromEnv(
   env: Record<string, string | undefined> = process.env,
 ): StatusPublisher | null {
-  const token = env.GITHUB_STATUS_TOKEN;
+  const token = githubTokenFromEnv(env);
   return token ? githubStatusPublisher(token) : null;
 }

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DESCRIPTION_MAX,
   githubStatusPublisher,
-  STATUS_CONTEXT,
+  STATUS_CONTEXTS,
   StatusError,
   statusPublisherFromEnv,
   statusRequest,
@@ -36,6 +36,7 @@ function fakeFetch(status = 201) {
 const success = {
   repo: "Fockus26/kd-hello",
   sha: sha("b"),
+  context: STATUS_CONTEXTS.production,
   state: "success" as const,
   description: "Live at kd-hello.fockus.dev",
   targetUrl: "https://kd-hello.fockus.dev",
@@ -47,7 +48,7 @@ describe("statusRequest", () => {
     expect(r.path).toBe(`/repos/Fockus26/kd-hello/statuses/${sha("b")}`);
     expect(JSON.parse(r.body)).toEqual({
       state: "success",
-      context: STATUS_CONTEXT,
+      context: "kit-deploy/production",
       description: "Live at kd-hello.fockus.dev",
       target_url: "https://kd-hello.fockus.dev",
     });
@@ -78,6 +79,17 @@ describe("statusRequest", () => {
     expect(() =>
       statusRequest({ ...success, targetUrl: "http://kd-hello.fockus.dev" }),
     ).toThrow(StatusError);
+    expect(() =>
+      statusRequest({
+        ...success,
+        context: "kit-deploy/other" as typeof success.context,
+      }),
+    ).toThrow(StatusError);
+  });
+
+  test("the preview's context", () => {
+    const r = statusRequest({ ...success, context: STATUS_CONTEXTS.preview });
+    expect(JSON.parse(r.body).context).toBe("kit-deploy/preview");
   });
 });
 
@@ -152,6 +164,7 @@ describe("the switch publishes the commit status", () => {
       {
         repo: "Fockus26/kd-hello",
         sha: sha("b"),
+        context: "kit-deploy/production",
         state: "success",
         description: "Live at kd-hello.fockus.dev",
         targetUrl: "https://kd-hello.fockus.dev",
@@ -160,6 +173,7 @@ describe("the switch publishes the commit status", () => {
     expect(logs).toContainEqual({
       event: "switch.status",
       deployment: "new",
+      context: "kit-deploy/production",
       state: "success",
     });
   });
@@ -195,6 +209,7 @@ describe("the switch publishes the commit status", () => {
     expect(logs).toContainEqual({
       event: "switch.status_failed",
       deployment: "new",
+      context: "kit-deploy/production",
       error: "github answered 500",
     });
   });
