@@ -1,7 +1,7 @@
 /** `SwitchRepo` on kit_deploy (Drizzle + postgres.js). */
-import { and, asc, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { deployments, domains, projects } from "@/lib/db/schema";
-import type { Db } from "@/lib/db/store";
+import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { deployments, domains, OPEN_STATUSES, projects } from "@/lib/db/schema";
+import { type Db, scopeIs } from "@/lib/db/store";
 import type { SwitchRepo } from "./repo";
 
 const production = eq(deployments.environment, "production");
@@ -42,12 +42,12 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
             id: deployments.id,
             sha: deployments.sha,
             image: deployments.image,
+            pr: deployments.pr,
           })
           .from(deployments)
           .where(
             and(
               eq(deployments.projectId, projectId),
-              production,
               eq(deployments.status, "queued"),
             ),
           )
@@ -55,14 +55,15 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
           .limit(1)
           .for("update");
         if (!next) return null;
-        // An older commit still queued is pointless once a newer one deploys.
+        // An older commit still queued is pointless once a newer one of the same scope (production,
+        // or the same PR) deploys.
         await tx
           .update(deployments)
           .set({ status: "superseded", finishedAt: new Date() })
           .where(
             and(
               eq(deployments.projectId, projectId),
-              production,
+              scopeIs({ pr: next.pr }),
               eq(deployments.status, "queued"),
               ne(deployments.id, next.id),
             ),
@@ -88,7 +89,7 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
     async markLive(id, container, port) {
       return db.transaction(async (tx) => {
         const [me] = await tx
-          .select({ projectId: deployments.projectId })
+          .select({ projectId: deployments.projectId, pr: deployments.pr })
           .from(deployments)
           .where(eq(deployments.id, id));
         if (!me) throw new Error(`deployment ${id} not found`);
@@ -98,7 +99,7 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
           .where(
             and(
               eq(deployments.projectId, me.projectId),
-              production,
+              scopeIs({ pr: me.pr }),
               eq(deployments.status, "live"),
               ne(deployments.id, id),
             ),
@@ -198,6 +199,26 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
         });
       }
       return out;
+    },
+
+    async closePreview(projectId, pr) {
+      return db.transaction(async (tx) => {
+        const scope = and(
+          eq(deployments.projectId, projectId),
+          scopeIs({ pr }),
+        );
+        await tx
+          .update(deployments)
+          .set({ status: "superseded", finishedAt: new Date() })
+          .where(and(scope, inArray(deployments.status, [...OPEN_STATUSES])));
+        const rows = await tx
+          .select({ id: deployments.id, container: deployments.container })
+          .from(deployments)
+          .where(and(scope, isNotNull(deployments.container)));
+        return rows.flatMap((r) =>
+          r.container ? [{ id: r.id, container: r.container }] : [],
+        );
+      });
     },
   };
 }

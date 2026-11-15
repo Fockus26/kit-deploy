@@ -14,12 +14,17 @@ export const name = (c: string) => `kd_hello-prod-${c.repeat(12)}`;
 export type Row = {
   id: string;
   sha: string;
+  /** A preview's PR; absent = production. */
+  pr?: number;
   status: KeptDeployment["status"];
   container: string | null;
   port: number | null;
   createdAt: Date;
   error?: string;
 };
+
+/** Same scope: production, or the same PR. */
+const same = (a: Row, b: Row) => (a.pr ?? null) === (b.pr ?? null);
 
 /** An in-memory kit_deploy for one project, kd_hello. */
 export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
@@ -28,17 +33,19 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
       return fn();
     },
     async claimNext() {
-      const queued = rows
+      const [next] = rows
         .filter((r) => r.status === "queued")
         .sort((a, b) => +b.createdAt - +a.createdAt);
-      const [next, ...older] = queued;
       if (!next) return null;
-      for (const o of older) o.status = "superseded";
+      for (const o of rows)
+        if (o !== next && o.status === "queued" && same(o, next))
+          o.status = "superseded";
       next.status = "starting";
       const c: ClaimedDeployment = {
         id: next.id,
         sha: next.sha,
         image: `ghcr.io/fockus26/kd-hello:${next.sha}`,
+        pr: next.pr ?? null,
         project: {
           id: "p1",
           name: "kd_hello",
@@ -50,9 +57,16 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
       return c;
     },
     async markLive(id, container, port) {
-      const prev = rows.find((r) => r.status === "live" && r.id !== id) ?? null;
-      if (prev) prev.status = "superseded";
       const me = rows.find((r) => r.id === id);
+      const prev =
+        rows.find(
+          (r) =>
+            r.status === "live" &&
+            r.id !== id &&
+            me !== undefined &&
+            same(r, me),
+        ) ?? null;
+      if (prev) prev.status = "superseded";
       if (me) Object.assign(me, { status: "live", container, port });
       return prev ? { id: prev.id, container: prev.container } : null;
     },
@@ -62,7 +76,10 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
     },
     async listKept() {
       return rows
-        .filter((r): r is Row & { container: string } => r.container !== null)
+        .filter(
+          (r): r is Row & { container: string } =>
+            r.container !== null && r.pr === undefined,
+        )
         .sort((a, b) => +b.createdAt - +a.createdAt)
         .map(({ id, sha, status, container, port, createdAt }) => ({
           id,
@@ -84,7 +101,10 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
     },
     async liveSites() {
       return rows
-        .filter((r) => r.status === "live" && r.container && r.port)
+        .filter(
+          (r) =>
+            r.status === "live" && r.container && r.port && r.pr === undefined,
+        )
         .map((r) => ({
           deploymentId: r.id,
           project: "kd_hello",
@@ -92,6 +112,15 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
           container: r.container as string,
           port: r.port as number,
         }));
+    },
+    async closePreview(_projectId, pr) {
+      const mine = rows.filter((r) => r.pr === pr);
+      for (const r of mine)
+        if (["queued", "starting", "live"].includes(r.status))
+          r.status = "superseded";
+      return mine.flatMap((r) =>
+        r.container ? [{ id: r.id, container: r.container }] : [],
+      );
     },
   };
   return repo;
@@ -122,6 +151,17 @@ export function fakeAgent(overrides: Partial<Record<OpName, Answer>> = {}) {
     "site.write": () =>
       ok({ path: "/etc/caddy/sites/kd_hello.caddy", changed: true }),
     "container.list": () => ok([]),
+    "preview.write": (p) =>
+      ok({
+        path: `/etc/caddy/previews/kd_hello-pr-${p.pr}.caddy`,
+        state: p.state,
+        changed: true,
+      }),
+    "preview.remove": (p) =>
+      ok({
+        path: `/etc/caddy/previews/kd_hello-pr-${p.pr}.caddy`,
+        removed: true,
+      }),
   };
   const agent: AgentClient = {
     async call(op, params) {

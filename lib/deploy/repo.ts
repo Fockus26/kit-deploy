@@ -5,9 +5,11 @@ export type ClaimedDeployment = {
   id: string;
   sha: string;
   image: string;
+  /** The PR of a preview; null in production. */
+  pr: number | null;
   /** `repo`: GitHub `owner/name`, where the commit status goes. */
   project: { id: string; name: string; repo: string; memoryMb: number };
-  /** The project's production hosts (`domains`). */
+  /** The project's production hosts (`domains`); a preview's host is derived (`previewHost`). */
   hosts: string[];
 };
 
@@ -41,9 +43,11 @@ export type LiveSite = {
 export interface SwitchRepo {
   /** Runs `fn` holding the project's lock: one switch per project at a time, across processes. */
   withProjectLock<T>(projectId: string, fn: () => Promise<T>): Promise<T>;
-  /** The newest queued production deployment, now `starting`; older queued ones → `superseded`. */
+  /** The project's newest queued deployment (production or any PR), now `starting`; older queued
+   * ones of the same scope (production, or that PR) → `superseded`. */
   claimNext(projectId: string): Promise<ClaimedDeployment | null>;
-  /** `live` with its container and port; the previous live one → `superseded`, and returned. */
+  /** `live` with its container and port; the previous live one of the same scope → `superseded`,
+   * and returned. */
   markLive(
     id: string,
     container: string,
@@ -57,4 +61,10 @@ export interface SwitchRepo {
   projectByName(name: string): Promise<ProjectInfo | null>;
   /** Every live production deployment, for `regenerate`. */
   liveSites(): Promise<LiveSite[]>;
+  /** The PR was closed: its open (queued, starting, live) preview deployments → `superseded`. Returns every
+   * deployment of that PR that still has a container, for the switch to remove. */
+  closePreview(
+    projectId: string,
+    pr: number,
+  ): Promise<Array<{ id: string; container: string }>>;
 }

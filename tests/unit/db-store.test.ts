@@ -55,7 +55,7 @@ describe.skipIf(!url)("drizzle store (Postgres)", () => {
     });
     await store.touchToken(t.id);
 
-    expect(await store.findOpenDeployment(p.id, SHA)).toBeNull();
+    expect(await store.findOpenDeployment(p.id, { pr: null }, SHA)).toBeNull();
     const input = {
       projectId: p.id,
       environment: "production",
@@ -64,14 +64,31 @@ describe.skipIf(!url)("drizzle store (Postgres)", () => {
     } as const;
     const d = await store.createDeployment(input);
     expect(d?.status).toBe("queued");
-    expect(await store.findOpenDeployment(p.id, SHA)).toEqual(d);
+    expect(await store.findOpenDeployment(p.id, { pr: null }, SHA)).toEqual(d);
     // The partial unique index: a second open deployment of the same commit is refused.
     expect(await store.createDeployment(input)).toBeNull();
 
     await db.update(deployments).set({ status: "failed" });
-    expect(await store.findOpenDeployment(p.id, SHA)).toBeNull();
+    expect(await store.findOpenDeployment(p.id, { pr: null }, SHA)).toBeNull();
     // Once it failed, the same commit can be queued again.
-    expect(await store.createDeployment(input)).not.toBeNull();
+    const again = await store.createDeployment(input);
+    expect(again).not.toBeNull();
+
+    // The same commit as a preview of PR 7 and of PR 8: each its own open deployment, and each
+    // refuses its own twin; production's is untouched.
+    const preview = (pr: number) =>
+      ({ ...input, environment: "preview", pr }) as const;
+    const p7 = await store.createDeployment(preview(7));
+    const p8 = await store.createDeployment(preview(8));
+    expect(p7).not.toBeNull();
+    expect(p8).not.toBeNull();
+    expect(await store.createDeployment(preview(7))).toBeNull();
+    expect(await store.findOpenDeployment(p.id, { pr: 7 }, SHA)).toEqual(p7);
+    expect(await store.findOpenDeployment(p.id, { pr: 8 }, SHA)).toEqual(p8);
+    expect(await store.findOpenDeployment(p.id, { pr: 9 }, SHA)).toBeNull();
+    expect(await store.findOpenDeployment(p.id, { pr: null }, SHA)).toEqual(
+      again,
+    );
 
     await db.update(deployTokens).set({ revokedAt: new Date() });
     expect(await store.findTokenProject(hash)).toBeNull();

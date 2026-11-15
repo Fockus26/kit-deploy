@@ -4,13 +4,22 @@
  * Rollback is the same switch onto a kept container; nothing is rebuilt. The last KEEP production
  * containers stay (stopped) for that; older ones are removed.
  *
+ * A preview (a deployment with a PR) is the same switch with its own target `pr-<n>`: 384 MB
+ * (D017), its file in `/etc/caddy/previews/` through `preview.write`, and nothing kept — a new
+ * push replaces the PR's container, and closing the PR removes it (`closePreview`).
+ *
  * Everything goes through kit-agent (`AgentClient`) and the database (`SwitchRepo`); time is
  * injected, so it is tested without waiting.
  */
 
 import type { OpName } from "@/agent/protocol";
 import type { AgentClient, Params } from "@/cli/client";
-import { containerName, type ProductionTarget } from "@/lib/core";
+import {
+  containerName,
+  MEMORY_MB,
+  type ProductionTarget,
+  type Target,
+} from "@/lib/core";
 import type { StatusPublisher } from "./commit-status";
 import type { ClaimedDeployment, KeptDeployment, SwitchRepo } from "./repo";
 
@@ -142,63 +151,127 @@ async function cutOver(
   await prune(ctx, d.projectId);
 }
 
-async function deployOne(
+/** What a deployment started, so a failure cleans exactly that up. */
+type Attempt = { started: string | null; reused: boolean };
+
+/** Pulls the image and runs it in a new container on a fresh loopback port. */
+async function runNew(
+  ctx: Ctx,
+  target: Target,
+  c: ClaimedDeployment,
+  memoryMb: number,
+  attempt: Attempt,
+): Promise<number> {
+  await call(ctx, "image.pull", { image: c.image });
+  const alloc = (await call(ctx, "ports.allocate", {
+    target,
+    sha: c.sha,
+  })) as { port: number };
+  await call(ctx, "container.run", {
+    target,
+    sha: c.sha,
+    image: c.image,
+    port: alloc.port,
+    memoryMb,
+  });
+  attempt.started = containerName(target, c.sha);
+  return alloc.port;
+}
+
+async function mustBeHealthy(ctx: Ctx, port: number) {
+  if (!(await waitHealthy(ctx, port))) {
+    throw new SwitchError(
+      `/api/health did not answer 2xx in ${ctx.healthTimeoutMs / 1000}s`,
+    );
+  }
+}
+
+async function deployProduction(
   ctx: Ctx,
   c: ClaimedDeployment,
-): Promise<SwitchOutcome> {
+  attempt: Attempt,
+) {
   const target: ProductionTarget = {
     project: c.project.name,
     env: "production",
   };
   const name = containerName(target, c.sha);
-  let started: string | null = null;
-  let reused = false;
-  try {
-    if (c.hosts.length === 0)
-      throw new SwitchError(`${c.project.name} has no domains`);
+  if (c.hosts.length === 0)
+    throw new SwitchError(`${c.project.name} has no domains`);
 
-    // The same commit may still have its container from an earlier deployment: start that one.
-    const kept = await ctx.repo.listKept(c.project.id);
-    // Never the live one: a failed health check would then stop the site that is serving.
-    if (kept.some((k) => k.container === name && k.status === "live")) {
-      throw new SwitchError(`${c.sha.slice(0, 12)} is already live`);
-    }
-    const reuse = kept.find((k) => k.container === name && k.port !== null);
-    let port: number;
-    if (reuse?.port) {
-      port = reuse.port;
-      reused = true;
-      await call(ctx, "container.start", { name });
-    } else {
-      await call(ctx, "image.pull", { image: c.image });
-      const alloc = (await call(ctx, "ports.allocate", {
-        target,
-        sha: c.sha,
-      })) as { port: number };
-      port = alloc.port;
-      await call(ctx, "container.run", {
-        target,
-        sha: c.sha,
-        image: c.image,
-        port,
-        memoryMb: c.project.memoryMb,
-      });
-    }
-    started = name;
+  // The same commit may still have its container from an earlier deployment: start that one.
+  const kept = await ctx.repo.listKept(c.project.id);
+  // Never the live one: a failed health check would then stop the site that is serving.
+  if (kept.some((k) => k.container === name && k.status === "live")) {
+    throw new SwitchError(`${c.sha.slice(0, 12)} is already live`);
+  }
+  const reuse = kept.find((k) => k.container === name && k.port !== null);
+  let port: number;
+  if (reuse?.port) {
+    port = reuse.port;
+    attempt.reused = true;
+    await call(ctx, "container.start", { name });
+    attempt.started = name;
+  } else {
+    port = await runNew(ctx, target, c, c.project.memoryMb, attempt);
+  }
 
-    if (!(await waitHealthy(ctx, port))) {
-      throw new SwitchError(
-        `/api/health did not answer 2xx in ${ctx.healthTimeoutMs / 1000}s`,
-      );
-    }
-    if (reuse) await ctx.repo.clearContainer(reuse.id);
-    await cutOver(ctx, target, {
-      id: c.id,
-      projectId: c.project.id,
-      hosts: c.hosts,
-      container: name,
-      port,
+  await mustBeHealthy(ctx, port);
+  if (reuse) await ctx.repo.clearContainer(reuse.id);
+  await cutOver(ctx, target, {
+    id: c.id,
+    projectId: c.project.id,
+    hosts: c.hosts,
+    container: name,
+    port,
+  });
+}
+
+/** A PR's preview: a new container beside the PR's current one, health, its preview file points
+ * at it, then the previous one drains and is removed (previews keep nothing for rollback). */
+async function deployPreview(
+  ctx: Ctx,
+  c: ClaimedDeployment,
+  pr: number,
+  attempt: Attempt,
+) {
+  const target: Target = { project: c.project.name, env: "preview", pr };
+  const name = containerName(target, c.sha);
+  const port = await runNew(ctx, target, c, MEMORY_MB.preview, attempt);
+  await mustBeHealthy(ctx, port);
+
+  await call(ctx, "preview.write", {
+    project: c.project.name,
+    pr,
+    state: "running",
+    port,
+  });
+  const previous = await ctx.repo.markLive(c.id, name, port);
+  ctx.log({
+    event: "switch.live",
+    deployment: c.id,
+    pr,
+    container: name,
+    port,
+  });
+  if (previous?.container && previous.container !== name) {
+    const old = previous.container;
+    await stopAfterDrain(ctx, previous, name);
+    await quietly(ctx, `remove ${old}`, async () => {
+      await call(ctx, "container.remove", { name: old });
+      await ctx.repo.clearContainer(previous.id);
     });
+  }
+}
+
+async function deployOne(
+  ctx: Ctx,
+  c: ClaimedDeployment,
+): Promise<SwitchOutcome> {
+  const attempt: Attempt = { started: null, reused: false };
+  try {
+    if (c.pr === null) await deployProduction(ctx, c, attempt);
+    else await deployPreview(ctx, c, c.pr, attempt);
     return { result: "live" };
   } catch (e) {
     const message =
@@ -206,13 +279,13 @@ async function deployOne(
         ? e.message
         : `unexpected: ${(e as Error).message}`;
     ctx.log({ event: "switch.failed", deployment: c.id, error: message });
-    if (started) {
-      const n = started;
+    if (attempt.started) {
+      const n = attempt.started;
       await quietly(ctx, `stop ${n}`, () =>
         call(ctx, "container.stop", { name: n, timeoutS: 0 }),
       );
       // A kept container stays for rollback; a new one that never served is removed.
-      if (!reused) {
+      if (!attempt.reused) {
         await quietly(ctx, `remove ${n}`, () =>
           call(ctx, "container.remove", { name: n }),
         );
@@ -229,6 +302,8 @@ async function publishStatus(
   c: ClaimedDeployment,
   outcome: SwitchOutcome,
 ) {
+  // A preview's status (`kit-deploy/preview`, with its URL) and its PR comment are U7's.
+  if (c.pr !== null) return;
   if (!ctx.status) {
     ctx.log({
       event: "switch.status_skipped",
@@ -287,6 +362,35 @@ export async function processProject(
       done.push({ id: c.id, ...outcome });
     }
     return done;
+  });
+}
+
+/**
+ * PR `pr` was closed: its preview file goes (the host answers "preview no existe" again), its
+ * queued and live deployments are superseded, and its containers are stopped and removed. Under
+ * the project's lock, so it never races a switch of the same PR. Idempotent.
+ */
+export async function closePreview(
+  deps: SwitchDeps,
+  project: { id: string; name: string },
+  pr: number,
+): Promise<{ removed: string[] }> {
+  const ctx = withDefaults(deps);
+  return ctx.repo.withProjectLock(project.id, async () => {
+    // The file first: if Caddy refuses, nothing else changed and the next close retries it all.
+    await call(ctx, "preview.remove", { project: project.name, pr });
+    const rows = await ctx.repo.closePreview(project.id, pr);
+    const removed: string[] = [];
+    for (const r of rows) {
+      await quietly(ctx, `remove ${r.container}`, async () => {
+        await call(ctx, "container.stop", { name: r.container, timeoutS: 0 });
+        await call(ctx, "container.remove", { name: r.container });
+        await ctx.repo.clearContainer(r.id);
+        removed.push(r.container);
+      });
+    }
+    ctx.log({ event: "preview.closed", project: project.name, pr, removed });
+    return { removed };
   });
 }
 

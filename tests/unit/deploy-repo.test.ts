@@ -164,4 +164,84 @@ describe.skipIf(!url)("drizzle switch repo (Postgres)", () => {
       ).rejects.toThrow();
     }
   });
+  test("previews: claim and markLive stay in their PR; production keeps serving; closePreview", async () => {
+    const queuePr = async (s: string, pr: number, minutesAgo: number) => {
+      const [d] = await db
+        .insert(deployments)
+        .values({
+          projectId,
+          environment: "preview",
+          pr,
+          sha: s,
+          image: `ghcr.io/fockus26/kd-hello:${s}`,
+          createdAt: new Date(Date.now() - minutesAgo * 60_000),
+        })
+        .returning();
+      if (!d) throw new Error("no row");
+      return d.id;
+    };
+    const liveProd = (await repo.liveSites()).map((s) => s.deploymentId);
+    expect(liveProd).toHaveLength(1);
+
+    const p8 = await queuePr(sha("1"), 8, 9);
+    const p7old = await queuePr(sha("2"), 7, 8);
+    const p7 = await queuePr(sha("3"), 7, 7);
+    const c = await repo.claimNext(projectId);
+    expect(c).toMatchObject({ id: p7, pr: 7, sha: sha("3") });
+    expect(await statusOf(p7old)).toBe("superseded");
+    expect(await statusOf(p8)).toBe("queued");
+    expect(await repo.markLive(p7, "kd_hello-pr-7-333333333333", 20501)).toBe(
+      null,
+    );
+
+    expect(await repo.claimNext(projectId)).toMatchObject({ id: p8, pr: 8 });
+    await repo.markLive(p8, "kd_hello-pr-8-111111111111", 20601);
+
+    const p7next = await queuePr(sha("4"), 7, 0);
+    await repo.claimNext(projectId);
+    expect(
+      await repo.markLive(p7next, "kd_hello-pr-7-444444444444", 20502),
+    ).toEqual({ id: p7, container: "kd_hello-pr-7-333333333333" });
+    expect(await statusOf(p8)).toBe("live");
+    // Production's rows are not previews': its live site and kept list are as they were.
+    expect((await repo.liveSites()).map((s) => s.deploymentId)).toEqual(
+      liveProd,
+    );
+    expect(
+      (await repo.listKept(projectId)).every((k) =>
+        k.container.includes("-prod-"),
+      ),
+    ).toBe(true);
+
+    const queuedAfter = await queuePr(sha("5"), 7, 0);
+    const rows = await repo.closePreview(projectId, 7);
+    expect(rows.map((r) => r.container).sort()).toEqual([
+      "kd_hello-pr-7-333333333333",
+      "kd_hello-pr-7-444444444444",
+    ]);
+    expect(await statusOf(p7next)).toBe("superseded");
+    expect(await statusOf(queuedAfter)).toBe("superseded");
+    expect(await statusOf(p8)).toBe("live");
+    expect((await repo.liveSites()).map((s) => s.deploymentId)).toEqual(
+      liveProd,
+    );
+  });
+
+  test("the database refuses a preview without a PR, a PR out of range, a production PR", async () => {
+    const base = {
+      projectId,
+      sha: sha("9"),
+      image: `ghcr.io/fockus26/kd-hello:${sha("9")}`,
+    };
+    for (const bad of [
+      { ...base, environment: "preview" as const },
+      { ...base, environment: "preview" as const, pr: 0 },
+      { ...base, environment: "preview" as const, pr: 1_000_000 },
+      { ...base, environment: "production" as const, pr: 3 },
+    ]) {
+      await expect(
+        Promise.resolve(db.insert(deployments).values(bad)),
+      ).rejects.toThrow();
+    }
+  });
 });

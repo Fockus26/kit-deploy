@@ -246,7 +246,7 @@ async function deploy(
 
   const lines: string[] = [];
   if (sha) {
-    const open = await d.store.findOpenDeployment(p.id, sha);
+    const open = await d.store.findOpenDeployment(p.id, { pr: null }, sha);
     if (open)
       lines.push(`already ${open.status}: ${open.id} (${sha.slice(0, 12)})`);
     else {
