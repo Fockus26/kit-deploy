@@ -195,3 +195,19 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - Not on the VPS: needs César's OK (release + migration 0004).
 - CI green (2026-11-15). The agent's `gh pr merge` was denied by the permission classifier: César merges #25.
 - Squash-merged as c4943ab with César's permission in chat ("Te doy permiso"). VPS pending his OK.
+
+### U7 GitHub status + PR comment (2026-11-15, PR #27, branch claude/preview-github-comment-7a5a1d)
+
+- `lib/deploy/github.ts`: one client (`githubRequest`) for statuses and comments; token only in
+  `Authorization`; errors = HTTP status / fetch error name / fixed text, never a body.
+- `commit-status.ts` takes `context` (`STATUS_CONTEXTS.production | preview`); `StatusError` is
+  now a re-export of `GitHubError`. Preview: success "Preview at <host>" + target_url, failure
+  "Deploy failed: …". Logs `switch.status*` now carry `context`.
+- `lib/deploy/pr-comment.ts`: marker `<!-- kit-deploy:preview <project> -->`; GET comments
+  (100/page, ≤ 10 pages) → first starting with the marker whose author_association is
+  OWNER/MEMBER/COLLABORATOR → PATCH, else POST. A failed push leaves the comment alone; close →
+  PATCH "eliminada", never POST (`missing` → `preview.comment_skipped` "no comment").
+- `closePreview(project)` now needs `repo` (TokenProject already had it). Runtime wires
+  `comments: commenterFromEnv()` with the same GITHUB_STATUS_TOKEN.
+- Verified: suite 420 pass; build, typecheck, lint green; security-review no findings.
+- Not on the VPS: needs César's OK (web release only, no migration, no agent change).
