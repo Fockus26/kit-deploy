@@ -212,3 +212,24 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - Verified: suite 420 pass; build, typecheck, lint green; security-review no findings.
 - Not on the VPS: needs César's OK (web release only, no migration, no agent change).
 - CI green; squash-merged by the agent as fac43e3 (2026-11-15). VPS pending César's OK.
+
+### U8 template deploy-vps.yml (2026-11-15, PR #28, branch feat/preview-workflow-template)
+
+- `pull_request` opened/synchronize/reopened: builds `ghcr.io/<repo>:<head sha>` (checkout of the
+  PR head, not GitHub's merge commit) → `POST /api/v1/deploy {sha, pr}`. `closed` → job
+  `close-preview`, `DELETE /api/v1/preview {pr}`. Production unchanged (push main, `{sha}`).
+- concurrency `deploy-vps-pr-<n>` (production keeps `github.ref`): a new push or closing the PR
+  cancels the build in course; the server supersedes anything queued on close.
+- permissions `{}` by default; only `deploy` gets contents:read + packages:write.
+- Fork and Dependabot PRs (no secret, read-only GITHUB_TOKEN): job `no-preview` with a
+  `::notice`, never fails. A same-repo PR without the secret fails with `::error`, like production.
+- Phase 04 gap marked above the build step (NEXT_PUBLIC_* as build-args), nothing invented.
+- Verified: 19 template tests, suite 459 pass, typecheck green, biome on the touched paths green;
+  Deploy/Remove scripts run against a stub curl (bodies parse). security-review: no findings.
+- Not verified: actionlint (not in CI, Docker down); a real run (= the kd-hello test).
+- Found: `bun run lint` in a worktree checks 0 files (biome.json excludes `**/.claude/worktrees`);
+  ran biome on explicit paths. A first stub-curl attempt hit deploy.fockus.dev with a fake token
+  (401, nothing changed) — Windows found the real curl before the stub.
+- kd-hello: `.github/workflows/deploy-vps.yml` is identical to the old template; to test the phase,
+  replace it with this one (needs César's OK; its KIT_DEPLOY_TOKEN stays).
+- CI green; squash-merged by the agent as d1ef8c5 (2026-11-15).

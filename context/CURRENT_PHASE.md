@@ -18,7 +18,8 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | U5 core + agent: `renderPreviewSite` (running / asleep), `preview.write`/`preview.remove`; site.write production-only | #24 | merged (e134cca) · on the VPS 2026-11-15, verified |
 | U6 API + preview switch: `POST deploy {sha, pr}` → `pr-<n>` 384 MB, `DELETE /api/v1/preview`, migration 0004 | #25 | merged (c4943ab) · not on the VPS (needs César's OK) |
 | U7 GitHub: `kit-deploy/preview` status + PR comment edited in place (marker), "eliminada" on close | #27 | merged (fac43e3) · not on the VPS (needs César's OK) |
-| U8–U10 | — | pending (see plan) |
+| U8 template `deploy-vps.yml`: `pull_request` → `{sha, pr}` / `DELETE preview`, concurrency per PR, forks + Dependabot skipped with a notice | #28 | merged (d1ef8c5) · kd-hello's workflow not yet updated (needs César's OK) |
+| U9–U10 | — | pending (see plan) |
 
 Log: `PHASE_LOG/03-previews.md`.
 
