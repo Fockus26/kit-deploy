@@ -159,3 +159,16 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - CI's lint failed on `{{ }}` in preview-asleep.html (biome's HTML parser): the snippet sets
   `templates { between %% %% }` (17701ca); real-Caddy test 36/36 again, CI green, squash-merged
   as e134cca. Copy and deploy pending (César).
+
+### U4 + U5 on the VPS (2026-11-15, César's OK: "Sí, sube U4 + U5")
+
+- The VPS was still on 7112799: U4 had never shipped. Release e134ccafbe1b (main, U4 + U5) built;
+  `install.test.sh` with that tgz in Docker 81/81; copied (sha256 66e74f6c… checked), update.sh
+  detached (/root/kit-deploy-update-e134cca.log): secret kept, migrations 4 (0003 preview access),
+  agent restarted, web switched, dashboard site unchanged, kit-previews.caddy rewritten (gate +
+  asleep snippets), Caddy reloaded cleanly; release ddeddee pruned; ship dir removed.
+- From outside: deploy / 307 → /login 200; /preview-access without session → /login?next=…;
+  kd-hello 200 (+ /api/health); nope-pr-1.preview → 404 "Este preview no existe", noindex, no-store.
+- Agent: version 0.1.0; preview.remove of a missing PR → removed:false (no-op); site.write with a
+  preview host → bad_request. /etc/caddy/previews/ still empty (U6 writes the first one).
+- Ports 80/443 untouched: no certbot dry-run needed.
