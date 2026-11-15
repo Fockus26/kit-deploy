@@ -194,3 +194,4 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   removed temporarily); Python on Windows writes CRLF (use newline='\n').
 - Not on the VPS: needs César's OK (release + migration 0004).
 - CI green (2026-11-15). The agent's `gh pr merge` was denied by the permission classifier: César merges #25.
+- Squash-merged as c4943ab with César's permission in chat ("Te doy permiso"). VPS pending his OK.
