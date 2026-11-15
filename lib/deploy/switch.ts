@@ -314,8 +314,7 @@ async function deployOne(
  * on its own host (`kit-deploy/preview`). */
 function statusFor(c: ClaimedDeployment, outcome: SwitchOutcome): CommitStatus {
   const base = { repo: c.project.repo, sha: c.sha };
-  const host =
-    c.pr === null ? c.hosts[0] : previewHost(c.project.name, c.pr);
+  const host = c.pr === null ? c.hosts[0] : previewHost(c.project.name, c.pr);
   const context =
     c.pr === null ? STATUS_CONTEXTS.production : STATUS_CONTEXTS.preview;
   if (outcome.result === "failed") {
@@ -399,7 +398,11 @@ async function upsertComment(
       create,
     });
     if (result === "missing") {
-      ctx.log({ event: "preview.comment_skipped", ...where, reason: "no comment" });
+      ctx.log({
+        event: "preview.comment_skipped",
+        ...where,
+        reason: "no comment",
+      });
       return;
     }
     ctx.log({ event: "preview.comment", ...where, result });

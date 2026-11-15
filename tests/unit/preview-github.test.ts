@@ -289,7 +289,9 @@ describe("the preview's status and comment after the switch", () => {
       context: "kit-deploy/preview",
       state: "failure",
     });
-    expect(r.statuses[0]?.description).toStartWith("Deploy failed: image.pull:");
+    expect(r.statuses[0]?.description).toStartWith(
+      "Deploy failed: image.pull:",
+    );
     expect(r.statuses[0]?.targetUrl).toBeUndefined();
     expect(r.comments).toEqual([]);
   });
@@ -363,7 +365,10 @@ describe("the preview's status and comment after the switch", () => {
       },
     ];
     const { d } = deps(agent, memoryRepo(rows));
-    await processProject({ ...d, status: r.status, comments: r.commenter }, "p1");
+    await processProject(
+      { ...d, status: r.status, comments: r.commenter },
+      "p1",
+    );
     expect(r.statuses[0]?.context).toBe("kit-deploy/production");
     expect(r.comments).toEqual([]);
   });

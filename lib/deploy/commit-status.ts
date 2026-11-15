@@ -8,11 +8,11 @@
 
 import {
   assertRepo,
+  discard,
   GitHubError,
   type GitHubOptions,
   githubRequest,
   githubTokenFromEnv,
-  discard,
 } from "./github";
 
 export { GitHubError as StatusError } from "./github";
