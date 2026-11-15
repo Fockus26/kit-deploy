@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { handleDeploy, imageFor, MAX_BODY_BYTES } from "../../lib/api/deploy";
+import {
+  handleClosePreview,
+  handleDeploy,
+  imageFor,
+  MAX_BODY_BYTES,
+} from "../../lib/api/deploy";
 import type {
   DeploymentRef,
   DeployStore,
@@ -9,6 +14,8 @@ import { bearerToken, generateDeployToken, hashToken } from "../../lib/tokens";
 
 const SHA = "3f2a9c1e7b4d5a6f8e9c0b1a2d3e4f5a6b7c8d9e";
 const { token: TOKEN, hash: HASH } = generateDeployToken();
+/** Another project's token (kd_other): it only ever reaches kd_other's deployments. */
+const { token: OTHER, hash: OTHER_HASH } = generateDeployToken();
 
 function memoryStore(opts: { revoked?: boolean; fail?: boolean } = {}) {
   const created: NewDeployment[] = [];
@@ -17,18 +24,24 @@ function memoryStore(opts: { revoked?: boolean; fail?: boolean } = {}) {
   const store: DeployStore = {
     async findTokenProject(hash) {
       if (opts.fail) throw new Error("connection refused");
-      return hash === HASH && !opts.revoked
-        ? {
-            tokenId: "t1",
-            project: { id: "p1", name: "kd_hello", repo: "Fockus26/KD-Hello" },
-          }
-        : null;
+      if (opts.revoked) return null;
+      if (hash === HASH)
+        return {
+          tokenId: "t1",
+          project: { id: "p1", name: "kd_hello", repo: "Fockus26/KD-Hello" },
+        };
+      if (hash === OTHER_HASH)
+        return {
+          tokenId: "t2",
+          project: { id: "p2", name: "kd_other", repo: "Fockus26/kd-other" },
+        };
+      return null;
     },
     async touchToken(id) {
       touched.push(id);
     },
-    async findOpenDeployment(projectId, sha) {
-      return open.get(`${projectId}:${sha}`) ?? null;
+    async findOpenDeployment(projectId, scope, sha) {
+      return open.get(`${projectId}:${scope.pr ?? "prod"}:${sha}`) ?? null;
     },
     async createDeployment(d) {
       created.push(d);
@@ -37,7 +50,8 @@ function memoryStore(opts: { revoked?: boolean; fail?: boolean } = {}) {
         status: "queued",
         image: d.image,
       };
-      open.set(`${d.projectId}:${d.sha}`, ref);
+      const scope = d.environment === "preview" ? d.pr : "prod";
+      open.set(`${d.projectId}:${scope}:${d.sha}`, ref);
       return ref;
     },
   };
@@ -214,5 +228,204 @@ describe("POST /api/v1/deploy", () => {
       `ghcr.io/fockus26/kd-hello:${SHA}`,
     );
     expect(() => imageFor("a b/c", SHA)).toThrow();
+  });
+});
+
+describe("POST /api/v1/deploy with a PR (preview)", () => {
+  test("queues a preview of that PR, with its URL, and starts the switch", async () => {
+    const { store, created } = memoryStore();
+    const kicked: string[] = [];
+    const res = await handleDeploy(post({ sha: SHA, pr: 7 }), store, {
+      onQueued: (p) => kicked.push(p),
+    });
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({
+      deployment: {
+        id: "d1",
+        status: "queued",
+        image: `ghcr.io/fockus26/kd-hello:${SHA}`,
+      },
+      preview: { pr: 7, url: "https://kd-hello-pr-7.preview.fockus.dev" },
+    });
+    expect(created).toEqual([
+      {
+        projectId: "p1",
+        environment: "preview",
+        pr: 7,
+        sha: SHA,
+        image: `ghcr.io/fockus26/kd-hello:${SHA}`,
+      },
+    ]);
+    expect(kicked).toEqual(["p1"]);
+  });
+
+  test("the same commit in production, PR 7 and PR 8 are three deployments; a retry is not", async () => {
+    const { store, created } = memoryStore();
+    expect((await handleDeploy(post({ sha: SHA }), store)).status).toBe(202);
+    expect((await handleDeploy(post({ sha: SHA, pr: 7 }), store)).status).toBe(
+      202,
+    );
+    expect((await handleDeploy(post({ sha: SHA, pr: 8 }), store)).status).toBe(
+      202,
+    );
+    const retry = await handleDeploy(post({ sha: SHA, pr: 7 }), store);
+    expect(retry.status).toBe(200);
+    expect(
+      ((await retry.json()) as { deployment: { id: string } }).deployment.id,
+    ).toBe("d2");
+    expect(created.map((d) => d.environment)).toEqual([
+      "production",
+      "preview",
+      "preview",
+    ]);
+  });
+
+  test.each([
+    ["0", 0],
+    ["negative", -3],
+    ["a fraction", 1.5],
+    ["a string", "7"],
+    ["too big", 1_000_000],
+    ["null", null],
+    ["an object", { n: 7 }],
+  ])("400 with a PR that is %s, nothing created", async (_, pr) => {
+    const { store, created } = memoryStore();
+    const kicked: string[] = [];
+    const res = await handleDeploy(post({ sha: SHA, pr }), store, {
+      onQueued: (p) => kicked.push(p),
+    });
+    expect(res.status).toBe(400);
+    expect(created).toEqual([]);
+    expect(kicked).toEqual([]);
+  });
+
+  test("another project's token deploys only its own repo's image, under its own host", async () => {
+    const { store, created } = memoryStore();
+    const res = await handleDeploy(
+      post({ sha: SHA, pr: 7 }, `Bearer ${OTHER}`),
+      store,
+    );
+    expect(res.status).toBe(202);
+    expect(
+      ((await res.json()) as { preview: { url: string } }).preview.url,
+    ).toBe("https://kd-other-pr-7.preview.fockus.dev");
+    expect(created).toEqual([
+      {
+        projectId: "p2",
+        environment: "preview",
+        pr: 7,
+        sha: SHA,
+        image: `ghcr.io/fockus26/kd-other:${SHA}`,
+      },
+    ]);
+  });
+
+  test("a body cannot name the project or the image", async () => {
+    const { store, created } = memoryStore();
+    for (const extra of [{ project: "kd_hello" }, { image: "ghcr.io/x/y:1" }]) {
+      const res = await handleDeploy(
+        post({ sha: SHA, pr: 7, ...extra }, `Bearer ${OTHER}`),
+        store,
+      );
+      expect(res.status).toBe(400);
+    }
+    expect(created).toEqual([]);
+  });
+});
+
+const del = (body: unknown, auth: string | null = `Bearer ${TOKEN}`) =>
+  new Request("http://localhost/api/v1/preview", {
+    method: "DELETE",
+    headers: {
+      "content-type": "application/json",
+      ...(auth ? { authorization: auth } : {}),
+    },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+
+describe("DELETE /api/v1/preview", () => {
+  const closing = () => {
+    const closed: Array<[string, string, number]> = [];
+    return {
+      closed,
+      hooks: {
+        onClosed: (p: { id: string; name: string }, pr: number) =>
+          closed.push([p.id, p.name, pr]),
+      },
+    };
+  };
+
+  test("202 and removes the token's project's preview of that PR", async () => {
+    const { store, touched } = memoryStore();
+    const { closed, hooks } = closing();
+    const res = await handleClosePreview(del({ pr: 7 }), store, hooks);
+    expect(res.status).toBe(202);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({
+      preview: { pr: 7, url: "https://kd-hello-pr-7.preview.fockus.dev" },
+    });
+    expect(closed).toEqual([["p1", "kd_hello", 7]]);
+    expect(touched).toEqual(["t1"]);
+  });
+
+  test("another project's token closes its own PR 7, never kd_hello's", async () => {
+    const { store } = memoryStore();
+    const { closed, hooks } = closing();
+    await handleClosePreview(del({ pr: 7 }, `Bearer ${OTHER}`), store, hooks);
+    expect(closed).toEqual([["p2", "kd_other", 7]]);
+  });
+
+  test.each([
+    ["no header", null],
+    ["a malformed header", "Bearer nope"],
+    ["an unknown token", `Bearer ${generateDeployToken().token}`],
+  ])("401 with %s, nothing removed", async (_, auth) => {
+    const { store } = memoryStore();
+    const { closed, hooks } = closing();
+    const res = await handleClosePreview(del({ pr: 7 }, auth), store, hooks);
+    expect(res.status).toBe(401);
+    expect(closed).toEqual([]);
+  });
+
+  test("401 with a revoked token", async () => {
+    const { store } = memoryStore({ revoked: true });
+    const { closed, hooks } = closing();
+    expect(
+      (await handleClosePreview(del({ pr: 7 }), store, hooks)).status,
+    ).toBe(401);
+    expect(closed).toEqual([]);
+  });
+
+  test.each([
+    ["not JSON", "{nope"],
+    ["no PR", {}],
+    ["PR 0", { pr: 0 }],
+    ["a string PR", { pr: "7" }],
+    ["a project named by the caller", { pr: 7, project: "kd_hello" }],
+  ])("400 with %s, nothing removed", async (_, body) => {
+    const { store } = memoryStore();
+    const { closed, hooks } = closing();
+    expect((await handleClosePreview(del(body), store, hooks)).status).toBe(
+      400,
+    );
+    expect(closed).toEqual([]);
+  });
+
+  test("413 over the size limit", async () => {
+    const { store } = memoryStore();
+    const res = await handleClosePreview(
+      del({ pr: 7, pad: "x".repeat(MAX_BODY_BYTES) }),
+      store,
+    );
+    expect(res.status).toBe(413);
+  });
+
+  test("a database error is a 500 that leaks nothing", async () => {
+    const { store } = memoryStore({ fail: true });
+    const res = await handleClosePreview(del({ pr: 7 }), store);
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(text).not.toContain("connection refused");
+    expect(text).not.toContain(TOKEN);
   });
 });

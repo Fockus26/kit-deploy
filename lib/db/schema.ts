@@ -84,9 +84,10 @@ export const deployments = pgTable(
   },
   (t) => [
     index("deployments_project_created").on(t.projectId, t.createdAt.desc()),
-    // One open deployment per commit: two concurrent retries of the Action cannot queue twice.
+    // One open deployment per commit and target (production, or one PR): two concurrent retries
+    // of the Action cannot queue twice. `coalesce`: production's null PR must collide with itself.
     uniqueIndex("deployments_open_commit")
-      .on(t.projectId, t.environment, t.sha)
+      .on(t.projectId, t.environment, sql`coalesce(${t.pr}, 0)`, t.sha)
       .where(
         sql.raw(`status in (${OPEN_STATUSES.map((s) => `'${s}'`).join(", ")})`),
       ),
@@ -106,6 +107,7 @@ export const deployments = pgTable(
       "deployments_pr_matches_env",
       sql`(${t.environment} = 'preview') = (${t.pr} is not null)`,
     ),
+    check("deployments_pr_range", sql`${t.pr} between 1 and 999999`),
   ],
 );
 

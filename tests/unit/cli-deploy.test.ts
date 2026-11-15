@@ -23,7 +23,7 @@ function rowsStore(rows: Row[]): DeployStore {
       return null;
     },
     async touchToken() {},
-    async findOpenDeployment(_p, s) {
+    async findOpenDeployment(_p, _scope, s) {
       const r = rows.find(
         (x) => x.sha === s && ["queued", "starting", "live"].includes(x.status),
       );
