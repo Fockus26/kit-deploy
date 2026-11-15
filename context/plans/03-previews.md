@@ -23,11 +23,13 @@ U1 security review (2026-11-13): no findings. For U5: the agent validates host a
 before writing a preview file, and `forward_auth` sits inside each preview's `handle`, before
 `reverse_proxy` (no preview handle without it).
 
-Shape of a preview file (U5 writes it; U1's real-Caddy test already uses it):
+Shape of a preview file (U5 writes it; the real-Caddy test uses it). Since U4b the handle is only
+`import kit_preview <addr>`: the snippet in kit-previews.caddy puts the exchange, forward_auth and
+the app in a fixed order (security review U4a):
 
 ```
 @kd_hello-pr-7 host kd-hello-pr-7.preview.fockus.dev
 handle @kd_hello-pr-7 {
-	reverse_proxy 127.0.0.1:29007
+	import kit_preview 127.0.0.1:29007
 }
 ```

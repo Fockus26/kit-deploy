@@ -19,5 +19,6 @@
 | 11 | UI copy of empty states and errors: realistic Spanish placeholders from the handoff, César confirms | phase 05 | kickoff | 05 | Pending |
 | 12 | Copy of the "preview no existe" page (title, one sentence, link to the dashboard): realistic Spanish placeholder, César confirms | `infra/caddy/pages/preview-missing.html` | phase 03 U1 | 03 | Pending |
 | 13 | Copy of `/login`, `/enrol` (3 steps, expired-link error) and the signed-in placeholder at `/`: realistic Spanish placeholder, César confirms | `app/login/`, `app/enrol/`, `lib/auth/messages.ts` | phase 03 U3 | 03 | Pending |
+| 14 | Copy of the "preview dormido" page (title, one sentence: why it sleeps and that its next push wakes it; project · PR): realistic Spanish placeholder, César confirms | `infra/caddy/pages/preview-asleep.html` | phase 03 U5 | 03 | Pending |
 
 <!-- Mark "Resolved" (do not delete the row) when it is done and the code is updated. -->

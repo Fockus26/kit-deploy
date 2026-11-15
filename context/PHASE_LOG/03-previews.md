@@ -132,3 +132,30 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - 2026-11-14: César re-enrolled with #21 (passkey-only path worked: 2nd passkey 18:49, TOTP kept)
   but it again went outside his password manager ("es culpa mía, luego lo arreglamos"). U3 closed;
   pending for César: passkey in his manager, passkey sign-in, cookie Domain check (phase close).
+
+### U4 merged (2026-11-14, PRs #22, #23)
+
+- #22 (13d7641): `/preview-access` one-time grant → exchange on the preview host → `kd_preview`;
+  `/api/v1/preview-auth` for forward_auth. #23 (40a837c): Caddy `kit_preview` gate (exchange,
+  forward_auth, app). Merged by other sessions; whether it is on the VPS is not confirmed here.
+
+### U5 core + agent: preview site file (2026-11-14, PR #24, branch feat/preview-site-file)
+
+- `renderPreviewSite` (lib/core/caddy.ts): `/etc/caddy/previews/<p>-pr-<n>.caddy` = matcher +
+  `handle` with one import: `kit_preview 127.0.0.1:<port>` (running) or `kit_preview_asleep <p> <n>`
+  (D017). kit-previews.caddy: exchange + forward_auth moved to `kit_preview_gate`, imported first in
+  both snippets' `route`; asleep = 503 page `pages/preview-asleep.html` (templates fill project · PR),
+  behind the login too (decision: do not publish which PRs exist).
+- kit-agent: `preview.write` (zod discriminated by state: running needs a D016 port, asleep none)
+  and `preview.remove`; the agent renders the file itself, `assertPreviewFile` re-checks path and
+  shape, atomic write, validate + bounded reload, restore on failure; refuses if
+  `sites/kit-previews.caddy` is missing. Hardening: site.write/site.remove production-only and no
+  host under preview.fockus.dev (a site block of its own would skip the gate).
+- Verified: full suite 365 pass; real-Caddy Docker test 36/36 with files rendered by lib/core;
+  typecheck, lint, build green; security-review: no findings. Copy → CONTENT_CHECKLIST #14.
+- Gotcha: previews.test.sh sets MSYS_NO_PATHCONV=1, so a /tmp path handed to bun.exe must go
+  through cygpath -w first (bun wrote to C:\tmp otherwise).
+- Not on the VPS: needs César's OK (update.sh reinstalls kit-previews.caddy + new agent).
+- CI's lint failed on `{{ }}` in preview-asleep.html (biome's HTML parser): the snippet sets
+  `templates { between %% %% }` (17701ca); real-Caddy test 36/36 again, CI green, squash-merged
+  as e134cca. Copy and deploy pending (César).
