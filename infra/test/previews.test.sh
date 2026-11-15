@@ -19,5 +19,20 @@ if ! docker run --rm -v "$VOL:/out" "caddy:$CADDY_VERSION-builder" test -x /out/
     xcaddy build "v$CADDY_VERSION" --with github.com/caddy-dns/cloudflare --output /out/caddy
 fi
 
+# The preview files kit-agent writes, rendered by lib/core itself (running and asleep), so the
+# real Caddy checks the exact bytes renderPreviewSite produces.
+RENDERED="$(mktemp -d)"
+trap 'rm -rf "$RENDERED"' EXIT
+(cd "$INFRA/.." && bun -e '
+  import { renderPreviewSite } from "./lib/core/caddy";
+  import { basename } from "node:path";
+  const out = process.argv[1];
+  for (const f of [
+    renderPreviewSite({ project: "kd_hello", pr: 7, state: "running", port: 29007 }),
+    renderPreviewSite({ project: "kd_hello", pr: 8, state: "asleep" }),
+  ]) await Bun.write(`${out}/${basename(f.path)}`, f.content);
+' "$(host "$RENDERED")")
+
 docker run --rm -v "$VOL:/caddy-build:ro" -v "$(host "$INFRA"):/infra:ro" \
+  -v "$(host "$RENDERED"):/rendered:ro" \
   "caddy:$CADDY_VERSION-builder" sh /infra/test/previews-in-container.sh

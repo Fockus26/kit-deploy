@@ -26,13 +26,22 @@ export const containerNameSchema = z
     /^[a-z0-9][a-z0-9_]{0,39}-(?:prod|pr-[1-9][0-9]{0,5})-[0-9a-f]{7,12}$/,
   );
 
+const pr = z.number().int().min(1).max(999_999);
+const productionTarget = z.strictObject({
+  project,
+  env: z.literal("production"),
+});
 const target = z.discriminatedUnion("env", [
-  z.strictObject({ project, env: z.literal("production") }),
-  z.strictObject({
-    project,
-    env: z.literal("preview"),
-    pr: z.number().int().min(1).max(999_999),
-  }),
+  productionTarget,
+  z.strictObject({ project, env: z.literal("preview"), pr }),
+]);
+
+/** A preview's file: the agent renders it from these values alone (`renderPreviewSite`); the
+ * host, the path and the handle are never the caller's. Running proxies to a port; asleep
+ * (D017) has none to give. */
+const previewSite = z.discriminatedUnion("state", [
+  z.strictObject({ project, pr, state: z.literal("running"), port }),
+  z.strictObject({ project, pr, state: z.literal("asleep") }),
 ]);
 
 /** Only GHCR (brief: build → GHCR → POST deploy): dockerd never talks to a registry a client picks. */
@@ -48,7 +57,11 @@ const host = z
     {
       message: "host is reserved for the platform",
     },
-  );
+  )
+  .refine((h) => !/(^|\.)preview\.fockus\.dev$/i.test(h), {
+    // A site block of its own would answer outside the wildcard and its login gate (D013).
+    message: "preview hosts are served only through preview.write",
+  });
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
 const op = <N extends string, P extends z.ZodRawShape>(name: N, params: P) =>
@@ -72,8 +85,14 @@ export const Request = z.discriminatedUnion("op", [
   op("container.remove", { name: containerNameSchema }),
   op("container.start", { name: containerNameSchema }),
   op("container.list", { project: project.optional() }),
-  op("site.write", { target, hosts: z.array(host).min(1).max(50), port }),
-  op("site.remove", { target }),
+  op("site.write", {
+    target: productionTarget,
+    hosts: z.array(host).min(1).max(50),
+    port,
+  }),
+  op("site.remove", { target: productionTarget }),
+  z.strictObject({ id, op: z.literal("preview.write"), params: previewSite }),
+  op("preview.remove", { project, pr }),
   op("health.check", {
     port,
     path: z

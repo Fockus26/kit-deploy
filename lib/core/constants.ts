@@ -13,6 +13,15 @@ export const CADDY_SITES_DIR = "/etc/caddy/sites";
  * `infra/caddy/kit-previews.caddy`. */
 export const CADDY_PREVIEWS_DIR = "/etc/caddy/previews";
 
+/** The wildcard site that imports the previews' files; without it a preview file is never served. */
+export const CADDY_PREVIEWS_SITE = `${CADDY_SITES_DIR}/kit-previews.caddy`;
+
+/** The snippets `infra/caddy/kit-previews.caddy` defines. A running preview's handle is only
+ * `import kit_preview 127.0.0.1:<port>` (exchange, forward_auth, then the app, D013); a sleeping
+ * one's is `import kit_preview_asleep <project> <pr>` (the same gate, then the D017 page). */
+export const CADDY_PREVIEW_SNIPPET = "kit_preview";
+export const CADDY_PREVIEW_ASLEEP_SNIPPET = "kit_preview_asleep";
+
 /** The snippet the base Caddyfile defines: one JSON access log for metrics (D015) and logs (D014). */
 export const CADDY_ACCESS_LOG_SNIPPET = "kit_access_log";
 

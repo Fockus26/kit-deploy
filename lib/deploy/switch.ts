@@ -10,7 +10,7 @@
 
 import type { OpName } from "@/agent/protocol";
 import type { AgentClient, Params } from "@/cli/client";
-import { containerName, type Target } from "@/lib/core";
+import { containerName, type ProductionTarget } from "@/lib/core";
 import type { StatusPublisher } from "./commit-status";
 import type { ClaimedDeployment, KeptDeployment, SwitchRepo } from "./repo";
 
@@ -121,7 +121,7 @@ async function prune(ctx: Ctx, projectId: string) {
 /** Points the site at `port`, marks `id` live, drains and stops the previous container. */
 async function cutOver(
   ctx: Ctx,
-  target: Target,
+  target: ProductionTarget,
   d: {
     id: string;
     projectId: string;
@@ -146,7 +146,10 @@ async function deployOne(
   ctx: Ctx,
   c: ClaimedDeployment,
 ): Promise<SwitchOutcome> {
-  const target: Target = { project: c.project.name, env: "production" };
+  const target: ProductionTarget = {
+    project: c.project.name,
+    env: "production",
+  };
   const name = containerName(target, c.sha);
   let started: string | null = null;
   let reused = false;
@@ -309,7 +312,10 @@ export async function rollback(
       throw new SwitchError(
         `${projectName} has no earlier deployment to roll back to`,
       );
-    const target: Target = { project: project.name, env: "production" };
+    const target: ProductionTarget = {
+      project: project.name,
+      env: "production",
+    };
 
     await call(ctx, "container.start", { name: to.container });
     if (!(await waitHealthy(ctx, to.port))) {

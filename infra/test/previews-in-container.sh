@@ -34,14 +34,11 @@ check "the token is read at runtime, never written into the config" sh -c "! gre
 check "caddy fmt leaves it as it is" sh -c "$CADDY fmt /etc/caddy/sites/kit-previews.caddy | diff -q - /etc/caddy/sites/kit-previews.caddy"
 
 echo "== 2. Serves (tls internal in place of DNS-01)"
-# One preview, the shape kit-agent writes: a host matcher and its handle, which only imports the
-# kit_preview gate (D013). Its app answers on a loopback port and tries to undo noindex.
-cat > /etc/caddy/previews/kd_hello-pr-7.caddy <<EOF
-@kd_hello-pr-7 host $H
-handle @kd_hello-pr-7 {
-	import kit_preview 127.0.0.1:29007
-}
-EOF
+# The files kit-agent writes, rendered by lib/core's renderPreviewSite (previews.test.sh): PR 7
+# running (its handle only imports the kit_preview gate, D013) and PR 8 asleep (D017). PR 7's
+# app answers on a loopback port and tries to undo noindex.
+cp /rendered/kd_hello-pr-7.caddy /rendered/kd_hello-pr-8.caddy /etc/caddy/previews/
+check "the rendered preview files are in caddy fmt form" sh -c "for f in /etc/caddy/previews/*.caddy; do $CADDY fmt \$f | diff -q - \$f || exit 1; done"
 cat > /etc/caddy/sites/app.caddy <<'EOF'
 http://:29007 {
 	bind 127.0.0.1
@@ -114,6 +111,21 @@ curl -sk -D /tmp/h -o /tmp/b --resolve "$H:443:127.0.0.1" -H 'Cookie: kd_preview
 check "only that exact path is the exchange (a subpath goes to the app, behind the gate)" grep -q 'hola desde el preview GET /__kit-deploy/exchange/x' /tmp/b
 
 check "a second-level name is not a preview (*.preview matches one label)" sh -c "! curl -sk -o /dev/null --resolve a.$H:443:127.0.0.1 https://a.$H/"
+
+echo "== 4. A sleeping preview (D017): the same gate, then the page, no proxy"
+S=kd-hello-pr-8.preview.fockus.dev
+get "$S" "pricing"
+check "no cookie: 302 to /preview-access, like a running one" sh -c "head -1 /tmp/h | grep -q ' 302' && grep -i '^location:' /tmp/h | tr -d '\r' | grep -qx 'location: https://deploy.fockus.dev/preview-access?to=https://$S/pricing'"
+check "... the page is not shown before the login" sh -c "! grep -q 'dormido' /tmp/b"
+curl -sk -D /tmp/h -o /tmp/b --resolve "$S:443:127.0.0.1" -H 'Cookie: kd_preview=good' "https://$S/pricing?x=1"
+check "valid cookie: 503 with the 'preview dormido' page" sh -c "head -1 /tmp/h | grep -q ' 503' && grep -q 'Este preview está dormido' /tmp/b"
+check "... naming its project and PR (templates filled them in)" grep -qF 'kd_hello · PR #8' /tmp/b
+check "... no template syntax left over" sh -c "! grep -q '{{' /tmp/b"
+check "... as HTML, noindex, not cached" sh -c "grep -qi '^content-type: text/html' /tmp/h && grep -qi '^x-robots-tag: noindex, nofollow' /tmp/h && grep -qi '^cache-control: no-store' /tmp/h"
+check "... never proxied: PR 7's app did not answer" sh -c "! grep -q 'hola desde el preview' /tmp/b"
+curl -sk -D /tmp/h -o /tmp/b --resolve "$S:443:127.0.0.1" -X POST -d "t=kdg_grant" "https://$S/__kit-deploy/exchange"
+check "the exchange still works while asleep (sign in, then see the page)" grep -q "exchange path=/api/v1/preview-exchange method=POST host=$S" /tmp/b
+check "the running preview is unaffected by its sleeping neighbour" sh -c "curl -sk --resolve $H:443:127.0.0.1 -H 'Cookie: kd_preview=good' https://$H/ | grep -q 'hola desde el preview'"
 $CADDY stop >/dev/null 2>&1 || true
 
 echo
