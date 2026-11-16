@@ -17,7 +17,7 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | U4 preview access (D013): `/preview-access`, one-time token, `kd_preview`, forward_auth + `kit_preview` gate | #22, #23 | merged (13d7641, 40a837c) · on the VPS with e134cca (2026-11-15) |
 | U5 core + agent: `renderPreviewSite` (running / asleep), `preview.write`/`preview.remove`; site.write production-only | #24 | merged (e134cca) · on the VPS 2026-11-15, verified |
 | U6 API + preview switch: `POST deploy {sha, pr}` → `pr-<n>` 384 MB, `DELETE /api/v1/preview`, migration 0004 | #25 | merged (c4943ab) · not on the VPS (needs César's OK) |
-| U7 GitHub: `kit-deploy/preview` status + PR comment edited in place (marker), "eliminada" on close | #27 | merged (fac43e3) · not on the VPS (needs César's OK) |
+| U7 GitHub: `kit-deploy/preview` status + PR comment edited in place (marker), "eliminada" on close | #27 | merged (fac43e3) · on the VPS 2026-11-16, verified |
 | U8 template `deploy-vps.yml`: `pull_request` → `{sha, pr}` / `DELETE preview`, concurrency per PR, forks + Dependabot skipped with a notice | #28 | merged (d1ef8c5) · kd-hello's workflow not yet updated (needs César's OK) |
 | U9 limit 4 + dormido (D017): 5th preview sleeps the least recently pushed; next push wakes it; close cleans it; migration 0005 | #29 | merged (1178451) · not on the VPS (needs César's OK: web release + migration 0005, with U6/U7) |
 | U10 | — | pending (see plan) |

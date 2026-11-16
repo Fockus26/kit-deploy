@@ -254,3 +254,12 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   paths, build green; security-review no findings.
 - Not on the VPS: needs César's OK (web release + migration 0005, with U6/U7).
 - CI green; squash-merged by the agent as 1178451 (2026-11-15). VPS pending César's OK.
+- Shipped with César's OK ("Sí, súbela"): release fac43e3de652 built in Docker (first tries failed on
+  DNS right after Docker Desktop started; retried), `install.test.sh` in Docker ALL PASS (82).
+  First scp cut at 24 MB (VPS SSH reset/timeouts); second copy sha256 9c6bcb03… checked;
+  update.sh detached (/root/kit-deploy-update-fac43e3.log): UPDATE_EXIT=0, secret kept, migrations
+  5 (none new), agent restarted, web switched, dashboard + previews sites unchanged (no Caddy
+  reload, no 80/443 change), release 7112799 pruned; ship dir removed.
+- From outside: deploy / 307 → /login, /login 200, kd-hello 200 (+ /api/health), nope-pr-1.preview
+  404. Web container has GITHUB_STATUS_TOKEN (checked set, value not read); kit-agent active.
+- Not yet exercised for real: the first preview status + PR comment arrives with U8's template.
