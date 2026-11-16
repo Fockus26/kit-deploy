@@ -94,7 +94,8 @@ check "release not unpacked twice" grep -q 'already unpacked' /tmp/install2.log
 check "agent back after the restart" bash -c "su cesar -c 'kit-deploy version' | grep -qx 'kit-agent 0.1.0'"
 check "sweep units unchanged on a re-run" grep -qx 'Units unchanged.' /tmp/install2.log
 echo "# an older version" > /etc/systemd/system/kit-deploy-preview-sweep.timer
-bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update-sweep.log 2>&1
+# Same .invalid host as steps 1–2: step 3 is the one that writes the dashboard site.
+DASHBOARD_HOST=deploy.kit-deploy.invalid bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update-sweep.log 2>&1
 check "an older timer is updated from the release" bash -c "grep -qx 'Units installed or updated.' /tmp/update-sweep.log && cmp -s /etc/systemd/system/kit-deploy-preview-sweep.timer /opt/kit-deploy/current/infra/kit-deploy-preview-sweep.timer"
 echo "== 2b. kit-deploy preview sweep against the real agent and database (nothing to sweep)"
 # No Docker in this container: a stand-in that lists no kit-deploy containers and refuses (and
