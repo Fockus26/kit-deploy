@@ -93,6 +93,7 @@ export const Request = z.discriminatedUnion("op", [
   op("site.remove", { target: productionTarget }),
   z.strictObject({ id, op: z.literal("preview.write"), params: previewSite }),
   op("preview.remove", { project, pr }),
+  op("preview.list", {}),
   op("health.check", {
     port,
     path: z

@@ -21,6 +21,7 @@ import { assertHost, CoreInputError } from "../lib/core/validate";
 import { AdminError, type AdminStore } from "../lib/db/admin";
 import type { DeployStore } from "../lib/db/store";
 import type { UserStore } from "../lib/db/users";
+import { type SweepDeps, sweepPreviews } from "../lib/deploy/sweep";
 import {
   processProject,
   regenerate,
@@ -38,6 +39,8 @@ export type CliContext = {
   deploy?: () => DeployContext;
   admin?: () => AdminStore;
   users?: () => UserStore;
+  /** `preview sweep`: the database, the agent and GitHub (read for PR state, write for comments). */
+  sweep?: () => Omit<SweepDeps, "dryRun">;
   /** Whether stdout is a terminal: a token is never printed to one without --show. */
   stdoutIsTTY?: boolean;
   now?: () => number;
@@ -74,6 +77,10 @@ Commands:
                      the dashboard's account (one in v1); prints a one-time enrolment link,
                      valid 15 minutes, to register the passkey and TOTP. Terminal only:
                      ssh -t kit-vps kit-deploy user create <email>
+  preview sweep [--dry-run]
+                     clean what previews left behind: previews of PRs closed on GitHub,
+                     pr-<n> containers no deployment holds, preview files with no preview
+                     in the database. Nightly by kit-deploy-preview-sweep.timer (root)
   user enrol <email> a new enrolment link for the account (the previous ones stop working)
   help               this text
 `;
@@ -477,6 +484,27 @@ async function user(
   );
 }
 
+const SWEEP_USAGE = "usage: kit-deploy preview sweep [--dry-run]\n";
+
+async function previewSweep(
+  ctx: CliContext,
+  args: string[],
+  json: boolean,
+): Promise<Result> {
+  const usage = SWEEP_USAGE;
+  const f = parseFlags(args, [], ["--dry-run"]);
+  if (f.error) return fail(`${f.error}\n${usage}`, 2);
+  if (f.words.length > 0) return fail(usage, 2);
+  if (!ctx.sweep) throw new SwitchError("this command needs the database");
+  const report = await sweepPreviews({
+    ...ctx.sweep(),
+    dryRun: f.flags.has("--dry-run"),
+  });
+  const code = report.failed > 0 ? 1 : 0;
+  if (json) return { code, out: `${JSON.stringify(report)}\n`, err: "" };
+  return { code, out: `${report.lines.join("\n")}\n`, err: "" };
+}
+
 export async function runCli(
   argv: string[],
   client: AgentClient,
@@ -517,6 +545,10 @@ export async function runCli(
         );
       case "user":
         return await user(ctx, args[0], args.slice(1));
+      case "preview":
+        if (args[0] === "sweep")
+          return await previewSweep(ctx, args.slice(1), json);
+        return fail(SWEEP_USAGE, 2);
       case undefined:
       case "help":
       case "--help":

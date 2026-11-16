@@ -17,6 +17,9 @@ export interface Deps {
   writeFileAtomic(path: string, content: string): Promise<void>;
   /** No error when it is already gone. */
   removeFile(path: string): Promise<void>;
+  /** Names of the regular files directly in `dir` (no symlinks, no subdirectories); [] when the
+   * directory does not exist. */
+  listFiles(dir: string): Promise<string[]>;
   httpGet(url: string, timeoutMs: number): Promise<{ status: number }>;
   /** One structured line per operation. Never params' values that could hold a secret. */
   log(event: Record<string, unknown>): void;

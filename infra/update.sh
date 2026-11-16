@@ -7,7 +7,8 @@
 #
 # Order: the auth secret in web.env if missing → unpack to releases/<sha> → migrate (with the new
 # migrations, before anything restarts)
-# → `current` points at it → kit-agent restarts → the web container is recreated → the dashboard's
+# → `current` points at it → kit-agent restarts → the nightly preview sweep timer is installed and
+# enabled → the web container is recreated → the dashboard's
 # Caddy site is written if its host resolves → the previews' wildcard site, once the Cloudflare
 # token and *.preview DNS exist → only the last 3 releases are kept.
 # The sites never stop: their containers and Caddy are not touched.
@@ -144,6 +145,26 @@ else
 fi
 for _ in $(seq 1 20); do [ -S /run/kit-deploy/agent.sock ] && break; sleep 0.5; done
 [ -S /run/kit-deploy/agent.sock ] || { echo "kit-agent did not open its socket." >&2; exit 1; }
+
+say "Nightly preview sweep (kit-deploy-preview-sweep.timer)"
+# `kit-deploy preview sweep` as root every night (phase 03 U10). Installed or updated from the
+# release and enabled; `enable --now` on the timer only schedules it, the sweep does not run here.
+SWEEP_UNITS=(kit-deploy-preview-sweep.service kit-deploy-preview-sweep.timer)
+SWEEP_CHANGED=0
+for u in "${SWEEP_UNITS[@]}"; do
+  cmp -s "$REL/infra/$u" "/etc/systemd/system/$u" && continue
+  install -m 0644 -o root -g root "$REL/infra/$u" "/etc/systemd/system/$u.new"
+  mv -f "/etc/systemd/system/$u.new" "/etc/systemd/system/$u"
+  SWEEP_CHANGED=1
+done
+[ "$SWEEP_CHANGED" = 1 ] && echo "Units installed or updated." || echo "Units unchanged."
+if [ "$TEST" = 1 ]; then
+  echo "TEST: systemctl enable --now kit-deploy-preview-sweep.timer skipped."
+else
+  [ "$SWEEP_CHANGED" = 1 ] && systemctl daemon-reload
+  systemctl enable -q --now kit-deploy-preview-sweep.timer
+  echo "Next run: $(systemctl show -p NextElapseUSecRealtime --value kit-deploy-preview-sweep.timer 2>/dev/null || echo unknown)"
+fi
 
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"
 UID_WEB="$(id -u kitdeploy)"
