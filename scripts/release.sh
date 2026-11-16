@@ -41,6 +41,7 @@ docker run --rm -e SHA="$SHA" -e SHORT="$SHORT" -v "$(host "$ROOT/build"):/out" 
   mkdir -p /rel/web/.next /rel/web/public && cp -r .next/static /rel/web/.next/static
   [ -d public ] && cp -r public/. /rel/web/public/
   mkdir -p /rel/web/.next/cache
+  cp -r drizzle /rel/drizzle
   mkdir -p /rel/infra && cp infra/install.sh infra/update.sh infra/kit-agent.service infra/kit-deploy-preview-sweep.service infra/kit-deploy-preview-sweep.timer /rel/infra/
   cp -r infra/caddy /rel/infra/caddy
   echo "$SHA" > /rel/VERSION
