@@ -9,6 +9,7 @@
  *                     edits the PR comment with it
  */
 import { drizzleAdminStore } from "../lib/db/admin";
+import { drizzleEnvStore, sshActor } from "../lib/db/env-store";
 import { db, drizzleStore } from "../lib/db/store";
 import { drizzleUserStore } from "../lib/db/users";
 import { statusPublisherFromEnv } from "../lib/deploy/commit-status";
@@ -21,11 +22,18 @@ import { pullStateFromEnv } from "../lib/deploy/pr-state";
 import { socketClient } from "./client";
 import { runCli } from "./commands";
 import { loadCliEnv, loadGithubEnv } from "./env";
+import { readValue } from "./stdin";
 
 const socket = process.env.KIT_AGENT_SOCKET ?? "/run/kit-deploy/agent.sock";
 const agent = socketClient(socket);
 const { code, out, err } = await runCli(process.argv.slice(2), agent, {
   stdoutIsTTY: process.stdout.isTTY === true,
+  actor: sshActor(),
+  readValue,
+  env: () => {
+    loadCliEnv();
+    return drizzleEnvStore(db());
+  },
   admin: () => {
     loadCliEnv();
     return drizzleAdminStore(db());
