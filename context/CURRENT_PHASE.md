@@ -5,7 +5,7 @@
 
 ## Now
 
-**Phase:** 03 — Previews (in progress) · **Track:** own, infrastructure first (D018)
+**Phase:** 03 — Previews (done 2026-11-17) → next: 04 — Variables and databases · **Track:** own, infrastructure first (D018)
 Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-11-13 (`PHASE_LOG/02-one-site-by-hand.md`).
 
 | Unit | PR | Status |
@@ -22,14 +22,15 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | U9 limit 4 + dormido (D017): 5th preview sleeps the least recently pushed; next push wakes it; close cleans it; migration 0005 | #29 | merged (1178451) · not on the VPS (needs César's OK: web release + migration 0005, with U6/U7) |
 | U10 nightly sweep: `kit-deploy preview sweep [--dry-run]` (closed PRs → closePreview; pr-<n> containers no row holds; preview files with no live/asleep preview) + agent op `preview.list` + `kit-deploy-preview-sweep.{service,timer}` (04:00 + 30 min) installed by update.sh | #30 | merged (71ac27d) · not on the VPS (goes with all of main) |
 | U10b agent passes the Cloudflare token to `caddy validate` (every site/preview write failed since U1) | #31 | merged (270208f) · on the VPS 2026-11-17 with all of main |
+| U10c Caddy strips `kd_preview` before each preview's app (phase security-review) | #32 | merged (92fbf71) · on the VPS 2026-11-17 |
 
 Log: `PHASE_LOG/03-previews.md`.
 
 ## Closes when (phase 03)
 
 - [x] A PR on kd-hello gets its URL in the PR in < 5 min, behind the login, and loses it on close (2026-11-17: 1.5 min, 302 to /preview-access, 404 + comment "eliminada" 17 s after close; needed fix #31)
-- [ ] The dashboard session cookie is host-only (browser); a `*.fockus.dev` production site never gets it
-- [x] security-review of auth and forward_auth (2026-11-17: no HIGH; 1 MEDIUM to fix in its own unit: `kd_preview` reaches every preview app, see PHASE_LOG)
+- [x] The dashboard session cookie is host-only (browser); a `*.fockus.dev` production site never gets it (2026-11-17: signed in through the built-in browser; Caddy's access log shows Cookie on deploy.fockus.dev and none on kd-hello.fockus.dev)
+- [x] security-review of auth and forward_auth (2026-11-17: no HIGH; the MEDIUM — `kd_preview` reached every preview app — fixed in #32, on the VPS)
 
 ## Blocked (actions for César or external)
 
@@ -53,7 +54,7 @@ Log: `PHASE_LOG/03-previews.md`.
 |---|---|---|
 | 01 | Server ready | done 2026-11-11 (nmap: PR #4 merged, run pending) |
 | 02 | One site by hand | done 2026-11-13 |
-| 03 | Previews | in progress |
+| 03 | Previews | done 2026-11-17 |
 | 04 | Variables and databases | pending |
 | 05 | Dashboard (kit UI phases in `phases/ui/`) | pending · brief in `design/BRIEF-kit-deploy.md` |
 | 06 | Alerts and cron | pending |

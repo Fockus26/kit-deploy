@@ -329,3 +329,16 @@ lib/core/caddy.ts, lib/auth/{config,cookie,next-path}.ts, proxy.ts. No HIGH.
   (`reverse_proxy … { header_up Cookie "kd_preview=[^;]*;?\s*" "" }` or equivalent), plus a
   previews-in-container check that the app never receives it.
 - Low: preview-auth's cache keeps a session valid ≤ 60 s after it is deleted (documented).
+
+### Phase close (2026-11-17)
+
+- #32 (92fbf71): `kit_preview` strips `kd_preview` from Cookie before the app (two `header_up`
+  passes); previews.test.sh in the real Caddy ALL PASS (alone / first / middle / look-alike
+  name). Release 92fbf71aaa27: install test ALL PASS, shipped; previews site rewritten, wildcard
+  cert Let's Encrypt (to 2027-02-11), dashboard 200, kd-hello 200, unknown preview 404.
+- Host-only cookie: César signed in through the built-in browser; get-session → session; Caddy's
+  access log: request to deploy.fockus.dev carries Cookie (REDACTED), the same browser's request
+  to kd-hello.fockus.dev has no Cookie header.
+- All three "Closes when" checked. From now on, per César: ship to the VPS once per phase.
+- Open: the CLI's `deploy` does not wire PR comments; a switch that dies mid-way leaves its row
+  `starting` (sweep cleans container/file only); CONTENT_CHECKLIST #12/#14 copy; release PR #26.
