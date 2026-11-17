@@ -62,6 +62,21 @@ export const MASTER_KEY = "/etc/kit-deploy/master.key";
  * for the length of one `docker run`; Docker keeps the variables in its root-only config. */
 export const ENV_FILES_DIR = "/run/kit-agent/env";
 
+/** What `kit-db url` prints: one PgBouncer URL, no whitespace (a line of an env file). */
+const DB_URL = /^postgres(?:ql)?:\/\/[^\s]+$/;
+
+/** A database's URL could end up in a command's stderr: never pass one on. */
+export function scrubUrls(text: string): string {
+  return text.replace(/postgres(?:ql)?:\/\/\S+/g, "postgresql://…");
+}
+
+/** kit-db's name for a target's database: the project's, or `<project>_preview` for every PR. */
+export function databaseName(target: Target): string {
+  return target.env === "production"
+    ? target.project
+    : `${target.project}_preview`;
+}
+
 const PULL_TIMEOUT_MS = 600_000;
 const HEALTH_TIMEOUT_MS = 3_000;
 /** A port handed out by `ports.allocate` stays reserved this long, so two deploys that allocate
@@ -243,6 +258,8 @@ export class Agent {
         return this.sealVar(req.params);
       case "env.reveal":
         return this.revealVars(req.params);
+      case "db.create":
+        return this.serial(() => this.createDatabases(req.params.project));
     }
   }
 
@@ -392,23 +409,23 @@ export class Agent {
   ) {
     const name = containerName(params.target, params.sha);
     const { vars, ...run } = params;
+    const { project } = params.target;
     // Variables only go into the image of the repository root pinned for this project (the
     // database is the web app's to write; the pin file is not). Checked before opening anything.
-    if (vars && vars.length > 0)
-      await this.assertPinned(params.target.project, params.image);
+    const pinned = await this.pinnedImage(project, params.image);
+    if (vars && vars.length > 0 && pinned !== true) throw pinned;
     // Everything is opened before anything is written or started: one bad row, no container.
-    const content =
+    const userLines =
       vars && vars.length > 0
-        ? await this.envFileContent(
-            params.target.project,
-            params.target.env,
-            vars,
-          )
-        : null;
-    const envFile =
-      content === null ? undefined : `${ENV_FILES_DIR}/${name}.env`;
+        ? await this.envFileContent(project, params.target.env, vars)
+        : "";
+    // Managed (U5): only for the pinned image, like every other secret of the project.
+    const managed =
+      pinned === true ? await this.managedLines(params.target) : "";
+    const content = userLines + managed;
+    const envFile = content === "" ? undefined : `${ENV_FILES_DIR}/${name}.env`;
     try {
-      if (envFile !== undefined && content !== null) {
+      if (envFile !== undefined) {
         await this.deps.writePrivateFile(envFile, content);
       }
       const argv = ["docker", ...dockerRunArgs({ ...run, envFile })];
@@ -420,21 +437,68 @@ export class Agent {
     }
   }
 
-  private async assertPinned(project: string, image: string): Promise<void> {
+  /** True when `image` is from the project's pinned repository; else the error to throw if the
+   * caller sent variables (without any, the container just runs with none). */
+  private async pinnedImage(
+    project: string,
+    image: string,
+  ): Promise<true | AgentError> {
     const path = pinPath(project);
     const pin = parsePin(await this.deps.readFile(path));
     if (pin === null) {
-      throw new AgentError(
+      return new AgentError(
         "forbidden",
         `${project} has no pinned image repository (${path}): as root, kit-deploy project pin ${project} <owner/repo>`,
       );
     }
     if (!imageMatchesPin(image, pin)) {
-      throw new AgentError(
+      return new AgentError(
         "forbidden",
         `${image} is not from ${pin}, the repository pinned for ${project}: its variables go nowhere else`,
       );
     }
+    return true;
+  }
+
+  /**
+   * DATABASE_URL from `kit-db url` (production: `<project>`, preview: `<project>_preview`), read at
+   * each start and never stored (César 2026-11-17: after `kit-db rotate`, a redeploy is enough).
+   * A project without that database runs without it. Neither the URL nor kit-db's output ever
+   * reaches a response or a log.
+   */
+  private async managedLines(target: Target): Promise<string> {
+    const db = databaseName(target);
+    const r = await this.deps.run(["kit-db", "url", db]);
+    const url = r.stdout.trim();
+    if (r.code !== 0 || !DB_URL.test(url)) {
+      this.deps.log({ event: "env.managed", database: db, databaseUrl: false });
+      return "";
+    }
+    return `DATABASE_URL=${url}\n`;
+  }
+
+  /** `kit-db create` for production's and the previews' databases. Its stdout carries the URLs
+   * with the password: it is dropped, never returned or logged. */
+  private async createDatabases(project: string) {
+    const out: { database: string; created: boolean }[] = [];
+    for (const database of [project, `${project}_preview`]) {
+      const exists = await this.deps.run(["kit-db", "url", database]);
+      if (exists.code === 0) {
+        out.push({ database, created: false });
+        continue;
+      }
+      const r = await this.deps.run(["kit-db", "create", database], {
+        timeoutMs: 120_000,
+      });
+      if (r.code !== 0) {
+        throw new AgentError(
+          "command_failed",
+          `kit-db create ${database} failed (exit ${r.code}): ${scrubUrls(tail(r.stderr))}`,
+        );
+      }
+      out.push({ database, created: true });
+    }
+    return out;
   }
 
   /** `NAME=value` lines for Docker's --env-file. Secrets too: this is where they are for. */
@@ -463,8 +527,7 @@ export class Agent {
       }
       // Sealed values are one line already; checked again before it becomes a line of a file.
       assertEnvValue(value);
-      return `${v.name}=${value}
-`;
+      return `${v.name}=${value}\n`;
     });
     return lines.join("");
   }
