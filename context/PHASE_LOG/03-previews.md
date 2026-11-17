@@ -263,3 +263,37 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
 - From outside: deploy / 307 → /login, /login 200, kd-hello 200 (+ /api/health), nope-pr-1.preview
   404. Web container has GITHUB_STATUS_TOKEN (checked set, value not read); kit-agent active.
 - Not yet exercised for real: the first preview status + PR comment arrives with U8's template.
+
+### U10 nightly sweep (2026-11-16, PR #30, branch feat/preview-sweep)
+
+- `kit-deploy preview sweep [--dry-run] [--json]` (lib/deploy/sweep.ts), root, reads cli.env +
+  github.env. Three steps:
+  1. Previews with something left (open/asleep row or a container) → `GET /repos/{o}/{r}/pulls/{n}`
+     (lib/deploy/pr-state.ts); closed → `closePreview` (file, rows, containers, comment "eliminada").
+     No token → one `skip` line, the rest still runs. 404 → `skip`, left as it is (not a failure).
+  2. Per project under `withProjectLock`: `container.list {project}`; only env=preview whose name
+     `<project>-pr-<n>-<sha>` matches its project and site labels; not in any row's `container` →
+     stop (timeoutS 0, if running) + remove. Name/labels disagree → `skip`.
+  3. Same lock: `preview.list` → file of a PR with no live/asleep row → `preview.remove`
+     (validate + bounded reload, restored on error).
+  Plus projects no longer in the DB: their preview containers and files are removed (no lock).
+  Step 1 runs outside the sweep's lock (closePreview takes its own; the advisory lock is not reentrant).
+- New agent op `preview.list` (no params): names in /etc/caddy/previews matching PREVIEW_FILE,
+  regular files only (Deps.listFiles); the rest is counted (`ignored`), never named or read.
+- Output: one line per action (`closed …`, `removed container …`, `removed file …`, `skip …`,
+  `failed …`, `would …` in dry-run) + summary `sweep: …`; exit 1 only if something failed.
+- infra: `kit-deploy-preview-sweep.service` (oneshot, Requires kit-agent, MemoryMax 256M,
+  NoNewPrivileges, ProtectHome read-only) + `.timer` (04:00, RandomizedDelaySec 30min,
+  Persistent). update.sh installs/updates them (cmp → install) and `enable --now` the timer (it
+  does not run the sweep). release.sh packs them.
+- Verified: unit tests with fakes for the three cases, a foreign container (gaby/evolution_*,
+  even with half labels) never touched, --dry-run reads only; suite, typecheck, biome (explicit
+  paths: `bun run lint` processes nothing inside a .claude/worktrees slot), build green;
+  `install.test.sh` in Docker ALL PASS (94): units installed/updated, real sweep against the agent
+  + Postgres (dry run as cesar, real as root; a fake docker logged only `docker ps` with the label).
+- security-review: no findings; it caught `cp -r drizzle` deleted by mistake in release.sh
+  (fixed in the second commit, before any release).
+- Not on the VPS. Follow-ups: the CLI's `deploy` context does not wire `comments`
+  (commenterFromEnv), so a preview deployed through `kit-deploy deploy` gets no PR comment (the
+  web's runtime.ts does). A switch that dies mid-way leaves its row `starting` forever (the sweep
+  removes its container/file, not the row).

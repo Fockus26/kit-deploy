@@ -20,7 +20,7 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | U7 GitHub: `kit-deploy/preview` status + PR comment edited in place (marker), "eliminada" on close | #27 | merged (fac43e3) · on the VPS 2026-11-16, verified |
 | U8 template `deploy-vps.yml`: `pull_request` → `{sha, pr}` / `DELETE preview`, concurrency per PR, forks + Dependabot skipped with a notice | #28 | merged (d1ef8c5) · kd-hello's workflow not yet updated (needs César's OK) |
 | U9 limit 4 + dormido (D017): 5th preview sleeps the least recently pushed; next push wakes it; close cleans it; migration 0005 | #29 | merged (1178451) · not on the VPS (needs César's OK: web release + migration 0005, with U6/U7) |
-| U10 | — | pending (see plan) |
+| U10 nightly sweep: `kit-deploy preview sweep [--dry-run]` (closed PRs → closePreview; pr-<n> containers no row holds; preview files with no live/asleep preview) + agent op `preview.list` + `kit-deploy-preview-sweep.{service,timer}` (04:00 + 30 min) installed by update.sh | #30 | merged (71ac27d) · not on the VPS (goes with all of main) |
 
 Log: `PHASE_LOG/03-previews.md`.
 
