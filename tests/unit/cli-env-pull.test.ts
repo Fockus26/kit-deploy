@@ -18,6 +18,7 @@ import { fakeDeps } from "./agent-fakes";
 const AWKWARD = [
   "plain",
   "$HOME",
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal text is the test case
   "${HOME}x",
   "pa$$word",
   "$1abc",
