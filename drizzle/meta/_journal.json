@@ -43,6 +43,13 @@
       "when": 1794773764786,
       "tag": "0005_preview_asleep",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794948546723,
+      "tag": "0006_env_vars",
+      "breakpoints": true
     }
   ]
 }
