@@ -21,12 +21,13 @@ Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-
 | U8 template `deploy-vps.yml`: `pull_request` → `{sha, pr}` / `DELETE preview`, concurrency per PR, forks + Dependabot skipped with a notice | #28 | merged (d1ef8c5) · kd-hello's workflow not yet updated (needs César's OK) |
 | U9 limit 4 + dormido (D017): 5th preview sleeps the least recently pushed; next push wakes it; close cleans it; migration 0005 | #29 | merged (1178451) · not on the VPS (needs César's OK: web release + migration 0005, with U6/U7) |
 | U10 nightly sweep: `kit-deploy preview sweep [--dry-run]` (closed PRs → closePreview; pr-<n> containers no row holds; preview files with no live/asleep preview) + agent op `preview.list` + `kit-deploy-preview-sweep.{service,timer}` (04:00 + 30 min) installed by update.sh | #30 | merged (71ac27d) · not on the VPS (goes with all of main) |
+| U10b agent passes the Cloudflare token to `caddy validate` (every site/preview write failed since U1) | #31 | merged (270208f) · on the VPS 2026-11-17 with all of main |
 
 Log: `PHASE_LOG/03-previews.md`.
 
 ## Closes when (phase 03)
 
-- [ ] A PR on kd-hello gets its URL in the PR in < 5 min, behind the login, and loses it on close
+- [x] A PR on kd-hello gets its URL in the PR in < 5 min, behind the login, and loses it on close (2026-11-17: 1.5 min, 302 to /preview-access, 404 + comment "eliminada" 17 s after close; needed fix #31)
 - [ ] The dashboard session cookie is host-only (browser); a `*.fockus.dev` production site never gets it
 - [ ] security-review of auth and forward_auth
 

@@ -297,3 +297,19 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   (commenterFromEnv), so a preview deployed through `kit-deploy deploy` gets no PR comment (the
   web's runtime.ts does). A switch that dies mid-way leaves its row `starting` forever (the sweep
   removes its container/file, not the row).
+
+### All of main on the VPS + end-to-end test (2026-11-17)
+
+- Release 71ac27d7432b (U7–U10): install test ALL PASS (94), migrations applied, sweep timer
+  active (dry run: nothing to clean). kd-hello got the new template (95a4d96) and test PR #1.
+- Both failed: `site.write`/`preview.write` → `caddy validate failed: … cloudflare: API token ''
+  appears invalid`. The agent ran validate without CLOUDFLARE_API_TOKEN (update.sh had it): no
+  site write had passed since U1 (2026-11-13). kd-hello stayed up on d740b30 (switch restored).
+- Fix #31 (270208f): the agent reads /etc/caddy/cloudflare.env as data, passes the token only to
+  validate's env, redacts it from stderr. Release 270208f5bfab: install test ALL PASS, shipped.
+- Retest: production 95a4d96 live; PR #1 push 18:51:33Z → comment with
+  https://kd-hello-pr-1.preview.fockus.dev and status success at 18:53:03Z (1.5 min); no cookie →
+  302 to deploy.fockus.dev/preview-access; X-Robots-Tag noindex. Closed 18:53:31Z → 404 at
+  18:53:48Z, comment "eliminada", no container or preview file left.
+- Lesson: the install test stubs caddy, so the agent's validate env was never exercised with the
+  previews site; a unit test now covers it.
