@@ -22,10 +22,17 @@ export const MAX_BODY_BYTES = 4096;
 
 /** A PR number, as GitHub and `lib/core` (`siteName`) allow it. */
 const pr = z.number().int().min(1).max(999_999);
-const DeployBody = z.strictObject({
-  sha: z.string().regex(/^[0-9a-f]{40}$/),
-  pr: pr.optional(),
-});
+const DeployBody = z
+  .strictObject({
+    sha: z.string().regex(/^[0-9a-f]{40}$/),
+    pr: pr.optional(),
+    /** `kit-deploy rebuild` (U8b): the commit is live, but its image was just built again with
+     * new NEXT_PUBLIC_* values — deploy it as the next generation instead of "already live". */
+    rebuild: z.literal(true).optional(),
+  })
+  .refine((b) => !(b.rebuild && b.pr !== undefined), {
+    message: "a rebuild is production's",
+  });
 const CloseBody = z.strictObject({ pr });
 
 export const json = (
@@ -52,6 +59,8 @@ export function imageFor(repo: string, sha: string): string {
 export type DeployHooks = {
   /** A deployment of this project is queued: start the switch (after the response). */
   onQueued?: (projectId: string) => void;
+  /** A rebuild of the live commit: queue its next generation (the switch repo's queueRedeploy). */
+  redeploy?: (projectId: string) => Promise<{ id: string } | null>;
 };
 
 export type PreviewHooks = {
@@ -127,16 +136,31 @@ export async function handleDeploy(
       request,
       store,
       DeployBody,
-      "{ sha: <40 hex chars>, pr?: <PR number> }",
+      "{ sha: <40 hex chars>, pr?: <PR number>, rebuild?: true (production only) }",
     );
     if (!auth.ok) return auth.response;
-    const { sha, pr: n } = auth.body;
+    const { sha, pr: n, rebuild } = auth.body;
     const { project } = auth.found;
     const scope = { pr: n ?? null };
     const extra =
       n === undefined ? {} : { preview: previewOf(project.name, n) };
 
     const existing = await store.findOpenDeployment(project.id, scope, sha);
+    if (existing?.status === "live" && rebuild && hooks.redeploy) {
+      // Same tag, new image (new public variables): the next generation pulls and runs it.
+      const queued = await hooks.redeploy(project.id);
+      if (queued) {
+        hooks.onQueued?.(project.id);
+        return json(202, {
+          deployment: {
+            id: queued.id,
+            status: "queued",
+            image: existing.image,
+          },
+          rebuilt: true,
+        });
+      }
+    }
     if (existing) {
       // A retry of a commit still queued (the web restarted mid-way?) kicks the switch again.
       if (existing.status === "queued") hooks.onQueued?.(project.id);

@@ -15,6 +15,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
+    inputs:
+      # `kit-deploy rebuild <project>` sets it: the commit is live, but its NEXT_PUBLIC_* changed,
+      # so the new image goes out as a redeploy instead of "already live".
+      rebuild:
+        description: Rebuild the live commit with the current public variables
+        type: boolean
+        default: false
 
 # One run per branch or PR at a time: a newer push (or closing the PR) cancels the build in course.
 concurrency:
@@ -113,6 +120,8 @@ jobs:
       - name: Deploy
         env:
           KIT_DEPLOY_TOKEN: ${{ secrets.KIT_DEPLOY_TOKEN }}
+          # "true" only for a manual run asked as a rebuild; never on a push or a PR.
+          REBUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.rebuild && 'true' || '' }}
         run: |
           if [ -z "$KIT_DEPLOY_TOKEN" ]; then
             echo "::error::KIT_DEPLOY_TOKEN is not set in this repository's secrets"
@@ -120,6 +129,8 @@ jobs:
           fi
           if [ -n "$PR" ]; then
             body="{\"sha\":\"${SHA}\",\"pr\":${PR}}"
+          elif [ "$REBUILD" = "true" ]; then
+            body="{\"sha\":\"${SHA}\",\"rebuild\":true}"
           else
             body="{\"sha\":\"${SHA}\"}"
           fi

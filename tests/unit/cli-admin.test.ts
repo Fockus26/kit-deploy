@@ -34,6 +34,9 @@ function memoryAdmin() {
     async projectRepo(project) {
       return projects.find((p) => p.name === project)?.repo ?? null;
     },
+    async productionBranch(project) {
+      return projects.some((p) => p.name === project) ? "main" : null;
+    },
     async addToken(project, hash, label) {
       if (!projects.some((p) => p.name === project))
         throw new AdminError(`no project ${project}`);

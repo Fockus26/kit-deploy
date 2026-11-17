@@ -74,7 +74,9 @@ function effect(name: string, environment: Environment, project: string) {
   if (environment === "development")
     return `\`kit-deploy env pull ${project} > .env.local\` picks it up`;
   if (isPublicName(name))
-    return `NEXT_PUBLIC_* is inlined at build: it needs a new build of ${environment}`;
+    return environment === "production"
+      ? `NEXT_PUBLIC_* is inlined at build: it needs a new build (now: kit-deploy rebuild ${project})`
+      : "NEXT_PUBLIC_* is inlined at build: the PR's next push builds it in";
   const now =
     environment === "production"
       ? `kit-deploy redeploy ${project}`

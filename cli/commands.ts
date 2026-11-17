@@ -22,6 +22,8 @@ import { assertHost, CoreInputError } from "../lib/core/validate";
 import { AdminError, type AdminStore } from "../lib/db/admin";
 import type { DeployStore } from "../lib/db/store";
 import type { UserStore } from "../lib/db/users";
+import type { GitHubRequest } from "../lib/deploy/github";
+import { dispatchRebuild } from "../lib/deploy/rebuild";
 import { type SweepDeps, sweepPreviews } from "../lib/deploy/sweep";
 import {
   processProject,
@@ -43,6 +45,8 @@ export type CliContext = EnvContext & {
   users?: () => UserStore;
   /** `preview sweep`: the database, the agent and GitHub (read for PR state, write for comments). */
   sweep?: () => Omit<SweepDeps, "dryRun">;
+  /** GitHub's API with the platform's token (root only), or null without it. */
+  github?: () => GitHubRequest | null;
   /** The root-owned image pins (lib/core/image-pin): written only when the CLI runs as root. */
   pins?: {
     isRoot: boolean;
@@ -70,6 +74,8 @@ Commands:
   status <project>   a project's containers and the health of the running ones
   deploy <project> [<sha>]
                      queue that commit (40 hex) if given, then run the project's switch
+  rebuild <project>  (root) production built again with the current NEXT_PUBLIC_* values and
+                     redeployed: GitHub runs its deploy-vps.yml with "rebuild"
   redeploy <project> [--pr <n>]
                      the live commit again, same image, new container with the variables
                      as they are now (no build); the old one stays for rollback
@@ -370,6 +376,38 @@ async function doRollback(
   );
 }
 
+/** `rebuild <project>` (U8b): production again from its branch, built with today's public
+ * variables; the new image replaces the live one as a redeploy, with no downtime. */
+async function rebuild(ctx: CliContext, args: string[]): Promise<Result> {
+  const [project, extra] = args;
+  if (!project || extra)
+    return fail("usage: kit-deploy rebuild <project>\n", 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  const admin = needAdmin(ctx);
+  const repo = await admin.projectRepo(project);
+  const branch = await admin.productionBranch(project);
+  if (repo === null || branch === null) return fail(`no project ${project}\n`);
+  const request = ctx.github?.() ?? null;
+  if (!request) {
+    return fail(
+      `no GitHub token here (root's /etc/kit-deploy/github.env): run it as ssh kit-vps kit-deploy rebuild ${project}, or start "Deploy (VPS)" by hand in GitHub with "rebuild" ticked\n`,
+    );
+  }
+  try {
+    await dispatchRebuild(request, repo, branch);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const hint = /403|404/.test(msg)
+      ? " (the token needs Actions: Read and write on this repo, and the repo the new deploy-vps.yml)"
+      : "";
+    return fail(`rebuild of ${project} not started: ${msg}${hint}\n`);
+  }
+  return ok(
+    `rebuild of ${project} started on ${repo}@${branch}: the Action builds with the current NEXT_PUBLIC_* values and redeploys it (see the repo's Actions tab)\n`,
+  );
+}
+
 /** `db create <project>`: production's and the previews' databases. The URLs never reach this
  * process: the agent drops kit-db's output; the switch puts DATABASE_URL in by itself. */
 async function dbCreate(
@@ -664,6 +702,8 @@ export async function runCli(
         return await status(client, args[0], json);
       case "deploy":
         return await deploy(ctx, args[0], args[1], json);
+      case "rebuild":
+        return await rebuild(ctx, args);
       case "redeploy":
         return await redeploy(ctx, args, json);
       case "rollback":

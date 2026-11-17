@@ -17,6 +17,7 @@ import {
   drizzleSweepRepo,
   drizzleSwitchRepo,
 } from "../lib/deploy/drizzle-repo";
+import { githubRequest, githubTokenFromEnv } from "../lib/deploy/github";
 import { commenterFromEnv } from "../lib/deploy/pr-comment";
 import { pullStateFromEnv } from "../lib/deploy/pr-state";
 import { socketClient } from "./client";
@@ -31,6 +32,11 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
   stdoutIsTTY: process.stdout.isTTY === true,
   actor: sshActor(),
   pins: { isRoot: process.getuid?.() === 0, write: writePinFile },
+  github: () => {
+    loadGithubEnv();
+    const token = githubTokenFromEnv();
+    return token ? githubRequest(token) : null;
+  },
   readValue,
   env: () => {
     loadCliEnv();

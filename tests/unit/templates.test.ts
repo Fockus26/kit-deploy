@@ -202,6 +202,25 @@ describe("templates/deploy-vps.yml", () => {
     expect(dockerfile).not.toMatch(/ARG NEXT_|ENV NEXT_PUBLIC|COPY[^\n]*\.env/);
   });
 
+  test("a manual run asked as a rebuild posts {sha, rebuild: true}, nothing else does", () => {
+    const dispatch = wf.on.workflow_dispatch as {
+      inputs: { rebuild: { type: string; default: boolean } };
+    };
+    expect(dispatch.inputs.rebuild).toMatchObject({
+      type: "boolean",
+      default: false,
+    });
+    const step = steps.find((s) => s.name === "Deploy");
+    expect(step?.env?.REBUILD).toBe(
+      "${{ github.event_name == 'workflow_dispatch' && inputs.rebuild && 'true' || '' }}",
+    );
+    const run = step?.run ?? "";
+    expect(run).toContain('elif [ "$REBUILD" = "true" ]; then');
+    expect(run).toContain('body="{\\"sha\\":\\"${SHA}\\",\\"rebuild\\":true}"');
+    // A PR never sends it: its branch comes first.
+    expect(run.indexOf('if [ -n "$PR" ]')).toBeLessThan(run.indexOf("REBUILD"));
+  });
+
   test("posts {sha} for production and {sha, pr} for a preview", () => {
     const run = steps.find((s) => s.name === "Deploy")?.run ?? "";
     expect(run).toContain('body="{\\"sha\\":\\"${SHA}\\",\\"pr\\":${PR}}"');

@@ -147,7 +147,9 @@ describe("kit-deploy env set", () => {
     expect(c.rows.get("kd_hello/production/NEXT_PUBLIC_SITE_URL")?.secret).toBe(
       false,
     );
-    expect(pub.out).toContain("needs a new build of production");
+    expect(pub.out).toContain(
+      "needs a new build (now: kit-deploy rebuild kd_hello)",
+    );
   });
 
   test("development points at env pull", async () => {
