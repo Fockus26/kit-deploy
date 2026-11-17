@@ -7,12 +7,13 @@
  * when it renders, so a value that slips past one layer still stops at the other.
  */
 import { z } from "zod";
+import { ENV_NAME_RE, ENVIRONMENTS } from "../lib/core/env";
 
 export const AGENT_VERSION = "0.1.0";
 
-/** Bigger than any legitimate request (a site with a few dozen hosts); stops a client from
- * making the root process buffer without limit. */
-export const MAX_REQUEST_BYTES = 64 * 1024;
+/** Bigger than any legitimate request (a site with a few dozen hosts, an environment's sealed
+ * variables); stops a client from making the root process buffer without limit. */
+export const MAX_REQUEST_BYTES = 1024 * 1024;
 
 const project = z.string().regex(/^[a-z0-9][a-z0-9_]{0,39}$/);
 const sha = z.string().regex(/^[0-9a-f]{7,40}$/);
@@ -64,6 +65,30 @@ const host = z
   });
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
+// ── Variables (phase 04). Shapes only: lib/core/env and crypto check the values again. ──
+const environment = z.enum(ENVIRONMENTS);
+const envName = z.string().regex(ENV_NAME_RE);
+const b64 = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/);
+/** What `env_vars` stores; opaque to the caller, opened only here. */
+const sealed = z.strictObject({
+  ciphertext: b64(43_692).min(4),
+  iv: b64(16),
+  tag: b64(24),
+  keyVersion: z.number().int().min(1),
+});
+/** One stored variable as the caller read it from its row: the AAD re-checks every field. */
+const storedVar = z.strictObject({
+  name: envName,
+  secret: z.boolean(),
+  sealed,
+});
+/** An environment's variables in one call; more than any project has. */
+export const MAX_VARS = 100;
+
 const op = <N extends string, P extends z.ZodRawShape>(name: N, params: P) =>
   z.strictObject({ id, op: z.literal(name), params: z.strictObject(params) });
 
@@ -94,6 +119,22 @@ export const Request = z.discriminatedUnion("op", [
   z.strictObject({ id, op: z.literal("preview.write"), params: previewSite }),
   op("preview.remove", { project, pr }),
   op("preview.list", {}),
+  op("env.seal", {
+    project,
+    environment,
+    name: envName,
+    secret: z.boolean(),
+    // Bytes are checked by assertEnvValue; this only bounds the characters.
+    value: z
+      .string()
+      .min(1)
+      .max(32 * 1024),
+  }),
+  op("env.reveal", {
+    project,
+    environment,
+    vars: z.array(storedVar).min(1).max(MAX_VARS),
+  }),
   op("health.check", {
     port,
     path: z
@@ -108,6 +149,8 @@ export type OpName = Request["op"];
 
 export type ErrorCode =
   | "bad_request"
+  /** Valid, but the agent never does it (a Production/Preview secret asked for its value). */
+  | "forbidden"
   | "not_managed"
   | "command_failed"
   | "invalid_config"
