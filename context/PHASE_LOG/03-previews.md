@@ -313,3 +313,19 @@ Plan: `context/plans/03-previews.md` (agreed 2026-11-13).
   18:53:48Z, comment "eliminada", no container or preview file left.
 - Lesson: the install test stubs caddy, so the agent's validate env was never exercised with the
   previews site; a unit test now covers it.
+
+### Phase security-review: auth + forward_auth (2026-11-17)
+
+Read: lib/preview/access.ts, the three preview routes, infra/caddy/kit-previews.caddy,
+lib/core/caddy.ts, lib/auth/{config,cookie,next-path}.ts, proxy.ts. No HIGH.
+- OK: grants are host-bound, single-use, 60 s, sent by POST (not in the URL or Caddy's log);
+  only sha256 hashes stored; the exchange path is handled before the app; forward_auth fails
+  closed (web down → 502); X-Forwarded-Host/Uri are set by Caddy, so a direct call to
+  /api/v1/preview-auth gets 403; `to` only accepts https + one label under the preview domain;
+  the dashboard cookies are `__Host-kd.*` (the browser refuses a Domain), no cross-subdomain.
+- MEDIUM (own unit): `kd_preview` (Domain=.preview.fockus.dev, 12 h, valid for every preview)
+  is forwarded to each preview's app by `reverse_proxy`. A PR whose app logs or echoes request
+  headers would expose a token that opens all previews. Fix: strip it in `kit_preview`
+  (`reverse_proxy … { header_up Cookie "kd_preview=[^;]*;?\s*" "" }` or equivalent), plus a
+  previews-in-container check that the app never receives it.
+- Low: preview-auth's cache keeps a session valid ≤ 60 s after it is deleted (documented).

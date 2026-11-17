@@ -29,7 +29,7 @@ Log: `PHASE_LOG/03-previews.md`.
 
 - [x] A PR on kd-hello gets its URL in the PR in < 5 min, behind the login, and loses it on close (2026-11-17: 1.5 min, 302 to /preview-access, 404 + comment "eliminada" 17 s after close; needed fix #31)
 - [ ] The dashboard session cookie is host-only (browser); a `*.fockus.dev` production site never gets it
-- [ ] security-review of auth and forward_auth
+- [x] security-review of auth and forward_auth (2026-11-17: no HIGH; 1 MEDIUM to fix in its own unit: `kd_preview` reaches every preview app, see PHASE_LOG)
 
 ## Blocked (actions for César or external)
 
