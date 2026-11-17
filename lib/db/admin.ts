@@ -26,6 +26,8 @@ export interface AdminStore {
   addDomain(project: string, host: string): Promise<void>;
   /** The project's `owner/name`, or null when there is no such project. */
   projectRepo(project: string): Promise<string | null>;
+  /** The branch production deploys from (`main` unless set), or null for no such project. */
+  productionBranch(project: string): Promise<string | null>;
   /** Stores the hash of a token for the project; the token itself never reaches the database. */
   addToken(
     project: string,
@@ -93,6 +95,14 @@ export function drizzleAdminStore(db: Db): AdminStore {
         .from(projects)
         .where(eq(projects.name, project));
       return p?.repo ?? null;
+    },
+
+    async productionBranch(project) {
+      const [p] = await db
+        .select({ branch: projects.productionBranch })
+        .from(projects)
+        .where(eq(projects.name, project));
+      return p?.branch ?? null;
     },
 
     async addToken(project, tokenHash, label) {
