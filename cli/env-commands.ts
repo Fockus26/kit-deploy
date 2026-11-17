@@ -24,6 +24,8 @@ export type EnvContext = {
   readValue?: () => Promise<string>;
   /** `ssh:<user>` for the audit log. */
   actor?: string;
+  /** Whether stdout is a terminal: `env pull` never prints values to one. */
+  stdoutIsTTY?: boolean;
 };
 
 type Result = { code: number; out: string; err: string };
@@ -34,8 +36,18 @@ export const ENV_USAGE = `usage:
   kit-deploy env ls <project> <environment>
   kit-deploy env set <project> <environment> <NAME> [--plain]   (value on stdin)
   kit-deploy env rm <project> <environment> <NAME>
+  kit-deploy env pull <project> > .env.local   (Development, never to a terminal)
 environments: production, preview, development
 `;
+
+/**
+ * One `.env.local` line Next.js reads back exactly (@next/env: dotenv + dotenv-expand). Single
+ * quotes keep `#`, spaces, `"` and backslashes; `\$` stops the expansion of `$NAME`. Checked
+ * against the real parser in tests/unit/cli-env-pull.test.ts.
+ */
+export function dotenvLine(name: string, value: string): string {
+  return `${name}='${value.replaceAll("$", "\\$")}'\n`;
+}
 
 /** Long plain values are cut in the table; --json has them whole. */
 const SHOWN_CHARS = 60;
@@ -160,6 +172,47 @@ async function rm(ctx: EnvContext, args: string[]): Promise<Result> {
   );
 }
 
+/**
+ * `env pull <project>` (brief F5): the Development set as a `.env.local`, on stdout and only into
+ * a pipe or a file — never a terminal, where the values would sit on screen. The equivalent of
+ * `vercel env pull .env.local --yes`, without a token on the PC: `ssh kit-vps` is the access.
+ */
+async function pull(
+  client: AgentClient,
+  ctx: EnvContext,
+  args: string[],
+): Promise<Result> {
+  const [p, extra] = args;
+  if (!p || extra) return fail(ENV_USAGE, 2);
+  const project = assertProject(p);
+  if (ctx.stdoutIsTTY) {
+    return fail(
+      `refusing to print ${project}'s variables to a terminal. Write them to the file:\n  ssh kit-vps kit-deploy env pull ${project} > .env.local\n`,
+      2,
+    );
+  }
+  const rows = await needStore(ctx).list(project, "development");
+  const header = `# kit-deploy env pull ${project} (development). Do not commit this file.\n`;
+  if (rows.length === 0) {
+    return ok(
+      header,
+      `no development variables in ${project}: empty .env.local\n`,
+    );
+  }
+  const res = await client.call("env.reveal", {
+    project,
+    environment: "development",
+    vars: rows.map(({ name, secret, sealed }) => ({ name, secret, sealed })),
+  });
+  if (!res.ok) return fail(agentError(res));
+  const values = res.result as { name: string; value: string }[];
+  return ok(
+    header + values.map((v) => dotenvLine(v.name, v.value)).join(""),
+    // stderr: the names only, so the terminal shows what was written and nothing else.
+    `wrote ${values.length} development variable(s) of ${project}: ${values.map((v) => v.name).join(", ")}\n`,
+  );
+}
+
 export async function envCommand(
   client: AgentClient,
   ctx: EnvContext,
@@ -174,6 +227,8 @@ export async function envCommand(
       return set(client, ctx, rest);
     case "rm":
       return rm(ctx, rest);
+    case "pull":
+      return pull(client, ctx, rest);
     default:
       return fail(ENV_USAGE, 2);
   }
