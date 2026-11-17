@@ -28,14 +28,25 @@ export function siteName(target: Target): string {
     : `${target.project}-pr-${target.pr}`;
 }
 
-/** `<project>-prod-<sha12>` / `<project>-pr-<n>-<sha12>` (brief, Architecture). Unique per
- * commit, so the new container can start beside the old one during the switch. */
-export function containerName(target: Target, sha: string): string {
+/** A redeploy of the same commit (phase 04 U8): 1 is the first deployment of a commit. */
+export const MAX_GENERATION = 9999;
+
+/** `<project>-prod-<sha12>` / `<project>-pr-<n>-<sha12>` (brief, Architecture), plus `-g<n>` for
+ * a redeploy of the same commit. Unique per commit and generation, so the new container can start
+ * beside the old one during the switch — also when only its variables changed. */
+export function containerName(
+  target: Target,
+  sha: string,
+  generation = 1,
+): string {
   checkTarget(target);
   const short = assertSha(sha).slice(0, 12);
-  return target.env === "production"
-    ? `${target.project}-prod-${short}`
-    : `${target.project}-pr-${target.pr}-${short}`;
+  assertIntInRange("generation", generation, 1, MAX_GENERATION);
+  const base =
+    target.env === "production"
+      ? `${target.project}-prod-${short}`
+      : `${target.project}-pr-${target.pr}-${short}`;
+  return generation === 1 ? base : `${base}-g${generation}`;
 }
 
 /** D001: `<project>-pr-<n>.preview.fockus.dev`. Underscores are not valid in a hostname, so the

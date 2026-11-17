@@ -19,13 +19,14 @@ const project = z.string().regex(/^[a-z0-9][a-z0-9_]{0,39}$/);
 const sha = z.string().regex(/^[0-9a-f]{7,40}$/);
 const port = z.number().int().min(20000).max(29999);
 
-/** `<project>-prod-<sha>` / `<project>-pr-<n>-<sha>`, as `lib/core` names them. Only these
- * can be stopped or removed — plus the label check against Docker itself. */
+/** `<project>-prod-<sha>` / `<project>-pr-<n>-<sha>`, plus `-g<n>` for a redeploy, as `lib/core`
+ * names them. Only these can be stopped or removed — plus the label check against Docker itself. */
 export const containerNameSchema = z
   .string()
   .regex(
-    /^[a-z0-9][a-z0-9_]{0,39}-(?:prod|pr-[1-9][0-9]{0,5})-[0-9a-f]{7,12}$/,
+    /^[a-z0-9][a-z0-9_]{0,39}-(?:prod|pr-[1-9][0-9]{0,5})-[0-9a-f]{7,12}(?:-g[2-9]|-g[1-9][0-9]{1,3})?$/,
   );
+const generation = z.number().int().min(1).max(9999);
 
 const pr = z.number().int().min(1).max(999_999);
 const productionTarget = z.strictObject({
@@ -94,11 +95,12 @@ const op = <N extends string, P extends z.ZodRawShape>(name: N, params: P) =>
 
 export const Request = z.discriminatedUnion("op", [
   op("version", {}),
-  op("ports.allocate", { target, sha }),
+  op("ports.allocate", { target, sha, generation: generation.optional() }),
   op("image.pull", { image }),
   op("container.run", {
     target,
     sha,
+    generation: generation.optional(),
     image,
     port,
     memoryMb: z.number().int(),

@@ -61,6 +61,7 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
           .select({
             id: deployments.id,
             sha: deployments.sha,
+            generation: deployments.generation,
             image: deployments.image,
             pr: deployments.pr,
           })
@@ -180,6 +181,54 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
         .update(deployments)
         .set({ container: null, port: null })
         .where(eq(deployments.id, id));
+    },
+
+    async queueRedeploy(projectId, pr) {
+      return db.transaction(async (tx) => {
+        const [live] = await tx
+          .select({
+            sha: deployments.sha,
+            image: deployments.image,
+            environment: deployments.environment,
+          })
+          .from(deployments)
+          .where(
+            and(
+              eq(deployments.projectId, projectId),
+              scopeIs({ pr }),
+              eq(deployments.status, "live"),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (!live) return null;
+        // The next generation of that commit in that scope, whatever happened to the earlier ones.
+        const [top] = await tx
+          .select({ g: max(deployments.generation) })
+          .from(deployments)
+          .where(
+            and(
+              eq(deployments.projectId, projectId),
+              scopeIs({ pr }),
+              eq(deployments.sha, live.sha),
+            ),
+          );
+        const generation = (top?.g ?? 1) + 1;
+        const [row] = await tx
+          .insert(deployments)
+          .values({
+            projectId,
+            environment: live.environment,
+            pr,
+            sha: live.sha,
+            generation,
+            image: live.image,
+          })
+          // A concurrent redeploy took this generation: it will deploy the same thing.
+          .onConflictDoNothing()
+          .returning({ id: deployments.id });
+        return row ? { id: row.id, sha: live.sha, generation } : null;
+      });
     },
 
     async envVars(projectId, environment) {

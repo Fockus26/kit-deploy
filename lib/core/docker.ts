@@ -22,6 +22,8 @@ export type RunInput = {
   memoryMb: number;
   /** Root-only file with the runtime variables, written by kit-agent (phase 04). */
   envFile?: string;
+  /** A redeploy of the same commit (U8): part of the container's name. Default 1. */
+  generation?: number;
 };
 
 /** ~75 % of the limit for V8's heap, so the process fails with a clear heap error before the
@@ -35,7 +37,7 @@ export function maxOldSpaceMb(memoryMb: number): number {
  * a shell string. Every value is validated, and none can start with `-`.
  */
 export function dockerRunArgs(input: RunInput): string[] {
-  const name = containerName(input.target, input.sha);
+  const name = containerName(input.target, input.sha, input.generation);
   const image = assertImage(input.image);
   const port = assertIntInRange(
     "port",

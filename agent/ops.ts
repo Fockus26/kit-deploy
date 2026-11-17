@@ -236,7 +236,11 @@ export class Agent {
         return this.health(req.params.port, req.params.path);
       case "ports.allocate":
         return this.serial(() =>
-          this.allocate(req.params.target, req.params.sha),
+          this.allocate(
+            req.params.target,
+            req.params.sha,
+            req.params.generation,
+          ),
         );
       case "container.run":
         return this.serial(() => this.runContainer(req.params));
@@ -440,8 +444,8 @@ export class Agent {
     }
   }
 
-  private async allocate(target: Target, sha: string) {
-    const name = containerName(target, sha);
+  private async allocate(target: Target, sha: string, generation?: number) {
+    const name = containerName(target, sha, generation);
     const ss = await must(this.deps, ["ss", "-H", "-l", "-t", "-n"], "ss");
     const used = parseListeningPorts(ss.stdout);
     // Stopped containers keep their port: a rollback restarts one without a new allocation.
@@ -459,7 +463,7 @@ export class Agent {
   private async runContainer(
     params: Extract<Request, { op: "container.run" }>["params"],
   ) {
-    const name = containerName(params.target, params.sha);
+    const name = containerName(params.target, params.sha, params.generation);
     const { vars, ...run } = params;
     const { project } = params.target;
     // Variables only go into the image of the repository root pinned for this project (the
