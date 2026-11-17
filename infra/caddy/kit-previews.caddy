@@ -23,11 +23,16 @@
 	}
 }
 
-# 3. the preview's app.
+# 3. the preview's app. kd_preview opens every preview for 12 h: the app never gets it, so a PR
+#    whose app logs or echoes its request headers cannot leak it (security review, 2026-11-17).
+#    Two passes: drop the pair, then a `; ` left at the start when it was the first cookie.
 (kit_preview) {
 	route {
 		import kit_preview_gate
-		reverse_proxy {args[0]}
+		reverse_proxy {args[0]} {
+			header_up Cookie `(?:^|;\s*)kd_preview=[^;]*` ""
+			header_up Cookie `^;\s*` ""
+		}
 	}
 }
 
