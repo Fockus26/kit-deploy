@@ -14,6 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { ENVIRONMENTS, MANAGED_NAMES, RESERVED_NAMES } from "../core/env";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -153,6 +154,102 @@ export const domains = pgTable(
     check(
       "domains_not_platform",
       sql`${t.host} not in ('db.fockus.dev', 'deploy.fockus.dev')`,
+    ),
+  ],
+);
+
+// ── Environment variables (brief F4, phase 04) ──────────────────────────────────────────────
+
+/** `ssh:cesar` from the CLI, `web:<user id>` from the dashboard. */
+const ACTOR_RE = "^(ssh|web):[A-Za-z0-9_.@-]{1,64}$";
+
+const inList = (col: string, values: readonly string[]) =>
+  sql.raw(`${col} in (${values.map((v) => `'${v}'`).join(", ")})`);
+
+/**
+ * One variable of one project in one environment. Every value is sealed (AES-256-GCM,
+ * lib/core/crypto.ts) by kit-agent, plain or secret: `secret` only decides whether it can ever be
+ * read back. The blob's AAD carries project, environment, name and `secret`, so editing any of
+ * them here makes it fail to open. Never holds the managed names (DATABASE_URL, …): the agent
+ * resolves those at each start.
+ */
+export const envVars = pgTable(
+  "env_vars",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    environment: text("environment", { enum: ENVIRONMENTS }).notNull(),
+    name: text("name").notNull(),
+    secret: boolean("secret").notNull(),
+    ciphertext: text("ciphertext").notNull(),
+    iv: text("iv").notNull(),
+    tag: text("tag").notNull(),
+    keyVersion: integer("key_version").notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Who set the current value, as in audit_log.actor. */
+    updatedBy: text("updated_by").notNull(),
+  },
+  (t) => [
+    uniqueIndex("env_vars_slot").on(t.projectId, t.environment, t.name),
+    check("env_vars_environment", inList("environment", ENVIRONMENTS)),
+    check("env_vars_name_format", sql`${t.name} ~ '^[A-Z_][A-Z0-9_]{0,127}$'`),
+    check(
+      "env_vars_name_settable",
+      sql`not ${inList("name", [...RESERVED_NAMES, ...MANAGED_NAMES])}`,
+    ),
+    check(
+      "env_vars_public_not_secret",
+      sql`not (${t.secret} and ${t.name} like 'NEXT\\_PUBLIC\\_%')`,
+    ),
+    // 12-byte IV and 16-byte tag in base64; the ciphertext at most 32 KiB of value.
+    check("env_vars_iv_format", sql`${t.iv} ~ '^[A-Za-z0-9+/]{16}$'`),
+    check("env_vars_tag_format", sql`${t.tag} ~ '^[A-Za-z0-9+/]{22}==$'`),
+    check(
+      "env_vars_ciphertext_format",
+      sql`${t.ciphertext} ~ '^[A-Za-z0-9+/]+={0,2}$' and length(${t.ciphertext}) <= 43692`,
+    ),
+    check("env_vars_key_version", sql`${t.keyVersion} >= 1`),
+    check(
+      "env_vars_updated_by_format",
+      sql`${t.updatedBy} ~ ${sql.raw(`'${ACTOR_RE}'`)}`,
+    ),
+  ],
+);
+
+export const AUDIT_ACTIONS = ["env.set", "env.remove"] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/**
+ * Who changed what and when (brief F4) — never a value. The project is stored by name, not by
+ * reference: the record outlives the project.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    /** `ssh:cesar` from the CLI, `web:<user id>` from the dashboard. */
+    actor: text("actor").notNull(),
+    action: text("action", { enum: AUDIT_ACTIONS }).notNull(),
+    project: text("project").notNull(),
+    environment: text("environment", { enum: ENVIRONMENTS }),
+    name: text("name"),
+  },
+  (t) => [
+    index("audit_log_project_at").on(t.project, t.at.desc()),
+    check("audit_log_action", inList("action", AUDIT_ACTIONS)),
+    check(
+      "audit_log_environment",
+      sql`${t.environment} is null or ${inList("environment", ENVIRONMENTS)}`,
+    ),
+    check(
+      "audit_log_actor_format",
+      sql`${t.actor} ~ ${sql.raw(`'${ACTOR_RE}'`)}`,
     ),
   ],
 );
