@@ -5,32 +5,22 @@
 
 ## Now
 
-**Phase:** 03 — Previews (done 2026-11-17) → next: 04 — Variables and databases · **Track:** own, infrastructure first (D018)
-Plan agreed 2026-11-13: `plans/03-previews.md` (U1–U10). Phase 02 closed 2026-11-13 (`PHASE_LOG/02-one-site-by-hand.md`).
+**Phase:** 04 — Variables and databases (in progress) · **Track:** own, infrastructure first (D018)
+Plan agreed 2026-11-17: `plans/04-variables.md` (U1–U8). Phase 03: everything done but the browser check of the host-only cookie (César); its log is `PHASE_LOG/03-previews.md`.
 
 | Unit | PR | Status |
 |---|---|---|
-| U1 wildcard site `*.preview.fockus.dev` (DNS-01, 404 page, noindex) | #17 | merged · on the VPS (f8632b5), cert issued, verified |
-| U1b update.sh restarts Caddy without the token; bounded reload | #18 | merged (e7f4855) · on the VPS with ddeddee |
-| U2 auth backend (Better Auth, passkey + TOTP, `user create`) | #19 | merged (ddeddee) · on the VPS 2026-11-13, verified |
-| U3 `/login` + `/enrol` + U3b (cut link, passkey-only re-enrol) | #20, #21 | merged · on the VPS (7112799); César enrolled, TOTP sign-in verified |
-| U4 preview access (D013): `/preview-access`, one-time token, `kd_preview`, forward_auth + `kit_preview` gate | #22, #23 | merged (13d7641, 40a837c) · on the VPS with e134cca (2026-11-15) |
-| U5 core + agent: `renderPreviewSite` (running / asleep), `preview.write`/`preview.remove`; site.write production-only | #24 | merged (e134cca) · on the VPS 2026-11-15, verified |
-| U6 API + preview switch: `POST deploy {sha, pr}` → `pr-<n>` 384 MB, `DELETE /api/v1/preview`, migration 0004 | #25 | merged (c4943ab) · not on the VPS (needs César's OK) |
-| U7 GitHub: `kit-deploy/preview` status + PR comment edited in place (marker), "eliminada" on close | #27 | merged (fac43e3) · on the VPS 2026-11-16, verified |
-| U8 template `deploy-vps.yml`: `pull_request` → `{sha, pr}` / `DELETE preview`, concurrency per PR, forks + Dependabot skipped with a notice | #28 | merged (d1ef8c5) · kd-hello's workflow not yet updated (needs César's OK) |
-| U9 limit 4 + dormido (D017): 5th preview sleeps the least recently pushed; next push wakes it; close cleans it; migration 0005 | #29 | merged (1178451) · not on the VPS (needs César's OK: web release + migration 0005, with U6/U7) |
-| U10 nightly sweep: `kit-deploy preview sweep [--dry-run]` (closed PRs → closePreview; pr-<n> containers no row holds; preview files with no live/asleep preview) + agent op `preview.list` + `kit-deploy-preview-sweep.{service,timer}` (04:00 + 30 min) installed by update.sh | #30 | merged (71ac27d) · not on the VPS (goes with all of main) |
-| U10b agent passes the Cloudflare token to `caddy validate` (every site/preview write failed since U1) | #31 | merged (270208f) · on the VPS 2026-11-17 with all of main |
-| U10c Caddy strips `kd_preview` before each preview's app (phase security-review) | #32 | merged (92fbf71) · on the VPS 2026-11-17 |
+| U1 core crypto (AES-256-GCM, HKDF, AAD) + migration 0006 `env_vars`, `audit_log` | #33 | open (`feat/env-crypto`); not on the VPS (goes with the phase release) |
 
-Log: `PHASE_LOG/03-previews.md`.
+Log: `PHASE_LOG/04-variables.md`.
 
-## Closes when (phase 03)
+## Closes when (phase 04)
 
-- [x] A PR on kd-hello gets its URL in the PR in < 5 min, behind the login, and loses it on close (2026-11-17: 1.5 min, 302 to /preview-access, 404 + comment "eliminada" 17 s after close; needed fix #31)
-- [x] The dashboard session cookie is host-only (browser); a `*.fockus.dev` production site never gets it (2026-11-17: signed in through the built-in browser; Caddy's access log shows Cookie on deploy.fockus.dev and none on kd-hello.fockus.dev)
-- [x] security-review of auth and forward_auth (2026-11-17: no HIGH; the MEDIUM — `kd_preview` reached every preview app — fixed in #32, on the VPS)
+- [ ] A secret set from `ssh kit-vps kit-deploy env set` is never readable afterwards (CLI, API, DB dump)
+- [ ] `env pull` writes a `.env.local` that runs kd-hello locally
+- [ ] A backup of `kit_deploy` alone cannot decrypt any variable
+- [ ] security-review of crypto and build-env
+- [ ] (phase 03 leftover) the dashboard cookie is host-only in the browser
 
 ## Blocked (actions for César or external)
 
@@ -38,6 +28,7 @@ Log: `PHASE_LOG/03-previews.md`.
   access); no reinstall. The token expires: when it does, re-run `ship.sh … --install --github-token`.
 
 - QA pendiente: once at the end (phase 09), per César 2026-11-10.
+- César: add Actions: Read and write to the GitHub status token (phase 04 U8, rebuild).
 - CONTENT_CHECKLIST #12, #14: César confirms the "preview no existe" and "preview dormido" copy.
 
 ## Next
@@ -55,7 +46,7 @@ Log: `PHASE_LOG/03-previews.md`.
 | 01 | Server ready | done 2026-11-11 (nmap: PR #4 merged, run pending) |
 | 02 | One site by hand | done 2026-11-13 |
 | 03 | Previews | done 2026-11-17 |
-| 04 | Variables and databases | pending |
+| 04 | Variables and databases | in progress |
 | 05 | Dashboard (kit UI phases in `phases/ui/`) | pending · brief in `design/BRIEF-kit-deploy.md` |
 | 06 | Alerts and cron | pending |
 | 07 | First real project: maranatha | pending |
