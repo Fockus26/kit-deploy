@@ -1,8 +1,19 @@
 /** `SwitchRepo` on kit_deploy (Drizzle + postgres.js). */
-import { and, asc, desc, eq, inArray, isNotNull, max, ne } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  max,
+  ne,
+  or,
+} from "drizzle-orm";
 import { deployments, domains, OPEN_STATUSES, projects } from "@/lib/db/schema";
 import { type Db, scopeIs } from "@/lib/db/store";
 import type { RunningPreview, SwitchRepo } from "./repo";
+import type { SweepRepo } from "./sweep";
 
 const production = eq(deployments.environment, "production");
 const preview = eq(deployments.environment, "preview");
@@ -289,6 +300,69 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
           r.container ? [{ id: r.id, container: r.container }] : [],
         );
       });
+    },
+  };
+}
+
+/** `SweepRepo` on kit_deploy: what the nightly sweep compares the machine against. */
+export function drizzleSweepRepo(db: Db): SweepRepo {
+  const project = {
+    id: projects.id,
+    name: projects.name,
+    repo: projects.repo,
+  };
+  return {
+    async projects() {
+      return db.select(project).from(projects).orderBy(asc(projects.name));
+    },
+
+    async previewPrs() {
+      const rows = await db
+        .selectDistinct({ ...project, pr: deployments.pr })
+        .from(deployments)
+        .innerJoin(projects, eq(projects.id, deployments.projectId))
+        .where(
+          and(
+            preview,
+            or(
+              inArray(deployments.status, [...OPEN_STATUSES, "asleep"]),
+              isNotNull(deployments.container),
+            ),
+          ),
+        )
+        .orderBy(asc(projects.name), asc(deployments.pr));
+      return rows.flatMap((r) =>
+        r.pr === null
+          ? []
+          : [{ project: { id: r.id, name: r.name, repo: r.repo }, pr: r.pr }],
+      );
+    },
+
+    async holds(projectId) {
+      const rows = await db
+        .select({
+          pr: deployments.pr,
+          status: deployments.status,
+          container: deployments.container,
+        })
+        .from(deployments)
+        .where(
+          and(
+            eq(deployments.projectId, projectId),
+            or(
+              isNotNull(deployments.container),
+              and(preview, inArray(deployments.status, [...CURRENT])),
+            ),
+          ),
+        );
+      const containers = new Set<string>();
+      const prs = new Set<number>();
+      for (const r of rows) {
+        if (r.container) containers.add(r.container);
+        if (r.pr !== null && (r.status === "live" || r.status === "asleep"))
+          prs.add(r.pr);
+      }
+      return { containers: [...containers], prs: [...prs] };
     },
   };
 }

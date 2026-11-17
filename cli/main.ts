@@ -5,13 +5,19 @@
  *   KIT_AGENT_SOCKET  default /run/kit-deploy/agent.sock
  *   DATABASE_URL      else read from /etc/kit-deploy/cli.env (deploy, rollback, regenerate)
  *   GITHUB_STATUS_TOKEN  else read from /etc/kit-deploy/github.env if readable (root): `deploy`
- *                     publishes the commit status with it
+ *                     publishes the commit status with it; `preview sweep` reads PR state and
+ *                     edits the PR comment with it
  */
 import { drizzleAdminStore } from "../lib/db/admin";
 import { db, drizzleStore } from "../lib/db/store";
 import { drizzleUserStore } from "../lib/db/users";
 import { statusPublisherFromEnv } from "../lib/deploy/commit-status";
-import { drizzleSwitchRepo } from "../lib/deploy/drizzle-repo";
+import {
+  drizzleSweepRepo,
+  drizzleSwitchRepo,
+} from "../lib/deploy/drizzle-repo";
+import { commenterFromEnv } from "../lib/deploy/pr-comment";
+import { pullStateFromEnv } from "../lib/deploy/pr-state";
 import { socketClient } from "./client";
 import { runCli } from "./commands";
 import { loadCliEnv, loadGithubEnv } from "./env";
@@ -39,6 +45,22 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
         repo: drizzleSwitchRepo(database),
         status: statusPublisherFromEnv(),
         // Progress on stderr: stdout stays the result agents parse.
+        log: (e) => process.stderr.write(`${JSON.stringify(e)}\n`),
+      },
+    };
+  },
+  sweep: () => {
+    loadCliEnv();
+    loadGithubEnv();
+    const database = db();
+    return {
+      sweep: drizzleSweepRepo(database),
+      pullState: pullStateFromEnv(),
+      switch: {
+        agent,
+        repo: drizzleSwitchRepo(database),
+        comments: commenterFromEnv(),
+        // Progress on stderr (the journal): stdout is one line per action and the summary.
         log: (e) => process.stderr.write(`${JSON.stringify(e)}\n`),
       },
     };

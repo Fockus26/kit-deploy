@@ -199,6 +199,8 @@ export class Agent {
         return this.serial(() =>
           this.removePreview(req.params.project, req.params.pr),
         );
+      case "preview.list":
+        return this.listPreviews();
     }
   }
 
@@ -395,6 +397,22 @@ export class Agent {
       this.deps.writeFileAtomic(file.path, file.content),
     );
     return { path: file.path, state: input.state, changed: true };
+  }
+
+  /** Which previews have a file, read from the directory's names alone (never their content):
+   * only `<project>-pr-<n>.caddy` counts; anything else there is counted, not named, and left. */
+  private async listPreviews(): Promise<{
+    previews: Array<{ project: string; pr: number }>;
+    ignored: number;
+  }> {
+    const previews: Array<{ project: string; pr: number }> = [];
+    let ignored = 0;
+    for (const f of (await this.deps.listFiles(CADDY_PREVIEWS_DIR)).sort()) {
+      const m = PREVIEW_FILE.exec(`${CADDY_PREVIEWS_DIR}/${f}`);
+      if (m?.[2] && m[3]) previews.push({ project: m[2], pr: Number(m[3]) });
+      else ignored++;
+    }
+    return { previews, ignored };
   }
 
   private async removePreview(project: string, pr: number) {

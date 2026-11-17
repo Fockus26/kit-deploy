@@ -1,0 +1,14 @@
+# kit-deploy · runs kit-deploy-preview-sweep.service every night around 04:00 (VPS time).
+# Installed and enabled by infra/update.sh. `Persistent`: a night missed while the VPS was down
+# runs at the next boot.
+[Unit]
+Description=kit-deploy nightly preview sweep (04:00 + up to 30 min)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=kit-deploy-preview-sweep.service
+
+[Install]
+WantedBy=timers.target

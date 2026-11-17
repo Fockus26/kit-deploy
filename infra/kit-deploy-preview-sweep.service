@@ -1,0 +1,22 @@
+# kit-deploy · nightly preview sweep (phase 03 U10): previews of PRs closed on GitHub, pr-<n>
+# containers no deployment holds, preview files with no preview in the database.
+# Started by kit-deploy-preview-sweep.timer; installed by infra/update.sh. Root, like `ssh kit-vps
+# kit-deploy deploy`: it reads /etc/kit-deploy/cli.env and github.env (root 0600, the token).
+# Everything it changes goes through kit-agent (D011). One line per action in the journal:
+#   journalctl -u kit-deploy-preview-sweep
+[Unit]
+Description=kit-deploy nightly preview sweep
+After=network-online.target kit-agent.service
+Wants=network-online.target
+Requires=kit-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kit-deploy preview sweep
+# A sweep never runs for long: a stuck one is killed before the next night's.
+TimeoutStartSec=30min
+Nice=10
+MemoryMax=256M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only

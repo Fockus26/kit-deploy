@@ -76,6 +76,11 @@ check "web.env keeps DATABASE_URL beside the secret" grep -q '^DATABASE_URL=post
 check "web: BETTER_AUTH_URL is the dashboard's origin" grep -q -- '-e BETTER_AUTH_URL=https://deploy.kit-deploy.invalid' /var/log/kit-deploy-web.cmd
 check "migrations: Better Auth's tables and enrolment_tokens" bash -c "[ \"\$(su postgres -c \"psql -tA -d kit_deploy -c \\\"select count(*) from information_schema.tables where table_schema='public' and table_name in ('auth_user','auth_session','auth_account','auth_verification','auth_passkey','auth_two_factor','enrolment_tokens')\\\"\")\" = 7 ]"
 check "standalone web in the release" test -f "/opt/kit-deploy/releases/$SHA/web/server.js"
+check "sweep: service and timer installed, 0644 root, the release's own" bash -c "for u in kit-deploy-preview-sweep.service kit-deploy-preview-sweep.timer; do [ \"\$(stat -c '%U %a' /etc/systemd/system/\$u)\" = 'root 644' ] && cmp -s /etc/systemd/system/\$u /opt/kit-deploy/current/infra/\$u || exit 1; done"
+check "sweep: runs kit-deploy preview sweep, oneshot, after kit-agent" bash -c "grep -qx 'ExecStart=/usr/local/bin/kit-deploy preview sweep' /etc/systemd/system/kit-deploy-preview-sweep.service && grep -qx 'Type=oneshot' /etc/systemd/system/kit-deploy-preview-sweep.service && grep -qx 'Requires=kit-agent.service' /etc/systemd/system/kit-deploy-preview-sweep.service"
+check "sweep: timer nightly at 04:00 with a randomized delay, persistent" bash -c "grep -qx 'OnCalendar=\*-\*-\* 04:00:00' /etc/systemd/system/kit-deploy-preview-sweep.timer && grep -q '^RandomizedDelaySec=' /etc/systemd/system/kit-deploy-preview-sweep.timer && grep -qx 'Persistent=true' /etc/systemd/system/kit-deploy-preview-sweep.timer && grep -qx 'WantedBy=timers.target' /etc/systemd/system/kit-deploy-preview-sweep.timer"
+check "sweep: units installed and the enable reported (skipped in --test)" bash -c "grep -qx 'Units installed or updated.' /tmp/install1.log && grep -qx 'TEST: systemctl enable --now kit-deploy-preview-sweep.timer skipped.' /tmp/install1.log"
+check "sweep: the CLI knows the command (dry run usage)" bash -c "kit-deploy preview sweep --bogus 2>&1 | grep -qx 'unknown option --bogus'"
 check "no dashboard site while its DNS does not resolve" bash -c "[ ! -f /etc/caddy/sites/kit-deploy.caddy ] && grep -q 'does not resolve yet' /tmp/install1.log"
 
 echo "== 2. Re-run: idempotent, nothing rewritten"
@@ -87,6 +92,32 @@ check "says so" grep -q 'Already there' /tmp/install2.log
 check "auth secret kept" bash -c "grep -A1 '^== Auth secret' /tmp/install2.log | grep -qx 'Already there (not rewritten).'"
 check "release not unpacked twice" grep -q 'already unpacked' /tmp/install2.log
 check "agent back after the restart" bash -c "su cesar -c 'kit-deploy version' | grep -qx 'kit-agent 0.1.0'"
+check "sweep units unchanged on a re-run" grep -qx 'Units unchanged.' /tmp/install2.log
+echo "# an older version" > /etc/systemd/system/kit-deploy-preview-sweep.timer
+# Same .invalid host as steps 1–2: step 3 is the one that writes the dashboard site.
+DASHBOARD_HOST=deploy.kit-deploy.invalid bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update-sweep.log 2>&1
+check "an older timer is updated from the release" bash -c "grep -qx 'Units installed or updated.' /tmp/update-sweep.log && cmp -s /etc/systemd/system/kit-deploy-preview-sweep.timer /opt/kit-deploy/current/infra/kit-deploy-preview-sweep.timer"
+echo "== 2b. kit-deploy preview sweep against the real agent and database (nothing to sweep)"
+# No Docker in this container: a stand-in that lists no kit-deploy containers and refuses (and
+# logs) anything else, so a sweep that tried to stop or remove something would show here.
+cat > /usr/local/bin/docker <<'FAKE'
+#!/bin/sh
+echo "docker $*" >> /tmp/docker.log
+[ "$1" = ps ] && exit 0
+exit 1
+FAKE
+chmod 755 /usr/local/bin/docker
+mkdir -p /etc/caddy/previews
+echo "keep me" > /etc/caddy/previews/README.txt
+su cesar -c 'kit-deploy preview sweep --dry-run' > /tmp/sweep-dry.out 2>&1; SWEEP_DRY=$?
+check "dry run exits 0 on an empty platform" [ "$SWEEP_DRY" = 0 ]
+check "no token as cesar: closed PRs skipped, and said" grep -q '^skip closed PRs: no GITHUB_STATUS_TOKEN' /tmp/sweep-dry.out
+check "a file that is not a preview file is left, and counted" bash -c "grep -q '^skip 1 file(s) in /etc/caddy/previews/' /tmp/sweep-dry.out && [ -f /etc/caddy/previews/README.txt ]"
+check "summary line (dry run)" grep -q '^sweep (dry run): 0 closed' /tmp/sweep-dry.out
+kit-deploy preview sweep > /tmp/sweep.out 2>&1; SWEEP=$?
+check "a real run as root exits 0, nothing removed" bash -c "[ $SWEEP = 0 ] && grep -q 'removed 0 container(s) and 0 file(s)' /tmp/sweep.out"
+check "the sweep only listed (docker ps with kit-deploy's label), never stopped or removed" bash -c "grep -q '^docker ps .*--filter=label=dev.fockus.kit-deploy=1' /tmp/docker.log && ! grep -v '^docker ps ' /tmp/docker.log"
+rm -f /etc/caddy/previews/README.txt /usr/local/bin/docker
 
 echo "== 3. update.sh heals /etc/kit-deploy after a server-ready re-run, and writes the dashboard site"
 chmod 700 /etc/kit-deploy && chown root:root /etc/kit-deploy

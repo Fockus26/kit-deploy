@@ -304,3 +304,41 @@ describe("no preview outside the login", () => {
     }
   });
 });
+
+describe("preview.list", () => {
+  test("only <project>-pr-<n>.caddy names count; the rest is counted, not named", async () => {
+    const { send, files, calls } = setup();
+    files.set("/etc/caddy/previews/kd_hello-pr-7.caddy", "x");
+    files.set("/etc/caddy/previews/old_site-pr-12.caddy", "x");
+    files.set("/etc/caddy/previews/kd_hello-pr-7.caddy.tmp", "x");
+    files.set("/etc/caddy/previews/README.txt", "x");
+    files.set("/etc/caddy/previews/Kd-pr-1.caddy", "x");
+    files.set("/etc/caddy/sites/kd_hello.caddy", "x");
+    expect(
+      await send({ id: "l1", op: "preview.list", params: {} }),
+    ).toMatchObject({
+      ok: true,
+      result: {
+        previews: [
+          { project: "kd_hello", pr: 7 },
+          { project: "old_site", pr: 12 },
+        ],
+        ignored: 3,
+      },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  test("an empty or missing directory lists nothing; params are refused", async () => {
+    const { send } = setup();
+    expect(
+      await send({ id: "l2", op: "preview.list", params: {} }),
+    ).toMatchObject({
+      ok: true,
+      result: { previews: [], ignored: 0 },
+    });
+    expect(
+      await send({ id: "l3", op: "preview.list", params: { dir: "/etc" } }),
+    ).toMatchObject({ ok: false, error: { code: "bad_request" } });
+  });
+});

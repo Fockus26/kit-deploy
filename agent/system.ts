@@ -1,5 +1,5 @@
 /** The real side effects behind `Deps`. Kept tiny: the logic is in `ops.ts`, tested with fakes. */
-import { chmod, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, readdir, rename, rm, writeFile } from "node:fs/promises";
 import type { Deps, RunResult } from "./deps";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -52,6 +52,16 @@ async function removeFile(path: string): Promise<void> {
   await rm(path, { force: true });
 }
 
+async function listFiles(dir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries.filter((e) => e.isFile()).map((e) => e.name);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw e;
+  }
+}
+
 async function httpGet(
   url: string,
   timeoutMs: number,
@@ -73,6 +83,7 @@ export const systemDeps: Deps = {
   readFile,
   writeFileAtomic,
   removeFile,
+  listFiles,
   httpGet,
   log,
 };

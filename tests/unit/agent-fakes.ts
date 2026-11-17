@@ -27,6 +27,14 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     async removeFile(path) {
       files.delete(path);
     },
+    async listFiles(dir) {
+      const prefix = `${dir}/`;
+      return [...files.keys()]
+        .filter(
+          (k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/"),
+        )
+        .map((k) => k.slice(prefix.length));
+    },
     async httpGet() {
       if (httpStatus instanceof Error) throw httpStatus;
       return { status: httpStatus };
