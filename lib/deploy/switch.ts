@@ -178,6 +178,11 @@ async function cutOver(
 type Attempt = { started: string | null; reused: boolean };
 
 /** Pulls the image and runs it in a new container on a fresh loopback port. */
+/** Only a redeploy names its generation: a first deployment keeps the agent call as it was. */
+function generationOf(c: ClaimedDeployment): { generation?: number } {
+  return c.generation > 1 ? { generation: c.generation } : {};
+}
+
 async function runNew(
   ctx: Ctx,
   target: Target,
@@ -189,18 +194,20 @@ async function runNew(
   const alloc = (await call(ctx, "ports.allocate", {
     target,
     sha: c.sha,
+    ...generationOf(c),
   })) as { port: number };
   // Read at each start: a change since the last deploy reaches this container (redeploy, U8).
   const vars = await ctx.repo.envVars(c.project.id, target.env);
   await call(ctx, "container.run", {
     target,
     sha: c.sha,
+    ...generationOf(c),
     image: c.image,
     port: alloc.port,
     memoryMb,
     ...(vars.length > 0 ? { vars } : {}),
   });
-  attempt.started = containerName(target, c.sha);
+  attempt.started = containerName(target, c.sha, c.generation);
   return alloc.port;
 }
 
@@ -221,7 +228,7 @@ async function deployProduction(
     project: c.project.name,
     env: "production",
   };
-  const name = containerName(target, c.sha);
+  const name = containerName(target, c.sha, c.generation);
   if (c.hosts.length === 0)
     throw new SwitchError(`${c.project.name} has no domains`);
 
@@ -326,7 +333,7 @@ async function deployPreview(
   attempt: Attempt,
 ) {
   const target: Target = { project: c.project.name, env: "preview", pr };
-  const name = containerName(target, c.sha);
+  const name = containerName(target, c.sha, c.generation);
   await makeRoom(ctx, c.project, pr);
   const port = await runNew(ctx, target, c, MEMORY_MB.preview, attempt);
   await mustBeHealthy(ctx, port);

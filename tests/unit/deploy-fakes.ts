@@ -23,6 +23,8 @@ export type Row = {
   port: number | null;
   createdAt: Date;
   error?: string;
+  /** Absent = 1. */
+  generation?: number;
 };
 
 /** Same scope: production, or the same PR. */
@@ -50,6 +52,7 @@ export function memoryRepo(
       const c: ClaimedDeployment = {
         id: next.id,
         sha: next.sha,
+        generation: next.generation ?? 1,
         image: `ghcr.io/fockus26/kd-hello:${next.sha}`,
         pr: next.pr ?? null,
         project: {
@@ -152,6 +155,30 @@ export function memoryRepo(
       return mine.flatMap((r) =>
         r.container ? [{ id: r.id, container: r.container }] : [],
       );
+    },
+    async queueRedeploy(_projectId, pr) {
+      const live = rows.find(
+        (r) => r.status === "live" && (r.pr ?? null) === pr,
+      );
+      if (!live) return null;
+      const generation =
+        Math.max(
+          ...rows
+            .filter((r) => r.sha === live.sha && (r.pr ?? null) === pr)
+            .map((r) => r.generation ?? 1),
+        ) + 1;
+      const row: Row = {
+        id: `redeploy-${generation}`,
+        sha: live.sha,
+        ...(pr === null ? {} : { pr }),
+        status: "queued",
+        container: null,
+        port: null,
+        createdAt: new Date(Math.max(...rows.map((r) => +r.createdAt)) + 1),
+        generation,
+      };
+      rows.push(row);
+      return { id: row.id, sha: row.sha, generation };
     },
     async envVars(_projectId, environment) {
       return vars[environment] ?? [];

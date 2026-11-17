@@ -74,6 +74,9 @@ export const deployments = pgTable(
     /** The PR number of a preview; null in production. */
     pr: integer("pr"),
     sha: text("sha").notNull(),
+    /** 1 for a commit's first deployment; a redeploy of the same commit (new variables, same
+     * image: phase 04 U8) takes the next one, and its container is `…-g<n>`. */
+    generation: integer("generation").notNull().default(1),
     image: text("image").notNull(),
     status: text("status", { enum: DEPLOYMENT_STATUSES })
       .notNull()
@@ -88,10 +91,17 @@ export const deployments = pgTable(
   },
   (t) => [
     index("deployments_project_created").on(t.projectId, t.createdAt.desc()),
-    // One open deployment per commit and target (production, or one PR): two concurrent retries
-    // of the Action cannot queue twice. `coalesce`: production's null PR must collide with itself.
+    // One open deployment per commit, generation and target (production, or one PR): two
+    // concurrent retries of the Action cannot queue twice, while a redeploy (the next generation)
+    // can queue beside the live one. `coalesce`: production's null PR must collide with itself.
     uniqueIndex("deployments_open_commit")
-      .on(t.projectId, t.environment, sql`coalesce(${t.pr}, 0)`, t.sha)
+      .on(
+        t.projectId,
+        t.environment,
+        sql`coalesce(${t.pr}, 0)`,
+        t.sha,
+        t.generation,
+      )
       .where(
         sql.raw(`status in (${OPEN_STATUSES.map((s) => `'${s}'`).join(", ")})`),
       ),
@@ -112,6 +122,10 @@ export const deployments = pgTable(
       sql`(${t.environment} = 'preview') = (${t.pr} is not null)`,
     ),
     check("deployments_pr_range", sql`${t.pr} between 1 and 999999`),
+    check(
+      "deployments_generation_range",
+      sql`${t.generation} between 1 and 9999`,
+    ),
   ],
 );
 

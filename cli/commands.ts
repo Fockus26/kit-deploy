@@ -70,6 +70,9 @@ Commands:
   status <project>   a project's containers and the health of the running ones
   deploy <project> [<sha>]
                      queue that commit (40 hex) if given, then run the project's switch
+  redeploy <project> [--pr <n>]
+                     the live commit again, same image, new container with the variables
+                     as they are now (no build); the old one stays for rollback
   rollback <project> back to the previous kept deployment (no build, no pull)
   regenerate         rewrite every live site's Caddy file; start its container if stopped
   project add <project> <owner/repo> [--memory <mb>] [--domain <host>]... [--no-default-domain]
@@ -302,6 +305,49 @@ async function deploy(
       r.result === "live" ? `live ${r.id}` : `failed ${r.id}: ${r.error}`,
     );
   }
+  return { code, out: `${lines.join("\n")}\n`, err: "" };
+}
+
+/**
+ * `redeploy <project> [--pr <n>]` (phase 04 U8): the live commit again, same image, in a new
+ * container that reads the variables as they are now — the brief's "Redeploy" for a runtime
+ * variable. The usual switch: the old container keeps serving until the new one is healthy, and
+ * stays for rollback (with the variables it had).
+ */
+async function redeploy(
+  ctx: CliContext,
+  args: string[],
+  json: boolean,
+): Promise<Result> {
+  const usage = "usage: kit-deploy redeploy <project> [--pr <n>]\n";
+  const f = parseFlags(args, ["--pr"], []);
+  if (f.error) return fail(`${f.error}\n${usage}`, 2);
+  const [project, extra] = f.words;
+  if (!project || extra) return fail(usage, 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  const prRaw = f.flags.get("--pr")?.at(-1);
+  const pr = prRaw === undefined ? null : Number(prRaw);
+  if (pr !== null && !(Number.isInteger(pr) && pr >= 1 && pr <= 999_999))
+    return fail(`--pr ${prRaw}: expected a PR number\n`, 2);
+  const d = needDeploy(ctx);
+  const p = await d.switch.repo.projectByName(project);
+  if (!p) return fail(`no project ${project}\n`);
+  const where = pr === null ? "production" : `pr-${pr}`;
+  const queued = await d.switch.repo.queueRedeploy(p.id, pr);
+  if (!queued)
+    return fail(
+      `nothing live in ${project} ${where} to redeploy (an asleep preview wakes on its next push)\n`,
+    );
+  const results = await processProject(d.switch, p.id);
+  const code = results.some((r) => r.result === "failed") ? 1 : 0;
+  if (json) return { code, out: `${JSON.stringify(results)}\n`, err: "" };
+  const lines = [
+    `redeploying ${project} ${where}: ${queued.sha.slice(0, 12)} generation ${queued.generation}`,
+    ...results.map((r) =>
+      r.result === "live" ? `live ${r.id}` : `failed ${r.id}: ${r.error}`,
+    ),
+  ];
   return { code, out: `${lines.join("\n")}\n`, err: "" };
 }
 
@@ -618,6 +664,8 @@ export async function runCli(
         return await status(client, args[0], json);
       case "deploy":
         return await deploy(ctx, args[0], args[1], json);
+      case "redeploy":
+        return await redeploy(ctx, args, json);
       case "rollback":
         return await doRollback(ctx, args[0], json);
       case "regenerate":

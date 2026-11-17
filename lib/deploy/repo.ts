@@ -5,6 +5,8 @@ import type { DeploymentStatus } from "@/lib/db/schema";
 export type ClaimedDeployment = {
   id: string;
   sha: string;
+  /** 1 for a commit's first deployment; a redeploy takes the next (container `…-g<n>`). */
+  generation: number;
   image: string;
   /** The PR of a preview; null in production. */
   pr: number | null;
@@ -87,6 +89,12 @@ export interface SwitchRepo {
     projectId: string,
     pr: number,
   ): Promise<Array<{ id: string; container: string }>>;
+  /** A redeploy (U8): a queued copy of the scope's live deployment (same commit and image, the next
+   * generation), or null when nothing of that scope is live. */
+  queueRedeploy(
+    projectId: string,
+    pr: number | null,
+  ): Promise<{ id: string; sha: string; generation: number } | null>;
   /** The environment's variables (phase 04), for the container that is about to start. */
   envVars(
     projectId: string,

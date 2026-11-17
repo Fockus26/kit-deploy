@@ -68,13 +68,18 @@ function target(project: string | undefined, environment: string | undefined) {
   };
 }
 
-/** When a change reaches the running site (U8 adds the redeploy/rebuild commands). */
+/** When a change reaches the running site: a runtime variable needs a new container (redeploy),
+ * a NEXT_PUBLIC_* a new build (Next inlines it). */
 function effect(name: string, environment: Environment, project: string) {
   if (environment === "development")
     return `\`kit-deploy env pull ${project} > .env.local\` picks it up`;
   if (isPublicName(name))
     return `NEXT_PUBLIC_* is inlined at build: it needs a new build of ${environment}`;
-  return `the next deploy of ${environment} gets it`;
+  const now =
+    environment === "production"
+      ? `kit-deploy redeploy ${project}`
+      : `kit-deploy redeploy ${project} --pr <n>`;
+  return `the next deploy of ${environment} gets it (now: ${now})`;
 }
 
 async function ls(
