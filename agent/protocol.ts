@@ -137,6 +137,8 @@ export const Request = z.discriminatedUnion("op", [
     environment,
     vars: z.array(storedVar).min(1).max(MAX_VARS),
   }),
+  /** `<project>` and `<project>_preview` with kit-db; the URLs never come back. */
+  op("db.create", { project }),
   op("health.check", {
     port,
     path: z

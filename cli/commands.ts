@@ -92,6 +92,9 @@ Commands:
                      pr-<n> containers no deployment holds, preview files with no preview
                      in the database. Nightly by kit-deploy-preview-sweep.timer (root)
   user enrol <email> a new enrolment link for the account (the previous ones stop working)
+  db create <project>
+                     kit-db databases <project> and <project>_preview (kept if there);
+                     DATABASE_URL then reaches its containers by itself, never shown
   env ls <project> <environment>
                      a project's variables in production, preview or development; plain
                      values shown, secrets never
@@ -319,6 +322,27 @@ async function doRollback(
   );
 }
 
+/** `db create <project>`: production's and the previews' databases. The URLs never reach this
+ * process: the agent drops kit-db's output; the switch puts DATABASE_URL in by itself. */
+async function dbCreate(
+  client: AgentClient,
+  args: string[],
+  json: boolean,
+): Promise<Result> {
+  const [project, extra] = args;
+  if (!project || extra)
+    return fail("usage: kit-deploy db create <project>\n", 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  const res = await client.call("db.create", { project });
+  if (!res.ok) return fail(`${describe(res)}\n`);
+  const dbs = res.result as { database: string; created: boolean }[];
+  if (json) return ok(`${JSON.stringify(dbs)}\n`);
+  return ok(
+    `${dbs.map((d) => `${d.database}: ${d.created ? "created" : "already there"}`).join("\n")}\nDATABASE_URL goes into ${project}'s production and preview containers by itself from the next deploy (pinned image only)\n`,
+  );
+}
+
 async function doRegenerate(ctx: CliContext, json: boolean): Promise<Result> {
   const results = await regenerate(needDeploy(ctx).switch);
   const code = results.some((r) => !r.ok) ? 1 : 0;
@@ -383,6 +407,11 @@ async function projectAdd(
   const [name, repo, extra] = f.words;
   if (!name || !repo || extra) return fail(usage, 2);
   if (!PROJECT.test(name)) return fail(`invalid project name "${name}"\n`, 2);
+  if (name.endsWith("_preview"))
+    return fail(
+      `invalid project name "${name}": _preview is the suffix of every project's previews database\n`,
+      2,
+    );
   if (!REPO.test(repo))
     return fail(`invalid repo "${repo}": expected owner/name\n`, 2);
   const memoryRaw = f.flags.get("--memory")?.at(-1) ?? "512";
@@ -612,6 +641,10 @@ export async function runCli(
         return await user(ctx, args[0], args.slice(1));
       case "env":
         return await envCommand(client, ctx, args, json);
+      case "db":
+        if (args[0] === "create")
+          return await dbCreate(client, args.slice(1), json);
+        return fail("usage: kit-deploy db create <project>\n", 2);
       case "preview":
         if (args[0] === "sweep")
           return await previewSweep(ctx, args.slice(1), json);
