@@ -10,7 +10,13 @@ import {
   ne,
   or,
 } from "drizzle-orm";
-import { deployments, domains, OPEN_STATUSES, projects } from "@/lib/db/schema";
+import {
+  deployments,
+  domains,
+  envVars,
+  OPEN_STATUSES,
+  projects,
+} from "@/lib/db/schema";
 import { type Db, scopeIs } from "@/lib/db/store";
 import type { RunningPreview, SwitchRepo } from "./repo";
 import type { SweepRepo } from "./sweep";
@@ -174,6 +180,29 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
         .update(deployments)
         .set({ container: null, port: null })
         .where(eq(deployments.id, id));
+    },
+
+    async envVars(projectId, environment) {
+      const rows = await db
+        .select()
+        .from(envVars)
+        .where(
+          and(
+            eq(envVars.projectId, projectId),
+            eq(envVars.environment, environment),
+          ),
+        )
+        .orderBy(asc(envVars.name));
+      return rows.map((r) => ({
+        name: r.name,
+        secret: r.secret,
+        sealed: {
+          ciphertext: r.ciphertext,
+          iv: r.iv,
+          tag: r.tag,
+          keyVersion: r.keyVersion,
+        },
+      }));
     },
 
     async projectByName(name) {

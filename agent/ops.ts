@@ -34,6 +34,7 @@ import {
   assertSecretFlag,
   type Environment,
 } from "../lib/core/env";
+import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
@@ -57,6 +58,9 @@ export function cloudflareToken(text: string | null): string | null {
 }
 /** Root 0400, written once by server-ready.sh (D012). Only this process reads it (D011). */
 export const MASTER_KEY = "/etc/kit-deploy/master.key";
+/** Root 0700, not under /run/kit-deploy (which the web container mounts). A file lives here only
+ * for the length of one `docker run`; Docker keeps the variables in its root-only config. */
+export const ENV_FILES_DIR = "/run/kit-agent/env";
 
 const PULL_TIMEOUT_MS = 600_000;
 const HEALTH_TIMEOUT_MS = 3_000;
@@ -386,13 +390,83 @@ export class Agent {
   private async runContainer(
     params: Extract<Request, { op: "container.run" }>["params"],
   ) {
-    const argv = ["docker", ...dockerRunArgs(params)];
-    const r = await must(this.deps, argv, "docker run");
-    this.reserved.delete(params.port);
-    return {
-      name: containerName(params.target, params.sha),
-      id: r.stdout.trim(),
-    };
+    const name = containerName(params.target, params.sha);
+    const { vars, ...run } = params;
+    // Variables only go into the image of the repository root pinned for this project (the
+    // database is the web app's to write; the pin file is not). Checked before opening anything.
+    if (vars && vars.length > 0)
+      await this.assertPinned(params.target.project, params.image);
+    // Everything is opened before anything is written or started: one bad row, no container.
+    const content =
+      vars && vars.length > 0
+        ? await this.envFileContent(
+            params.target.project,
+            params.target.env,
+            vars,
+          )
+        : null;
+    const envFile =
+      content === null ? undefined : `${ENV_FILES_DIR}/${name}.env`;
+    try {
+      if (envFile !== undefined && content !== null) {
+        await this.deps.writePrivateFile(envFile, content);
+      }
+      const argv = ["docker", ...dockerRunArgs({ ...run, envFile })];
+      const r = await must(this.deps, argv, "docker run");
+      this.reserved.delete(params.port);
+      return { name, id: r.stdout.trim() };
+    } finally {
+      if (envFile !== undefined) await this.deps.removeFile(envFile);
+    }
+  }
+
+  private async assertPinned(project: string, image: string): Promise<void> {
+    const path = pinPath(project);
+    const pin = parsePin(await this.deps.readFile(path));
+    if (pin === null) {
+      throw new AgentError(
+        "forbidden",
+        `${project} has no pinned image repository (${path}): as root, kit-deploy project pin ${project} <owner/repo>`,
+      );
+    }
+    if (!imageMatchesPin(image, pin)) {
+      throw new AgentError(
+        "forbidden",
+        `${image} is not from ${pin}, the repository pinned for ${project}: its variables go nowhere else`,
+      );
+    }
+  }
+
+  /** `NAME=value` lines for Docker's --env-file. Secrets too: this is where they are for. */
+  private async envFileContent(
+    project: string,
+    environment: Environment,
+    vars: { name: string; secret: boolean; sealed: Sealed }[],
+  ): Promise<string> {
+    const key = await this.key();
+    const seen = new Set<string>();
+    const lines = vars.map((v) => {
+      assertEnvName(v.name);
+      if (seen.has(v.name)) {
+        throw new AgentError("bad_request", `${v.name} appears twice`);
+      }
+      seen.add(v.name);
+      const slot = { project, environment, name: v.name, secret: v.secret };
+      let value: string;
+      try {
+        value = open(key, slot, v.sealed);
+      } catch (e) {
+        if (e instanceof EnvCryptoError) {
+          throw new AgentError("bad_request", `${v.name} cannot be decrypted`);
+        }
+        throw e;
+      }
+      // Sealed values are one line already; checked again before it becomes a line of a file.
+      assertEnvValue(value);
+      return `${v.name}=${value}
+`;
+    });
+    return lines.join("");
   }
 
   /** Docker's own record decides: the name pattern is not enough, anyone could name a container so. */

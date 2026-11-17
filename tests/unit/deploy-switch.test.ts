@@ -432,3 +432,53 @@ describe("regenerate", () => {
     expect(ops()).toEqual(["container.list", "site.write"]);
   });
 });
+
+describe("processProject passes the environment's variables", () => {
+  const blob = {
+    ciphertext: "AAAA",
+    iv: "A".repeat(16),
+    tag: `${"A".repeat(22)}==`,
+    keyVersion: 1,
+  };
+  const vars = {
+    production: [{ name: "PROD_ONLY", secret: true, sealed: blob }],
+    preview: [{ name: "PREVIEW_ONLY", secret: true, sealed: blob }],
+  };
+
+  test("production gets Production's, sealed as stored", async () => {
+    const rows: Row[] = [
+      {
+        id: "new",
+        sha: sha("b"),
+        status: "queued",
+        container: null,
+        port: null,
+        createdAt: at(2),
+      },
+    ];
+    const { agent, calls } = fakeAgent();
+    const { d } = deps(agent, memoryRepo(rows, undefined, vars));
+    await processProject(d, "p1");
+    const run = calls.find((c) => c.op === "container.run");
+    expect(run?.params.vars).toEqual(vars.production);
+  });
+
+  test("a preview gets Preview's", async () => {
+    const rows: Row[] = [
+      {
+        id: "pr",
+        sha: sha("c"),
+        pr: 7,
+        status: "queued",
+        container: null,
+        port: null,
+        createdAt: at(2),
+      },
+    ];
+    const { agent, calls } = fakeAgent();
+    const { d } = deps(agent, memoryRepo(rows, undefined, vars));
+    await processProject(d, "p1");
+    const run = calls.find((c) => c.op === "container.run");
+    expect(run?.params.vars).toEqual(vars.preview);
+  });
+});
