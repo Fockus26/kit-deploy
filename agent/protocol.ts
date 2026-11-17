@@ -132,6 +132,12 @@ export const Request = z.discriminatedUnion("op", [
       .min(1)
       .max(32 * 1024),
   }),
+  /** A build's public variables and its Server Actions key (U7); vars may be empty. */
+  op("env.build", {
+    project,
+    environment: z.enum(["production", "preview"]),
+    vars: z.array(storedVar).max(MAX_VARS),
+  }),
   op("env.reveal", {
     project,
     environment,

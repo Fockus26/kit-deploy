@@ -22,7 +22,14 @@ ENV NEXT_DEPLOYMENT_ID=${GIT_SHA} \
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN if [ -z "$GIT_SHA" ]; then echo "GIT_SHA build arg is required" >&2; exit 1; fi
-RUN bun run build
+# The environment's NEXT_PUBLIC_* and Server Actions key (deploy-vps.yml › Build variables), for
+# this command only: the mounted file is in no layer (the key itself goes into .next, as Next
+# needs it at runtime). Without it (a build by hand) Next builds with
+# none of them. BUILD_ENV_HASH (sha256 of that file) makes new values miss the cache, which
+# ignores a secret's content.
+ARG BUILD_ENV_HASH
+RUN --mount=type=secret,id=build_env,target=/app/.env.production.local,required=false \
+    bun run build
 RUN if [ ! -f .next/standalone/server.js ]; then \
       echo "no .next/standalone/server.js: set output: \"standalone\" in next.config" >&2; exit 1; \
     fi

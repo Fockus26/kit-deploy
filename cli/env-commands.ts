@@ -10,6 +10,7 @@ import {
   assertEnvironment,
   assertEnvName,
   assertEnvValue,
+  dotenvLine,
   type Environment,
   isPublicName,
 } from "../lib/core/env";
@@ -40,14 +41,7 @@ export const ENV_USAGE = `usage:
 environments: production, preview, development
 `;
 
-/**
- * One `.env.local` line Next.js reads back exactly (@next/env: dotenv + dotenv-expand). Single
- * quotes keep `#`, spaces, `"` and backslashes; `\$` stops the expansion of `$NAME`. Checked
- * against the real parser in tests/unit/cli-env-pull.test.ts.
- */
-export function dotenvLine(name: string, value: string): string {
-  return `${name}='${value.replaceAll("$", "\\$")}'\n`;
-}
+export { dotenvLine };
 
 /** Long plain values are cut in the table; --json has them whole. */
 const SHOWN_CHARS = 60;

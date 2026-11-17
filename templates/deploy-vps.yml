@@ -63,14 +63,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Phase 04 (pending): the Preview and Production environments' NEXT_PUBLIC_* variables
-      # arrive here as build-args. Until then the image is built with none of them.
+      # The environment's NEXT_PUBLIC_* variables and its Server Actions key (Next embeds both at
+      # build), from kit-deploy with the same token. They reach `next build` as a BuildKit secret
+      # mounted at .env.production.local: the file is in no image layer, no `docker history`, no
+      # log (the key itself ends up in Next's build output, where Next reads it at runtime). Server
+      # variables and secrets never come here: kit-agent puts them into the container itself.
+      - name: Build variables
+        id: buildenv
+        env:
+          KIT_DEPLOY_TOKEN: ${{ secrets.KIT_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$KIT_DEPLOY_TOKEN" ]; then
+            echo "::error::KIT_DEPLOY_TOKEN is not set in this repository's secrets"
+            exit 1
+          fi
+          environment=production
+          if [ -n "$PR" ]; then environment=preview; fi
+          umask 077
+          printf 'Authorization: Bearer %s\n' "$KIT_DEPLOY_TOKEN" |
+            curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+              --max-time 30 \
+              --header @- \
+              --header 'content-type: application/json' \
+              --data "{\"environment\":\"${environment}\"}" \
+              --output "$RUNNER_TEMP/build-env.json" \
+              "${KIT_DEPLOY_URL}/api/v1/build-env"
+          jq -r .dotenv "$RUNNER_TEMP/build-env.json" > "$RUNNER_TEMP/build.env"
+          # Masked before anything else runs, in case a later step ever prints it.
+          key=$(sed -n "s/^NEXT_SERVER_ACTIONS_ENCRYPTION_KEY='\(.*\)'$/\1/p" "$RUNNER_TEMP/build.env")
+          echo "::add-mask::${key}"
+          echo "Build variables for ${environment}: $(jq -r '.names | join(", ")' "$RUNNER_TEMP/build-env.json")"
+          rm -f "$RUNNER_TEMP/build-env.json"
+          # BuildKit's cache ignores a secret's content: without this, new values with the same
+          # code would reuse the old `next build`. Only the hash reaches the image's history.
+          echo "hash=$(sha256sum "$RUNNER_TEMP/build.env" | cut -c1-64)" >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.image.outputs.ref }}
-          build-args: GIT_SHA=${{ env.SHA }}
+          build-args: |
+            GIT_SHA=${{ env.SHA }}
+            BUILD_ENV_HASH=${{ steps.buildenv.outputs.hash }}
+          secret-files: build_env=${{ runner.temp }}/build.env
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

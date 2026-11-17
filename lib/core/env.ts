@@ -88,3 +88,13 @@ export function assertEnvValue(value: string): string {
   }
   return value;
 }
+
+/**
+ * One `.env` line Next.js reads back exactly (@next/env: dotenv + dotenv-expand), for `env pull`'s
+ * `.env.local` and the build's `.env.production.local`. Single quotes keep `#`, spaces, `"` and
+ * backslashes; `\$` stops the expansion of `$NAME`. Checked against the real parser in
+ * tests/unit/cli-env-pull.test.ts.
+ */
+export function dotenvLine(name: string, value: string): string {
+  return `${name}='${value.replaceAll("$", "\\$")}'\n`;
+}

@@ -53,8 +53,7 @@ export class EnvCryptoError extends Error {
   }
 }
 
-/** The AES key for variables, from master.key's text (base64 of 32 random bytes, server-ready.sh). */
-export function deriveEnvKey(masterKeyFile: string): Buffer {
+function masterBytes(masterKeyFile: string): Buffer {
   const raw = Buffer.from(masterKeyFile.trim(), "base64");
   if (raw.length !== MASTER_KEY_BYTES) {
     // Never echo the file: it is the key.
@@ -62,9 +61,46 @@ export function deriveEnvKey(masterKeyFile: string): Buffer {
       `master key must be base64 of ${MASTER_KEY_BYTES} bytes`,
     );
   }
+  return raw;
+}
+
+/** The AES key for variables, from master.key's text (base64 of 32 random bytes, server-ready.sh). */
+export function deriveEnvKey(masterKeyFile: string): Buffer {
   return Buffer.from(
-    hkdfSync("sha256", raw, Buffer.alloc(0), HKDF_INFO, MASTER_KEY_BYTES),
+    hkdfSync(
+      "sha256",
+      masterBytes(masterKeyFile),
+      Buffer.alloc(0),
+      HKDF_INFO,
+      MASTER_KEY_BYTES,
+    ),
   );
+}
+
+/**
+ * A project's `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` for one environment (base64 of 32 bytes): the
+ * same on every build, so a page from the previous deployment can still call the new one's Server
+ * Actions during a switch (Next.js self-hosting guide). Derived, never stored; another HKDF
+ * `info` than the variables' key, so knowing it says nothing about that one. Production's and
+ * the previews' differ, so a preview build gets its own. (Not a wall against a PR's code: a repo
+ * has one deploy token, which can already deploy production; separate tokens would be one.)
+ */
+export function deriveServerActionsKey(
+  masterKeyFile: string,
+  project: string,
+  environment: "production" | "preview",
+): string {
+  assertProject(project);
+  assertEnvironment(environment);
+  return Buffer.from(
+    hkdfSync(
+      "sha256",
+      masterBytes(masterKeyFile),
+      Buffer.alloc(0),
+      `kit-deploy server-actions v1\0${project}\0${environment}`,
+      MASTER_KEY_BYTES,
+    ),
+  ).toString("base64");
 }
 
 function checkSlot(slot: EnvSlot): EnvSlot {
