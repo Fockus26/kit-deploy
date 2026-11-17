@@ -21,6 +21,19 @@ import {
   siteName,
   type Target,
 } from "../lib/core";
+import {
+  deriveEnvKey,
+  EnvCryptoError,
+  open,
+  type Sealed,
+  seal,
+} from "../lib/core/crypto";
+import {
+  assertEnvName,
+  assertEnvValue,
+  assertSecretFlag,
+  type Environment,
+} from "../lib/core/env";
 import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
@@ -42,6 +55,9 @@ export function cloudflareToken(text: string | null): string | null {
   }
   return null;
 }
+/** Root 0400, written once by server-ready.sh (D012). Only this process reads it (D011). */
+export const MASTER_KEY = "/etc/kit-deploy/master.key";
+
 const PULL_TIMEOUT_MS = 600_000;
 const HEALTH_TIMEOUT_MS = 3_000;
 /** A port handed out by `ports.allocate` stays reserved this long, so two deploys that allocate
@@ -171,6 +187,8 @@ export function parseContainerList(stdout: string): ManagedContainer[] {
 
 export class Agent {
   private readonly reserved = new Map<number, number>();
+  /** Derived from master.key on first use; never leaves this process. */
+  private envKey: Buffer | null = null;
   /** Mutations run one at a time: two deploys never interleave a site file or a port. */
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -217,7 +235,93 @@ export class Agent {
         );
       case "preview.list":
         return this.listPreviews();
+      case "env.seal":
+        return this.sealVar(req.params);
+      case "env.reveal":
+        return this.revealVars(req.params);
     }
+  }
+
+  private async key(): Promise<Buffer> {
+    if (this.envKey) return this.envKey;
+    const text = await this.deps.readFile(MASTER_KEY);
+    if (text === null) {
+      throw new AgentError(
+        "invalid_config",
+        `${MASTER_KEY} is missing: run infra/server-ready.sh`,
+      );
+    }
+    try {
+      this.envKey = deriveEnvKey(text);
+    } catch {
+      // Never the file's content in a message.
+      throw new AgentError("invalid_config", `${MASTER_KEY} is malformed`);
+    }
+    return this.envKey;
+  }
+
+  /** A value someone sets (CLI stdin, dashboard field) → the blob its row stores. Only settable
+   * names: the managed ones (DATABASE_URL, …) are the agent's own. */
+  private async sealVar(p: {
+    project: string;
+    environment: Environment;
+    name: string;
+    secret: boolean;
+    value: string;
+  }): Promise<Sealed> {
+    assertEnvName(p.name);
+    assertSecretFlag(p.name, p.secret);
+    assertEnvValue(p.value);
+    const slot = {
+      project: p.project,
+      environment: p.environment,
+      name: p.name,
+      secret: p.secret,
+    };
+    return seal(await this.key(), slot, p.value);
+  }
+
+  /**
+   * Values back, under the one rule of phase 04: a plain variable (any environment), or anything
+   * in Development (`env pull`). A Production/Preview secret is refused before anything is
+   * opened; and since `secret` is in the AAD, a caller that calls it plain gets nothing either.
+   */
+  private async revealVars(p: {
+    project: string;
+    environment: Environment;
+    vars: { name: string; secret: boolean; sealed: Sealed }[];
+  }): Promise<{ name: string; value: string }[]> {
+    const seen = new Set<string>();
+    for (const v of p.vars) {
+      assertEnvName(v.name);
+      if (seen.has(v.name)) {
+        throw new AgentError("bad_request", `${v.name} appears twice`);
+      }
+      seen.add(v.name);
+      if (v.secret && p.environment !== "development") {
+        throw new AgentError(
+          "forbidden",
+          `${v.name} is a secret in ${p.environment}: its value is never returned`,
+        );
+      }
+    }
+    const key = await this.key();
+    return p.vars.map((v) => {
+      const slot = {
+        project: p.project,
+        environment: p.environment,
+        name: v.name,
+        secret: v.secret,
+      };
+      try {
+        return { name: v.name, value: open(key, slot, v.sealed) };
+      } catch (e) {
+        if (e instanceof EnvCryptoError) {
+          throw new AgentError("bad_request", `${v.name} cannot be decrypted`);
+        }
+        throw e;
+      }
+    });
   }
 
   private serial<T>(fn: () => Promise<T>): Promise<T> {
