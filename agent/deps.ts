@@ -6,10 +6,11 @@
 export type RunResult = { code: number; stdout: string; stderr: string };
 
 export interface Deps {
-  /** Runs argv directly (no shell). Never pass a joined string. */
+  /** Runs argv directly (no shell). Never pass a joined string. `env` is added to the agent's
+   * own environment for this one command (a secret meant only for it). */
   run(
     argv: readonly string[],
-    opts?: { timeoutMs?: number },
+    opts?: { timeoutMs?: number; env?: Record<string, string> },
   ): Promise<RunResult>;
   /** null when the file does not exist. */
   readFile(path: string): Promise<string | null>;

@@ -26,6 +26,22 @@ import type { Deps, RunResult } from "./deps";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
 
 export const CADDYFILE = "/etc/caddy/Caddyfile";
+/** Caddy's Cloudflare token (DNS-01 for `*.preview`), the file the caddy unit reads as its
+ * EnvironmentFile. Once the previews site exists, `caddy validate` provisions the DNS provider and
+ * fails without it, so every site and preview write needs it in validate's env (2026-11-17). */
+export const CLOUDFLARE_ENV = "/etc/caddy/cloudflare.env";
+const CF_TOKEN = /^[A-Za-z0-9_-]{20,}$/;
+
+/** The token from cloudflare.env, read as data (never sourced); `null` when absent or malformed. */
+export function cloudflareToken(text: string | null): string | null {
+  if (text === null) return null;
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.startsWith("CLOUDFLARE_API_TOKEN=")) continue;
+    const v = line.slice("CLOUDFLARE_API_TOKEN=".length).trim();
+    return CF_TOKEN.test(v) ? v : null;
+  }
+  return null;
+}
 const PULL_TIMEOUT_MS = 600_000;
 const HEALTH_TIMEOUT_MS = 3_000;
 /** A port handed out by `ports.allocate` stays reserved this long, so two deploys that allocate
@@ -327,17 +343,23 @@ export class Agent {
         ? this.deps.removeFile(path)
         : this.deps.writeFileAtomic(path, previous);
     await change();
-    const v = await this.deps.run([
-      "caddy",
-      "validate",
-      `--config=${CADDYFILE}`,
-      "--adapter=caddyfile",
-    ]);
+    // Only validate provisions modules in this process; reload hands the config to the running
+    // Caddy, which has the token from its own unit. The token is never logged or returned.
+    const token = cloudflareToken(await this.deps.readFile(CLOUDFLARE_ENV));
+    const v = await this.deps.run(
+      ["caddy", "validate", `--config=${CADDYFILE}`, "--adapter=caddyfile"],
+      token ? { env: { CLOUDFLARE_API_TOKEN: token } } : undefined,
+    );
     if (v.code !== 0) {
       await restore();
+      // The cloudflare module echoes a token it judges malformed: never let it into the error,
+      // which ends in logs and the GitHub status.
+      const stderr = token
+        ? v.stderr.replaceAll(token, "[redacted]")
+        : v.stderr;
       throw new AgentError(
         "invalid_config",
-        `caddy validate failed: ${tail(v.stderr)}`,
+        `caddy validate failed: ${tail(stderr)}`,
       );
     }
     const r = await this.deps.run([
