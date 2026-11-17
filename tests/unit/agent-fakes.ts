@@ -5,13 +5,17 @@ type Handler = (argv: readonly string[]) => Partial<RunResult> | undefined;
 /** In-memory `Deps`: records every command, keeps files in a Map, answers commands by prefix. */
 export function fakeDeps(handlers: Record<string, Handler> = {}) {
   const calls: string[][] = [];
+  const runOpts: Array<
+    { timeoutMs?: number; env?: Record<string, string> } | undefined
+  > = [];
   const files = new Map<string, string>();
   const logs: Record<string, unknown>[] = [];
   let httpStatus: number | Error = 200;
 
   const deps: Deps = {
-    async run(argv) {
+    async run(argv, opts) {
       calls.push([...argv]);
+      runOpts.push(opts);
       const key = Object.keys(handlers)
         .sort((a, b) => b.length - a.length)
         .find((k) => argv.join(" ").startsWith(k));
@@ -47,6 +51,7 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
   return {
     deps,
     calls,
+    runOpts,
     files,
     logs,
     setHttp(s: number | Error) {

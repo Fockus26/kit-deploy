@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { dispatch } from "../../agent/dispatch";
 import {
   Agent,
+  CLOUDFLARE_ENV,
+  cloudflareToken,
   parseContainerList,
   parseListeningPorts,
   RESERVATION_MS,
@@ -323,6 +325,38 @@ describe("sites", () => {
     ]);
   });
 
+  test("validate gets the Cloudflare token in its env only; reload does not", async () => {
+    // Not a real token: the shape only.
+    const token = "TEST_ONLY_cf_token_0000000000";
+    const { send, calls, files, runOpts, logs } = setup();
+    files.set(CLOUDFLARE_ENV, `CLOUDFLARE_API_TOKEN=${token}\n`);
+    expect(await send(write())).toMatchObject({ ok: true });
+    expect(calls.map((c) => c[1])).toEqual(["validate", "reload"]);
+    expect(runOpts[0]?.env).toEqual({ CLOUDFLARE_API_TOKEN: token });
+    expect(runOpts[1]?.env).toBeUndefined();
+    expect(JSON.stringify(logs)).not.toContain(token);
+  });
+
+  test("a token echoed by a failed validate never reaches the error", async () => {
+    const token = "TEST_ONLY_cf_token_0000000000";
+    const { send, files } = setup({
+      "caddy validate": () => ({
+        code: 1,
+        stderr: `API token '${token}' appears invalid`,
+      }),
+    });
+    files.set(CLOUDFLARE_ENV, `CLOUDFLARE_API_TOKEN=${token}\n`);
+    const r = await send(write());
+    expect(JSON.stringify(r)).not.toContain(token);
+    expect(JSON.stringify(r)).toContain("[redacted]");
+  });
+
+  test("no cloudflare.env: validate runs without the token (no previews site yet)", async () => {
+    const { send, runOpts } = setup();
+    expect(await send(write())).toMatchObject({ ok: true });
+    expect(runOpts[0]?.env).toBeUndefined();
+  });
+
   test("an identical file does not reload Caddy", async () => {
     const { send, calls } = setup();
     await send(write());
@@ -475,5 +509,17 @@ describe.skipIf(process.platform === "win32")("socket server", () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe("cloudflareToken", () => {
+  test("reads the token as data, refuses odd values", () => {
+    const t = "abcdefghijklmnopqrstuvwxyz_-01";
+    expect(cloudflareToken(`# caddy\nCLOUDFLARE_API_TOKEN=${t}\r\n`)).toBe(t);
+    expect(cloudflareToken(null)).toBeNull();
+    expect(cloudflareToken("CLOUDFLARE_API_TOKEN=\n")).toBeNull();
+    expect(cloudflareToken("CLOUDFLARE_API_TOKEN=short\n")).toBeNull();
+    expect(cloudflareToken(`CLOUDFLARE_API_TOKEN=${t};rm -rf /\n`)).toBeNull();
+    expect(cloudflareToken(`OTHER=${t}\n`)).toBeNull();
   });
 });

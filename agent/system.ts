@@ -6,12 +6,13 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 
 async function run(
   argv: readonly string[],
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; env?: Record<string, string> } = {},
 ): Promise<RunResult> {
   let proc: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">>;
   try {
     proc = Bun.spawn([...argv], {
       stdin: "ignore",
+      ...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
       stdout: "pipe",
       stderr: "pipe",
       timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
