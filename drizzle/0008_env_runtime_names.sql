@@ -1,0 +1,1 @@
+ALTER TABLE "env_vars" ADD CONSTRAINT "env_vars_name_not_runtime" CHECK ("env_vars"."name" !~ '^(?:PATH|NODE_[A-Z0-9_]*|LD_[A-Z0-9_]*|[A-Z0-9_]*_PROXY|SSL_CERT_[A-Z0-9_]*|OPENSSL_[A-Z0-9_]*|UV_[A-Z0-9_]*|BUN_[A-Z0-9_]*)$');

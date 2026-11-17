@@ -14,7 +14,12 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { ENVIRONMENTS, MANAGED_NAMES, RESERVED_NAMES } from "../core/env";
+import {
+  ENVIRONMENTS,
+  MANAGED_NAMES,
+  RESERVED_NAMES,
+  RUNTIME_NAME_RE,
+} from "../core/env";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -215,6 +220,11 @@ export const envVars = pgTable(
     check(
       "env_vars_name_settable",
       sql`not ${inList("name", [...RESERVED_NAMES, ...MANAGED_NAMES])}`,
+    ),
+    // Security review F1: the runtime's names (lib/core/env RUNTIME_NAME_RE), Postgres' ARE.
+    check(
+      "env_vars_name_not_runtime",
+      sql`${t.name} !~ ${sql.raw(`'${RUNTIME_NAME_RE.source}'`)}`,
     ),
     check(
       "env_vars_public_not_secret",
