@@ -29,3 +29,73 @@ write to the GitHub status token).
 - Branch: `feat/env-crypto-schema` picked up 0c42cf7 (perf/faster-ship, another session sharing this
   folder); the PR is from `feat/env-crypto` = origin/main + the cherry-picked commit. The old branch
   is left as it is (not deleted).
+
+## U2 · agent env.seal / env.reveal (`feat/agent-env-ops`, 2026-11-17)
+
+- The agent reads master.key on first use (`readFile`, cached derived key); missing/malformed →
+  `invalid_config`, never the content.
+- `env.seal {project, environment, name, secret, value}` → Sealed; settable names only (managed are
+  the agent's own), NEXT_PUBLIC_* never secret, one-line value.
+- `env.reveal {project, environment, vars[≤100]}` → [{name, value}]: the whole request is checked
+  first; any secret outside Development → `forbidden` (new error code), duplicates and managed names
+  → bad_request. Lying `secret:false`, or calling a production row development, fails the AAD
+  ("<NAME> cannot be decrypted").
+- MAX_REQUEST_BYTES 64 KiB → 1 MiB (100 sealed variables of a few KiB fit).
+- By design (plan): any socket client (web, CLI user) can read Development secrets — that is
+  `env pull`; Production/Preview secrets have no op that returns them.
+- Merged #34 (28b6ca3). Full suite: 3 timeouts under load (security agent running), 80/80 alone.
+
+## U3 · CLI env ls / set / rm (#35, `feat/cli-env`, 2026-11-17)
+
+- `cli/env-commands.ts`, `cli/stdin.ts` (terminal: stty -echo, one line; pipe: whole), `lib/db/env-store.ts`
+  (upsert + audit in one transaction; `xmax = 0` for created). Secret by default, `--plain`;
+  NEXT_PUBLIC_* always plain. `ls` never sends a secret's blob to env.reveal.
+- Verified: 25 tests with the real Agent behind the client; drizzleEnvStore on postgres:17 9/9;
+  real pty in oven/bun:1.3 with `script`: value not echoed, read whole, echo restored.
+- Slip: the first commit had a broken string in main.ts (a Python edit turned `\n` into a newline);
+  fixed in c2e48a3. Lesson: run typecheck before committing, not only the related tests.
+- Merged #35.
+
+## U4 · variables into the container (#36, `feat/switch-env-vars`, 2026-11-17)
+
+- Switch reads the env's rows at each start (`SwitchRepo.envVars`) → `container.run {vars}`; the agent
+  opens all first, writes /run/kit-agent/env/<container>.env (dir 0700, file 0600, not under the web's
+  /run/kit-deploy mount), `docker run --env-file` before the platform's --env, removes it in finally.
+- security-review HIGH: a compromised web could run its own ghcr.io image with another project's
+  rows and get the plaintext. César chose (2026-11-17) the root-pinned repo:
+  /etc/kit-deploy/images/<project> = `ghcr.io/<owner>/<repo>`, written only as root by `project add`
+  or `project pin <p> <owner/repo>` (typed repo, must match the DB). The agent refuses vars for any
+  other image (`forbidden`). Containers without vars need no pin.
+- Verified: real docker --env-file keeps `=`, spaces, quotes, `#`, `$`, ñ; Linux modes 0700/0600 and
+  pins 0755/0644 under umask 077; suite 550/0.
+- VPS action with the phase release: `ssh kit-vps kit-deploy project pin kd_hello Fockus26/kd-hello`.
+- Tooling lesson (twice today): in this Git Bash, `\n` inside a Python heredoc string ends up as a
+  real newline in the file. Edit tool for anything with `\n`.
+- Merged #36, #37 (+ `_preview` name guard from its review; kit-db role-reuse note → KIT_FEEDBACK #8).
+
+## U6 · env pull (#38, merged)
+
+- Development set → stdout, refused on a TTY; names only on stderr. `dotenvLine`: single quotes +
+  `\$`, 17 awkward values round-trip through @next/env's real parser (test writes `.env`: under
+  `bun test` NODE_ENV=test skips `.env.local`; `forceReload` or @next/env caches).
+
+## U7 · build-env (#39, merged)
+
+- POST /api/v1/build-env {environment}; web sends only plain NEXT_PUBLIC_* rows; agent `env.build`
+  refuses anything else and adds the derived Server Actions key (HKDF per project + env; Next 16
+  embeds it at `next build`, self-hosting guide).
+- Template: response to $RUNNER_TEMP, key masked, BuildKit `secret-files` → Dockerfile
+  `RUN --mount=type=secret,…,target=/app/.env.production.local`.
+- Found with real Docker: BuildKit's cache ignores a secret's content → new values reused the old
+  build. Fix: `ARG BUILD_ENV_HASH` (sha256 of the file) right before the build.
+- Review notes (no finding): the key does end up in `.next` (Next needs it); a repo has one token,
+  so a PR could ask for production's build env — same power it already has via /deploy.
+- Shell lesson: Git Bash heredocs here also eat `\` in some commands; test data written with Write.
+
+## U8a · redeploy (#40, merged) · U8b · rebuild (#41)
+
+- `deployments.generation` (0007), in the open-commit unique index; container `…-g<n>`; agent regex
+  accepts `-g2…-g9999` only. `queueRedeploy` copies the live row as the next generation.
+- Rebuild: `kit-deploy rebuild <p>` (root, platform GitHub token) → workflow_dispatch
+  `rebuild=true` → `{sha, rebuild: true}` → next generation of the live commit. Previews: push.
+- Needs César: token Actions: Read and write; new deploy-vps.yml in kd-hello.

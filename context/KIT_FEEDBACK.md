@@ -32,6 +32,7 @@ send carries it with the new count). What repeats is what is most worth fixing.
 | 5 | 2026-11-11 | Gap | 1 | `reference/vps/bootstrap.sh` + VPS-POSTGRES.md | The kit leaves db.<domain> on certbot standalone; any later web server on :80 breaks its renewal silently (brief Trap) and each project solves it alone | bootstrap.sh: issue by webroot from day one (`/var/www/acme`), or ship the standalone→webroot migration kit-deploy wrote |
 | 6 | 2026-11-13 | Gap | 1 | kit docs/scripts for César on Windows (`bash <script>.sh` commands) | `bash scripts/ship.sh …` from PowerShell ran WSL's bash.exe (no distro: `execvpe(/bin/bash) failed`); César had to ask | Give César's commands as `& "C:\Program Files\Git\bin\bash.exe" …` (or "open Git Bash"), or ship a `.ps1` wrapper |
 | 7 | 2026-11-14 | Friction | 1 | `scripts/qa-local.ts` › Postgres | Calls `bun run db:migrate`, which a Drizzle project built without the kit's scripts may not have (kit-deploy had `scripts/migrate.ts` only); the first `initdb` on an HDD also outlasted its readiness wait | Check the script exists and say which to add; wait longer (or poll `pg_isready`) on the first container start |
+| 8 | 2026-11-17 | Gap | 1 | `reference/vps/kit-db` › `create` | Its retry path reuses an existing role with no database and resets its password (`ALTER ROLE … PASSWORD`): whoever may run `kit-db create` can break a role kit-db did not create (security review U5, kit-deploy `db.create`) | Only reuse a role kit-db has a `dbs/<name>.env` for; refuse any other existing role |
 
 ## Sending it to the kit
 

@@ -10,7 +10,17 @@ Plan agreed 2026-11-17: `plans/04-variables.md` (U1–U8). Phase 03: everything 
 
 | Unit | PR | Status |
 |---|---|---|
-| U1 core crypto (AES-256-GCM, HKDF, AAD) + migration 0006 `env_vars`, `audit_log` | #33 | open (`feat/env-crypto`); not on the VPS (goes with the phase release) |
+| U1 core crypto (AES-256-GCM, HKDF, AAD) + migration 0006 `env_vars`, `audit_log` | #33 | merged (c7c8789) · not on the VPS (goes with the phase release) |
+| U2 agent `env.seal` / `env.reveal` (plain or Development only; Prod/Preview secrets `forbidden`) | #34 | merged (28b6ca3) |
+| U3 CLI `env ls / set / rm` (stdin, no echo; audit in the same transaction) | #35 | merged |
+| U4 switch: variables into the container + root-pinned image repo (security review HIGH fixed) | #36 | merged |
+| U5 managed DATABASE_URL (kit-db url at each start, pinned image only) + `db create`; no `*_preview` projects | #37 | merged |
+| U6 `env pull` (Development to a pipe/file only; dotenv-safe quoting checked with @next/env) | #38 | merged |
+| U7 `/api/v1/build-env` + template (BuildKit secret, BUILD_ENV_HASH) + derived Server Actions key | #39 | merged |
+| U8a `redeploy` (generation per deployment, migration 0007, container `-g<n>`) | #40 | merged |
+| U8b `rebuild` (workflow_dispatch + `{sha, rebuild}`) | #41 | open |
+
+All units written. Left: phase security-review (running), then the VPS release with César's OK and the close checks on the VPS.
 
 Log: `PHASE_LOG/04-variables.md`.
 
@@ -28,6 +38,7 @@ Log: `PHASE_LOG/04-variables.md`.
   access); no reinstall. The token expires: when it does, re-run `ship.sh … --install --github-token`.
 
 - QA pendiente: once at the end (phase 09), per César 2026-11-10.
+- With the phase release: `ssh kit-vps kit-deploy project pin kd_hello Fockus26/kd-hello` (U4).
 - César: add Actions: Read and write to the GitHub status token (phase 04 U8, rebuild).
 - CONTENT_CHECKLIST #12, #14: César confirms the "preview no existe" and "preview dormido" copy.
 
