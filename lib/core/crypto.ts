@@ -82,7 +82,8 @@ export function deriveEnvKey(masterKeyFile: string): Buffer {
  * same on every build, so a page from the previous deployment can still call the new one's Server
  * Actions during a switch (Next.js self-hosting guide). Derived, never stored; another HKDF
  * `info` than the variables' key, so knowing it says nothing about that one. Production's and
- * the previews' differ: a PR's build never learns production's.
+ * the previews' differ, so a preview build gets its own. (Not a wall against a PR's code: a repo
+ * has one deploy token, which can already deploy production; separate tokens would be one.)
  */
 export function deriveServerActionsKey(
   masterKeyFile: string,

@@ -65,7 +65,8 @@ jobs:
 
       # The environment's NEXT_PUBLIC_* variables and its Server Actions key (Next embeds both at
       # build), from kit-deploy with the same token. They reach `next build` as a BuildKit secret
-      # mounted at .env.production.local: in no image layer, no `docker history`, no log. Server
+      # mounted at .env.production.local: the file is in no image layer, no `docker history`, no
+      # log (the key itself ends up in Next's build output, where Next reads it at runtime). Server
       # variables and secrets never come here: kit-agent puts them into the container itself.
       - name: Build variables
         id: buildenv
