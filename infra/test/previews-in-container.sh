@@ -43,7 +43,7 @@ cat > /etc/caddy/sites/app.caddy <<'EOF'
 http://:29007 {
 	bind 127.0.0.1
 	header X-Robots-Tag "all"
-	respond "hola desde el preview {method} {uri}" 200
+	respond "hola desde el preview {method} {uri} cookie=[{header.Cookie}]" 200
 }
 EOF
 # A stand-in for the dashboard's web on :3100 with lib/preview/access.ts's contract: preview-auth
@@ -99,6 +99,15 @@ check "forward_auth asks with GET and tells the original method" grep -q 'auth m
 
 curl -sk -D /tmp/h -o /tmp/b --resolve "$H:443:127.0.0.1" -H 'Cookie: a=1; kd_preview=good' "https://$H/pricing?plan=pro"
 check "valid cookie: the app answers the original request" grep -qF 'hola desde el preview GET /pricing?plan=pro' /tmp/b
+check "... and never sees kd_preview, only its own cookies" grep -qF 'cookie=[a=1]' /tmp/b
+curl -sk -o /tmp/b --resolve "$H:443:127.0.0.1" -H 'Cookie: kd_preview=good; b=2' "https://$H/"
+check "kd_preview first: the app gets the rest, with no stray separator" grep -qF 'cookie=[b=2]' /tmp/b
+curl -sk -o /tmp/b --resolve "$H:443:127.0.0.1" -H 'Cookie: a=1; kd_preview=good; b=2' "https://$H/"
+check "kd_preview in the middle: the app gets both neighbours" grep -qF 'cookie=[a=1; b=2]' /tmp/b
+curl -sk -o /tmp/b --resolve "$H:443:127.0.0.1" -H 'Cookie: kd_preview=good' "https://$H/"
+check "kd_preview alone: the app gets no cookie value" sh -c "grep -qF 'cookie=[]' /tmp/b && ! grep -q 'kd_preview' /tmp/b"
+curl -sk -o /tmp/b --resolve "$H:443:127.0.0.1" -H 'Cookie: my_kd_preview=x; kd_preview=good' "https://$H/"
+check "a cookie whose name only ends in kd_preview is the app's own" grep -qF 'cookie=[my_kd_preview=x]' /tmp/b
 rm -f /tmp/h /tmp/b
 curl -sk -D /tmp/h -o /tmp/b --resolve "$H:443:127.0.0.1" -H 'Cookie: kd_preview=forged' "https://$H/"
 check "a forged cookie is refused like none" sh -c "head -1 /tmp/h | grep -q ' 302'"
