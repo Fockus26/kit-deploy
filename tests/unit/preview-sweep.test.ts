@@ -247,6 +247,20 @@ describe("preview sweep: containers no deployment holds", () => {
     );
   });
 
+  test("a redeploy's -g<n> container no row holds is swept too; a held one is kept", async () => {
+    const g2 = { ...preview(9, "c"), name: `${prName(9, "c")}-g2` };
+    const held = { ...preview(7, "a"), name: `${prName(7, "a")}-g3` };
+    const s = setup({
+      rows: [{ ...livePreview(7, "a"), container: held.name, generation: 3 }],
+      containers: [held, g2],
+    });
+    await sweepPreviews(s.sd);
+    expect(s.mutations()).toEqual([
+      { op: "container.stop", params: { name: g2.name, timeoutS: 0 } },
+      { op: "container.remove", params: { name: g2.name } },
+    ]);
+  });
+
   test("a container of someone else's (gaby, evolution_*) is never touched", async () => {
     // Even if one ever showed up in the list, without kit-deploy's preview labels it is skipped.
     const foreign = (n: string, labels: Partial<Listed> = {}): Listed => ({
