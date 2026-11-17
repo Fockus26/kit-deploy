@@ -28,7 +28,7 @@ const DeployBody = z.strictObject({
 });
 const CloseBody = z.strictObject({ pr });
 
-const json = (
+export const json = (
   status: number,
   body: unknown,
   headers: Record<string, string> = {},
@@ -68,7 +68,7 @@ type Authorized<T> =
  * `schema`, then the token's project. The body is checked before the database is asked, so a
  * malformed request never costs a query; the token is never logged.
  */
-async function authorize<T>(
+export async function authorize<T>(
   request: Request,
   store: DeployStore,
   schema: z.ZodType<T>,

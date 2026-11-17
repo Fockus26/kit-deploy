@@ -10,6 +10,7 @@ import { APP_USER, CONTAINER_PORT } from "../../lib/core/constants";
 const read = (p: string) => readFileSync(p, "utf8");
 
 type Step = {
+  id?: string;
   uses?: string;
   name?: string;
   run?: string;
@@ -148,11 +149,57 @@ describe("templates/deploy-vps.yml", () => {
       s.uses?.startsWith("docker/build-push-action"),
     );
     expect(build?.with?.push).toBe(true);
-    expect(build?.with?.["build-args"]).toBe("GIT_SHA=${{ env.SHA }}");
+    expect(build?.with?.["build-args"]).toBe(
+      "GIT_SHA=${{ env.SHA }}\nBUILD_ENV_HASH=${{ steps.buildenv.outputs.hash }}\n",
+    );
   });
 
-  test("the phase 04 gap (public variables) is marked, not filled", () => {
-    expect(raw).toMatch(/Phase 04 \(pending\)[\s\S]*NEXT_PUBLIC_\*/);
+  test("new build variables miss BuildKit's cache (it ignores a secret's content)", () => {
+    const run = steps.find((s) => s.name === "Build variables")?.run ?? "";
+    expect(steps.find((s) => s.name === "Build variables")?.id).toBe(
+      "buildenv",
+    );
+    expect(run).toContain(
+      'echo "hash=$(sha256sum "$RUNNER_TEMP/build.env" | cut -c1-64)" >> "$GITHUB_OUTPUT"',
+    );
+    const dockerfile = read("templates/Dockerfile");
+    // Declared right before the build: a changed hash misses the cache there, not earlier.
+    expect(dockerfile).toMatch(
+      /ARG BUILD_ENV_HASH\nRUN --mount=type=secret,id=build_env/,
+    );
+  });
+
+  test("build variables: its environment from build-env, as a BuildKit secret file", () => {
+    const names = steps.map((s) => s.name ?? s.uses);
+    expect(names.indexOf("Build variables")).toBeLessThan(
+      names.indexOf("docker/build-push-action@v6"),
+    );
+    const run = steps.find((s) => s.name === "Build variables")?.run ?? "";
+    expect(run).toContain("environment=production");
+    expect(run).toContain('if [ -n "$PR" ]; then environment=preview; fi');
+    expect(run).toContain('--data "{\\"environment\\":\\"${environment}\\"}"');
+    expect(run).toContain("/api/v1/build-env");
+    // The response goes to a file (never the log), and the key is masked before anything prints.
+    expect(run).toContain('--output "$RUNNER_TEMP/build-env.json"');
+    expect(run).toContain("umask 077");
+    expect(run.indexOf("::add-mask::")).toBeLessThan(
+      run.indexOf('echo "Build variables'),
+    );
+    expect(run).not.toMatch(/jq -r \.dotenv[^>]*$/m);
+    const build = steps.find((s) => s.uses === "docker/build-push-action@v6");
+    expect(build?.with?.["secret-files"]).toBe(
+      "build_env=${{ runner.temp }}/build.env",
+    );
+    // Never a build-arg: those stay in the image's history.
+    expect(build?.with?.["build-args"]).not.toContain("NEXT_");
+  });
+
+  test("the Dockerfile mounts the build variables for `bun run build` only", () => {
+    const dockerfile = read("templates/Dockerfile");
+    expect(dockerfile).toContain(
+      "RUN --mount=type=secret,id=build_env,target=/app/.env.production.local,required=false \\\n    bun run build",
+    );
+    expect(dockerfile).not.toMatch(/ARG NEXT_|ENV NEXT_PUBLIC|COPY[^\n]*\.env/);
   });
 
   test("posts {sha} for production and {sha, pr} for a preview", () => {
@@ -172,6 +219,7 @@ describe("templates/deploy-vps.yml", () => {
 
   test("the token comes from secrets, only through stdin, never echoed or in a URL", () => {
     const tokenSteps = [
+      steps.find((s) => s.name === "Build variables"),
       steps.find((s) => s.name === "Deploy"),
       close.steps.find((s) => s.name === "Remove preview"),
     ];
@@ -188,7 +236,7 @@ describe("templates/deploy-vps.yml", () => {
       expect(run).not.toMatch(/https?:\/\/[^\s"]*KIT_DEPLOY_TOKEN/);
     }
     // The secret is only read where it is used, never in a run line directly.
-    expect(raw.match(/secrets\.KIT_DEPLOY_TOKEN/g)).toHaveLength(2);
+    expect(raw.match(/secrets\.KIT_DEPLOY_TOKEN/g)).toHaveLength(3);
     expect(raw).not.toMatch(/run:[^\n]*secrets\./);
   });
 

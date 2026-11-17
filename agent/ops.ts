@@ -23,6 +23,7 @@ import {
 } from "../lib/core";
 import {
   deriveEnvKey,
+  deriveServerActionsKey,
   EnvCryptoError,
   open,
   type Sealed,
@@ -33,6 +34,7 @@ import {
   assertEnvValue,
   assertSecretFlag,
   type Environment,
+  isPublicName,
 } from "../lib/core/env";
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
@@ -213,6 +215,7 @@ export class Agent {
   private readonly reserved = new Map<number, number>();
   /** Derived from master.key on first use; never leaves this process. */
   private envKey: Buffer | null = null;
+  private master: string | null = null;
   /** Mutations run one at a time: two deploys never interleave a site file or a port. */
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -265,11 +268,14 @@ export class Agent {
         return this.revealVars(req.params);
       case "db.create":
         return this.serial(() => this.createDatabases(req.params.project));
+      case "env.build":
+        return this.buildEnv(req.params);
     }
   }
 
-  private async key(): Promise<Buffer> {
-    if (this.envKey) return this.envKey;
+  /** master.key's text, checked; read once. */
+  private async masterText(): Promise<string> {
+    if (this.master !== null) return this.master;
     const text = await this.deps.readFile(MASTER_KEY);
     if (text === null) {
       throw new AgentError(
@@ -283,7 +289,48 @@ export class Agent {
       // Never the file's content in a message.
       throw new AgentError("invalid_config", `${MASTER_KEY} is malformed`);
     }
+    this.master = text;
+    return text;
+  }
+
+  private async key(): Promise<Buffer> {
+    await this.masterText();
+    if (this.envKey === null) throw new Error("env key not derived");
     return this.envKey;
+  }
+
+  /**
+   * What `next build` needs from kit-deploy (U7, /api/v1/build-env): the environment's public
+   * variables — plain by rule, inlined into the browser bundle anyway — and the project's derived
+   * Server Actions key for that environment. Nothing else: a secret or a server variable is
+   * refused, so this op never widens what a build can learn.
+   */
+  private async buildEnv(p: {
+    project: string;
+    environment: "production" | "preview";
+    vars: { name: string; secret: boolean; sealed: Sealed }[];
+  }): Promise<{
+    variables: { name: string; value: string }[];
+    serverActionsKey: string;
+  }> {
+    for (const v of p.vars) {
+      if (v.secret || !isPublicName(v.name)) {
+        throw new AgentError(
+          "forbidden",
+          `${v.name}: a build only gets plain NEXT_PUBLIC_* variables`,
+        );
+      }
+    }
+    const variables =
+      p.vars.length > 0 ? await this.revealVars({ ...p, vars: p.vars }) : [];
+    return {
+      variables,
+      serverActionsKey: deriveServerActionsKey(
+        await this.masterText(),
+        p.project,
+        p.environment,
+      ),
+    };
   }
 
   /** A value someone sets (CLI stdin, dashboard field) → the blob its row stores. Only settable
