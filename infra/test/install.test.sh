@@ -3,11 +3,14 @@
 # bootstrap.sh --test (Postgres 17 + PgBouncer + kit-db), against a release from scripts/release.sh.
 # Usage: bash infra/test/install.test.sh [build/kit-deploy-<sha12>.tgz]   (builds one if omitted)
 # Env:   KIT_VPS_DIR  the kit's reference/vps folder (default ~/.claude/kit-reference/vps)
+#        IMAGE        run on this image instead of the cached base (e.g. IMAGE=ubuntu:24.04)
+#        KIT_TEST_REBUILD=1  rebuild the cached base image now
+# The base image (install-base.Dockerfile) has apt's packages already downloaded; its tag changes
+# with that file and every ISO week, so a week-old base is rebuilt with fresh packages.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 KIT_VPS_DIR="${KIT_VPS_DIR:-$HOME/.claude/kit-reference/vps}"
-IMAGE="${IMAGE:-ubuntu:24.04}"
 
 command -v docker >/dev/null && docker info >/dev/null 2>&1 || { echo "Docker is not running." >&2; exit 2; }
 [ -f "$KIT_VPS_DIR/bootstrap.sh" ] || { echo "No kit bootstrap.sh in $KIT_VPS_DIR (set KIT_VPS_DIR)." >&2; exit 2; }
@@ -18,6 +21,13 @@ case "$TGZ" in /*|[A-Za-z]:*) ;; *) TGZ="$ROOT/$TGZ" ;; esac
 
 host() { cygpath -w "$1" 2>/dev/null || echo "$1"; }
 export MSYS_NO_PATHCONV=1
+if [ -z "${IMAGE:-}" ]; then
+  IMAGE="kit-deploy-install-base:$(sha256sum "$HERE/install-base.Dockerfile" | cut -c1-12)-$(date +%G%V)"
+  if [ "${KIT_TEST_REBUILD:-0}" = 1 ] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "== Building the test base $IMAGE (apt + PGDG, once a week)"
+    docker build -q -t "$IMAGE" -f "$(host "$HERE/install-base.Dockerfile")" "$(host "$HERE")" >/dev/null
+  fi
+fi
 docker run --rm \
   -v "$(host "$KIT_VPS_DIR"):/kit:ro" -v "$(host "$HERE"):/t:ro" \
   -v "$(host "$TGZ"):/release.tgz:ro" \

@@ -29,7 +29,11 @@ git archive --format=tar -o "$SRC" HEAD
 
 host() { cygpath -w "$1" 2>/dev/null || echo "$1"; }
 export MSYS_NO_PATHCONV=1
-docker run --rm -e SHA="$SHA" -e SHORT="$SHORT" -v "$(host "$ROOT/build"):/out" "$BUN_IMAGE" sh -euc '
+# Two named volumes keep bun's package cache and Next's build cache between releases (minutes
+# saved per build); the source is still a fresh `git archive`, so nothing else carries over.
+docker run --rm -e SHA="$SHA" -e SHORT="$SHORT" -v "$(host "$ROOT/build"):/out" \
+  -v kit-deploy-bun-cache:/root/.bun/install/cache -v kit-deploy-next-cache:/src/.next/cache \
+  "$BUN_IMAGE" sh -euc '
   mkdir -p /src /rel/bin && cd /src && tar -xf "/out/src-$SHORT.tar"
   bun install --frozen-lockfile >/dev/null
   NEXT_TELEMETRY_DISABLED=1 NEXT_DEPLOYMENT_ID="$SHA" bun run build >/dev/null
