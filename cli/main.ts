@@ -9,6 +9,7 @@
  *                     edits the PR comment with it
  */
 import { drizzleAdminStore } from "../lib/db/admin";
+import { drizzleEnvStore, sshActor } from "../lib/db/env-store";
 import { db, drizzleStore } from "../lib/db/store";
 import { drizzleUserStore } from "../lib/db/users";
 import { statusPublisherFromEnv } from "../lib/deploy/commit-status";
@@ -24,8 +25,30 @@ import { loadCliEnv, loadGithubEnv } from "./env";
 
 const socket = process.env.KIT_AGENT_SOCKET ?? "/run/kit-deploy/agent.sock";
 const agent = socketClient(socket);
+/** `env set`'s value: a terminal gets one line with echo off (`stty`, restored even on error);
+ * a pipe is read whole. Never through argv, so never in `ps` or the shell's history. */
+async function readValue(): Promise<string> {
+  if (!process.stdin.isTTY) return await Bun.stdin.text();
+  process.stderr.write("Value (not shown): ");
+  Bun.spawnSync(["stty", "-echo"], { stdin: "inherit" });
+  try {
+    for await (const line of console) return line;
+    return "";
+  } finally {
+    Bun.spawnSync(["stty", "echo"], { stdin: "inherit" });
+    process.stderr.write("
+");
+  }
+}
+
 const { code, out, err } = await runCli(process.argv.slice(2), agent, {
   stdoutIsTTY: process.stdout.isTTY === true,
+  actor: sshActor(),
+  readValue,
+  env: () => {
+    loadCliEnv();
+    return drizzleEnvStore(db());
+  },
   admin: () => {
     loadCliEnv();
     return drizzleAdminStore(db());

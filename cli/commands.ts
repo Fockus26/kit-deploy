@@ -32,10 +32,11 @@ import {
 import { generateDeployToken } from "../lib/tokens";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
+import { type EnvContext, envCommand } from "./env-commands";
 
 /** What the database-backed commands need; built lazily so `version` works without a database. */
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
-export type CliContext = {
+export type CliContext = EnvContext & {
   deploy?: () => DeployContext;
   admin?: () => AdminStore;
   users?: () => UserStore;
@@ -82,6 +83,14 @@ Commands:
                      pr-<n> containers no deployment holds, preview files with no preview
                      in the database. Nightly by kit-deploy-preview-sweep.timer (root)
   user enrol <email> a new enrolment link for the account (the previous ones stop working)
+  env ls <project> <environment>
+                     a project's variables in production, preview or development; plain
+                     values shown, secrets never
+  env set <project> <environment> <NAME> [--plain]
+                     the value from stdin, never from argv. Typed with no echo:
+                     ssh -t kit-vps kit-deploy env set <project> <env> <NAME>
+                     Secret unless --plain (NEXT_PUBLIC_* is always plain)
+  env rm <project> <environment> <NAME>
   help               this text
 `;
 
@@ -545,6 +554,8 @@ export async function runCli(
         );
       case "user":
         return await user(ctx, args[0], args.slice(1));
+      case "env":
+        return await envCommand(client, ctx, args, json);
       case "preview":
         if (args[0] === "sweep")
           return await previewSweep(ctx, args.slice(1), json);
