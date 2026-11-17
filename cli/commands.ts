@@ -103,6 +103,8 @@ Commands:
                      ssh -t kit-vps kit-deploy env set <project> <env> <NAME>
                      Secret unless --plain (NEXT_PUBLIC_* is always plain)
   env rm <project> <environment> <NAME>
+  env pull <project> the Development set as a .env.local, into a pipe or file only:
+                     ssh kit-vps kit-deploy env pull <project> > .env.local
   help               this text
 `;
 
