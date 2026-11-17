@@ -31,6 +31,9 @@ function memoryAdmin() {
         throw new AdminError(`no project ${project}`);
       domains.push({ project, host });
     },
+    async projectRepo(project) {
+      return projects.find((p) => p.name === project)?.repo ?? null;
+    },
     async addToken(project, hash, label) {
       if (!projects.some((p) => p.name === project))
         throw new AdminError(`no project ${project}`);
@@ -41,10 +44,20 @@ function memoryAdmin() {
   return { store, projects, domains, tokens };
 }
 
-function cli(stdoutIsTTY = false) {
+function cli(stdoutIsTTY = false, isRoot = true) {
   const m = memoryAdmin();
-  const ctx: CliContext = { admin: () => m.store, stdoutIsTTY };
-  return { ...m, run: (argv: string[]) => runCli(argv, agent, ctx) };
+  const pins = new Map<string, string>();
+  const ctx: CliContext = {
+    admin: () => m.store,
+    stdoutIsTTY,
+    pins: {
+      isRoot,
+      async write(project, pin) {
+        pins.set(project, pin);
+      },
+    },
+  };
+  return { ...m, pins, run: (argv: string[]) => runCli(argv, agent, ctx) };
 }
 
 describe("defaultHost", () => {
@@ -185,5 +198,53 @@ describe("kit-deploy token create", () => {
     const c = cli();
     const r = await c.run(["token", "create", "nope"]);
     expect(r).toMatchObject({ code: 1, out: "", err: "no project nope\n" });
+  });
+});
+
+describe("image pins (project add / project pin)", () => {
+  test("project add as root pins the typed repository", async () => {
+    const c = cli();
+    await c.run(["project", "add", "kd_hello", "Fockus26/kd-hello"]);
+    expect([...c.pins]).toEqual([["kd_hello", "ghcr.io/fockus26/kd-hello"]]);
+  });
+
+  test("project add not as root: registered, not pinned, and told how", async () => {
+    const c = cli(false, false);
+    const r = await c.run(["project", "add", "kd_hello", "Fockus26/kd-hello"]);
+    expect(r.code).toBe(0);
+    expect(r.err).toContain(
+      "kit-deploy project pin kd_hello Fockus26/kd-hello",
+    );
+    expect(c.pins.size).toBe(0);
+  });
+
+  test("project pin: typed repo, must match the database", async () => {
+    const c = cli();
+    await c.run(["project", "add", "kd_hello", "Fockus26/kd-hello"]);
+    c.pins.clear();
+    expect(
+      (await c.run(["project", "pin", "kd_hello", "Fockus26/kd-hello"])).code,
+    ).toBe(0);
+    expect(c.pins.get("kd_hello")).toBe("ghcr.io/fockus26/kd-hello");
+    c.pins.clear();
+    const other = await c.run(["project", "pin", "kd_hello", "attacker/dump"]);
+    expect(other.code).toBe(1);
+    expect(other.err).toContain("deploys Fockus26/kd-hello in the database");
+    expect(c.pins.size).toBe(0);
+  });
+
+  test("project pin refuses without root, unknown projects and bad input", async () => {
+    const notRoot = cli(false, false);
+    expect(
+      (await notRoot.run(["project", "pin", "kd_hello", "Fockus26/kd-hello"]))
+        .err,
+    ).toContain("needs root");
+    const c = cli();
+    expect(
+      (await c.run(["project", "pin", "nope", "Fockus26/kd-hello"])).err,
+    ).toBe("no project nope\n");
+    expect((await c.run(["project", "pin", "kd_hello"])).code).toBe(2);
+    expect((await c.run(["project", "pin", "kd_hello", "a/b/c"])).code).toBe(2);
+    expect(c.pins.size).toBe(0);
   });
 });

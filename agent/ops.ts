@@ -34,6 +34,7 @@ import {
   assertSecretFlag,
   type Environment,
 } from "../lib/core/env";
+import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
@@ -391,6 +392,10 @@ export class Agent {
   ) {
     const name = containerName(params.target, params.sha);
     const { vars, ...run } = params;
+    // Variables only go into the image of the repository root pinned for this project (the
+    // database is the web app's to write; the pin file is not). Checked before opening anything.
+    if (vars && vars.length > 0)
+      await this.assertPinned(params.target.project, params.image);
     // Everything is opened before anything is written or started: one bad row, no container.
     const content =
       vars && vars.length > 0
@@ -412,6 +417,23 @@ export class Agent {
       return { name, id: r.stdout.trim() };
     } finally {
       if (envFile !== undefined) await this.deps.removeFile(envFile);
+    }
+  }
+
+  private async assertPinned(project: string, image: string): Promise<void> {
+    const path = pinPath(project);
+    const pin = parsePin(await this.deps.readFile(path));
+    if (pin === null) {
+      throw new AgentError(
+        "forbidden",
+        `${project} has no pinned image repository (${path}): as root, kit-deploy project pin ${project} <owner/repo>`,
+      );
+    }
+    if (!imageMatchesPin(image, pin)) {
+      throw new AgentError(
+        "forbidden",
+        `${image} is not from ${pin}, the repository pinned for ${project}: its variables go nowhere else`,
+      );
     }
   }
 

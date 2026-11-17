@@ -9,6 +9,7 @@ const SHA = "3f2a9c1e7b4d5a6f8e9c0b1a2d3e4f5a6b7c8d9e";
 const MASTER = randomBytes(32).toString("base64");
 const KEY = deriveEnvKey(MASTER);
 const SECRET = "xkeysib-only-inside-the-container";
+const PIN = "/etc/kit-deploy/images/kd_hello";
 
 const sealed = (slot: Omit<EnvSlot, "project">, value: string) => ({
   name: slot.name,
@@ -25,6 +26,7 @@ function setup(
 ) {
   const f = fakeDeps({ "docker run": dockerRun });
   f.files.set(MASTER_KEY, MASTER);
+  f.files.set(PIN, "ghcr.io/cesar/kd-hello\n");
   // What the env file held at the moment `docker run` ran.
   const atRun: (string | null)[] = [];
   const realRun = f.deps.run;
@@ -179,5 +181,66 @@ describe("container.run with variables", () => {
       `${ENV_FILES_DIR}/kd_hello-pr-7-3f2a9c1e7b4d.env`,
     );
     expect(s.atRun).toEqual(["A=pv\n"]);
+  });
+});
+
+describe("container.run with variables: only the pinned repository's image", () => {
+  const vars = () => [
+    sealed(
+      { environment: "production", name: "BREVO_API_KEY", secret: true },
+      SECRET,
+    ),
+  ];
+
+  test.each([
+    ["another owner's image", `ghcr.io/attacker/dump:1`],
+    [
+      "a repo whose name only starts like it",
+      `ghcr.io/cesar/kd-hello-evil:${SHA}`,
+    ],
+    ["a path under it", `ghcr.io/cesar/kd-hello/dump:${SHA}`],
+  ])("refuses %s: nothing opened, written or started", async (_, image) => {
+    const s = setup();
+    const res = await s.send({ image, vars: vars() });
+    expect(res).toMatchObject({ ok: false, error: { code: "forbidden" } });
+    expect(s.privateFiles).toEqual([]);
+    expect(s.calls.some((c) => c[1] === "run")).toBe(false);
+  });
+
+  test("no pin file: refused, with the command that fixes it", async () => {
+    const s = setup();
+    s.files.delete(PIN);
+    const res = (await s.send({ vars: vars() })) as {
+      ok: false;
+      error: { code: string; message: string };
+    };
+    expect(res.error.code).toBe("forbidden");
+    expect(res.error.message).toContain("kit-deploy project pin kd_hello");
+    expect(s.calls.some((c) => c[1] === "run")).toBe(false);
+  });
+
+  test("a garbled pin file counts as none", async () => {
+    const s = setup();
+    s.files.set(PIN, "ghcr.io/\n");
+    const res = await s.send({ vars: vars() });
+    expect(res).toMatchObject({ ok: false, error: { code: "forbidden" } });
+  });
+
+  test("the pinned image by tag or digest is accepted", async () => {
+    for (const image of [
+      `ghcr.io/cesar/kd-hello:${SHA}`,
+      `ghcr.io/cesar/kd-hello@sha256:${"a".repeat(64)}`,
+    ]) {
+      const s = setup();
+      expect(await s.send({ image, vars: vars() })).toMatchObject({ ok: true });
+    }
+  });
+
+  test("without variables no pin is needed (rollback images, kit-deploy itself)", async () => {
+    const s = setup();
+    s.files.delete(PIN);
+    expect(await s.send({ image: "ghcr.io/other/app:1" })).toMatchObject({
+      ok: true,
+    });
   });
 });

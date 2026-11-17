@@ -17,6 +17,7 @@ import {
 } from "../lib/auth/enrolment";
 import { defaultHost, MEMORY_MB } from "../lib/core";
 import { DASHBOARD_HOST } from "../lib/core/constants";
+import { pinFor } from "../lib/core/image-pin";
 import { assertHost, CoreInputError } from "../lib/core/validate";
 import { AdminError, type AdminStore } from "../lib/db/admin";
 import type { DeployStore } from "../lib/db/store";
@@ -42,6 +43,11 @@ export type CliContext = EnvContext & {
   users?: () => UserStore;
   /** `preview sweep`: the database, the agent and GitHub (read for PR state, write for comments). */
   sweep?: () => Omit<SweepDeps, "dryRun">;
+  /** The root-owned image pins (lib/core/image-pin): written only when the CLI runs as root. */
+  pins?: {
+    isRoot: boolean;
+    write(project: string, pin: string): Promise<void>;
+  };
   /** Whether stdout is a terminal: a token is never printed to one without --show. */
   stdoutIsTTY?: boolean;
   now?: () => number;
@@ -68,6 +74,9 @@ Commands:
   regenerate         rewrite every live site's Caddy file; start its container if stopped
   project add <project> <owner/repo> [--memory <mb>] [--domain <host>]... [--no-default-domain]
                      register a project; it answers on <project>.fockus.dev unless told not to
+  project pin <project> <owner/repo>
+                     (root) the only repository whose images get the project's variables;
+                     'project add' as root does it too
   domain add <project> <host>
                      one more host for a project's production
   token create <project> [--label <text>] [--show]
@@ -400,18 +409,64 @@ async function projectAdd(
   }
   for (const h of f.flags.get("--domain") ?? []) hosts.push(checkHost(h));
   const unique = [...new Set(hosts)];
+  const pin = pinFor(repo);
   const { id } = await needAdmin(ctx).addProject({
     name,
     repo,
     memoryMb,
     hosts: unique,
   });
+  const pinned = await writePin(ctx, name, pin);
+  const note = pinned
+    ? ""
+    : `not root: its variables stay out of containers until, as root: kit-deploy project pin ${name} ${repo}\n`;
   if (json)
-    return ok(
-      `${JSON.stringify({ id, name, repo, memoryMb, hosts: unique })}\n`,
+    return {
+      code: 0,
+      out: `${JSON.stringify({ id, name, repo, memoryMb, hosts: unique, pinned })}\n`,
+      err: note,
+    };
+  return {
+    code: 0,
+    out: `added ${name} (${repo}), ${memoryMb} MB, domains: ${unique.join(", ") || "none"}\n`,
+    err: note,
+  };
+}
+
+/** True when written; false when this CLI is not root (the agent then refuses variables). */
+async function writePin(
+  ctx: CliContext,
+  project: string,
+  pin: string,
+): Promise<boolean> {
+  if (!ctx.pins?.isRoot) return false;
+  await ctx.pins.write(project, pin);
+  return true;
+}
+
+/** `project pin <project> <owner/repo>`: the repository is typed, never read from the database
+ * (the web app can write there); it must also match the database, or deploys would be refused. */
+async function projectPin(ctx: CliContext, args: string[]): Promise<Result> {
+  const usage = "usage: kit-deploy project pin <project> <owner/repo>\n";
+  const [project, repo, extra] = args;
+  if (!project || !repo || extra) return fail(usage, 2);
+  if (!PROJECT.test(project))
+    return fail(`invalid project name "${project}"\n`, 2);
+  const pin = pinFor(repo);
+  if (!ctx.pins?.isRoot)
+    return fail(
+      "project pin needs root: ssh kit-vps kit-deploy project pin <project> <owner/repo>\n",
     );
+  const stored = await needAdmin(ctx).projectRepo(project);
+  if (stored === null) return fail(`no project ${project}\n`);
+  if (pinFor(stored) !== pin) {
+    return fail(
+      `${project} deploys ${stored} in the database, not ${repo}: check which one is right before pinning\n`,
+    );
+  }
+  await ctx.pins.write(project, pin);
   return ok(
-    `added ${name} (${repo}), ${memoryMb} MB, domains: ${unique.join(", ") || "none"}\n`,
+    `pinned ${project} to ${pin}: only its images get the project's variables\n`,
   );
 }
 
@@ -539,6 +594,7 @@ export async function runCli(
       case "project":
         if (args[0] === "add")
           return await projectAdd(ctx, args.slice(1), json);
+        if (args[0] === "pin") return await projectPin(ctx, args.slice(1));
         return fail(
           "usage: kit-deploy project add <project> <owner/repo> [...]\n",
           2,

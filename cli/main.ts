@@ -22,6 +22,7 @@ import { pullStateFromEnv } from "../lib/deploy/pr-state";
 import { socketClient } from "./client";
 import { runCli } from "./commands";
 import { loadCliEnv, loadGithubEnv } from "./env";
+import { writePinFile } from "./pins";
 import { readValue } from "./stdin";
 
 const socket = process.env.KIT_AGENT_SOCKET ?? "/run/kit-deploy/agent.sock";
@@ -29,6 +30,7 @@ const agent = socketClient(socket);
 const { code, out, err } = await runCli(process.argv.slice(2), agent, {
   stdoutIsTTY: process.stdout.isTTY === true,
   actor: sshActor(),
+  pins: { isRoot: process.getuid?.() === 0, write: writePinFile },
   readValue,
   env: () => {
     loadCliEnv();
