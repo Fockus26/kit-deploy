@@ -70,6 +70,11 @@ export function scrubUrls(text: string): string {
   return text.replace(/postgres(?:ql)?:\/\/\S+/g, "postgresql://…");
 }
 
+/** A project named like this would share kit-db's name with another project's previews. */
+export function isPreviewsName(project: string): boolean {
+  return project.endsWith("_preview");
+}
+
 /** kit-db's name for a target's database: the project's, or `<project>_preview` for every PR. */
 export function databaseName(target: Target): string {
   return target.env === "production"
@@ -467,6 +472,8 @@ export class Agent {
    * reaches a response or a log.
    */
   private async managedLines(target: Target): Promise<string> {
+    // `shop_preview` in production would be `shop`'s previews database (security review U5).
+    if (isPreviewsName(target.project)) return "";
     const db = databaseName(target);
     const r = await this.deps.run(["kit-db", "url", db]);
     const url = r.stdout.trim();
@@ -480,6 +487,12 @@ export class Agent {
   /** `kit-db create` for production's and the previews' databases. Its stdout carries the URLs
    * with the password: it is dropped, never returned or logged. */
   private async createDatabases(project: string) {
+    if (isPreviewsName(project)) {
+      throw new AgentError(
+        "bad_request",
+        `${project}: a name ending in _preview is another project's previews database`,
+      );
+    }
     const out: { database: string; created: boolean }[] = [];
     for (const database of [project, `${project}_preview`]) {
       const exists = await this.deps.run(["kit-db", "url", database]);

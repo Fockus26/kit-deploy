@@ -407,6 +407,11 @@ async function projectAdd(
   const [name, repo, extra] = f.words;
   if (!name || !repo || extra) return fail(usage, 2);
   if (!PROJECT.test(name)) return fail(`invalid project name "${name}"\n`, 2);
+  if (name.endsWith("_preview"))
+    return fail(
+      `invalid project name "${name}": _preview is the suffix of every project's previews database\n`,
+      2,
+    );
   if (!REPO.test(repo))
     return fail(`invalid repo "${repo}": expected owner/name\n`, 2);
   const memoryRaw = f.flags.get("--memory")?.at(-1) ?? "512";
