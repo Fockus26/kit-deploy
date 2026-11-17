@@ -102,6 +102,8 @@ export const Request = z.discriminatedUnion("op", [
     image,
     port,
     memoryMb: z.number().int(),
+    /** The target environment's stored variables; the agent opens them into the env file. */
+    vars: z.array(storedVar).max(MAX_VARS).optional(),
   }),
   op("container.stop", {
     name: containerNameSchema,

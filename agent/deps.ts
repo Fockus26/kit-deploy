@@ -16,6 +16,9 @@ export interface Deps {
   readFile(path: string): Promise<string | null>;
   /** Write to `<path>.tmp` and rename over `path`: readers never see half a file. */
   writeFileAtomic(path: string, content: string): Promise<void>;
+  /** Root-only: the file 0600 in a directory made 0700 if missing. For a container's env file,
+   * which holds decrypted secrets for the moment of `docker run`. */
+  writePrivateFile(path: string, content: string): Promise<void>;
   /** No error when it is already gone. */
   removeFile(path: string): Promise<void>;
   /** Names of the regular files directly in `dir` (no symlinks, no subdirectories); [] when the

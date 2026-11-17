@@ -190,12 +190,15 @@ async function runNew(
     target,
     sha: c.sha,
   })) as { port: number };
+  // Read at each start: a change since the last deploy reaches this container (redeploy, U8).
+  const vars = await ctx.repo.envVars(c.project.id, target.env);
   await call(ctx, "container.run", {
     target,
     sha: c.sha,
     image: c.image,
     port: alloc.port,
     memoryMb,
+    ...(vars.length > 0 ? { vars } : {}),
   });
   attempt.started = containerName(target, c.sha);
   return alloc.port;

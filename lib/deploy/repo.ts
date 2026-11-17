@@ -1,4 +1,5 @@
 /** What the switch needs from the database. `drizzleSwitchRepo` is the real one. */
+import type { Sealed } from "@/lib/core/crypto";
 import type { DeploymentStatus } from "@/lib/db/schema";
 
 export type ClaimedDeployment = {
@@ -32,6 +33,9 @@ export type RunningPreview = {
   /** When the PR was last pushed: its newest deployment's `createdAt`. */
   lastPushAt: Date;
 };
+
+/** A stored variable as the switch hands it to kit-agent: sealed, never opened here. */
+export type SealedVar = { name: string; secret: boolean; sealed: Sealed };
 
 export type ProjectInfo = {
   id: string;
@@ -83,4 +87,9 @@ export interface SwitchRepo {
     projectId: string,
     pr: number,
   ): Promise<Array<{ id: string; container: string }>>;
+  /** The environment's variables (phase 04), for the container that is about to start. */
+  envVars(
+    projectId: string,
+    environment: "production" | "preview",
+  ): Promise<SealedVar[]>;
 }

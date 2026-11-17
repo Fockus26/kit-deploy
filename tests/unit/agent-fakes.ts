@@ -10,6 +10,7 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
   > = [];
   const files = new Map<string, string>();
   const logs: Record<string, unknown>[] = [];
+  const privateFiles: { path: string; content: string }[] = [];
   let httpStatus: number | Error = 200;
 
   const deps: Deps = {
@@ -27,6 +28,10 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     },
     async writeFileAtomic(path, content) {
       files.set(path, content);
+    },
+    async writePrivateFile(path, content) {
+      files.set(path, content);
+      privateFiles.push({ path, content });
     },
     async removeFile(path) {
       files.delete(path);
@@ -53,6 +58,7 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     calls,
     runOpts,
     files,
+    privateFiles,
     logs,
     setHttp(s: number | Error) {
       httpStatus = s;

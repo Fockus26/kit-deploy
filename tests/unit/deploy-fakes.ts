@@ -4,6 +4,7 @@ import type {
   ClaimedDeployment,
   KeptDeployment,
   RunningPreview,
+  SealedVar,
   SwitchRepo,
 } from "../../lib/deploy/repo";
 import type { SwitchDeps } from "../../lib/deploy/switch";
@@ -28,7 +29,11 @@ export type Row = {
 const same = (a: Row, b: Row) => (a.pr ?? null) === (b.pr ?? null);
 
 /** An in-memory kit_deploy for one project, kd_hello. */
-export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
+export function memoryRepo(
+  rows: Row[],
+  hosts = ["hello.fockus.dev"],
+  vars: Partial<Record<"production" | "preview", SealedVar[]>> = {},
+) {
   const repo: SwitchRepo = {
     async withProjectLock(_id, fn) {
       return fn();
@@ -147,6 +152,9 @@ export function memoryRepo(rows: Row[], hosts = ["hello.fockus.dev"]) {
       return mine.flatMap((r) =>
         r.container ? [{ id: r.id, container: r.container }] : [],
       );
+    },
+    async envVars(_projectId, environment) {
+      return vars[environment] ?? [];
     },
   };
   return repo;
