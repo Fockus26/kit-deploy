@@ -39,7 +39,17 @@ export function assertEnvironment(env: string): Environment {
   return env as Environment;
 }
 
-/** A name a person may set: well-formed, not reserved, not managed. */
+/**
+ * Names that steer the runtime rather than the app (phase 04 security review, F1): a proxy for
+ * every outbound call, TLS checks off, a preloaded library, another CA, Node's or Bun's own
+ * switches, the PATH that finds `node`. Set on a pinned container, any of them would let whoever
+ * writes a row read the container's secrets on the wire. Refused at seal, in the database and
+ * again by kit-agent at each start. The same list is `env_vars_name_not_runtime` (migration 0008).
+ */
+export const RUNTIME_NAME_RE =
+  /^(?:PATH|NODE_[A-Z0-9_]*|LD_[A-Z0-9_]*|[A-Z0-9_]*_PROXY|SSL_CERT_[A-Z0-9_]*|OPENSSL_[A-Z0-9_]*|UV_[A-Z0-9_]*|BUN_[A-Z0-9_]*)$/;
+
+/** A name a person may set: well-formed, not reserved, not managed, not the runtime's. */
 export function assertEnvName(name: string): string {
   if (!ENV_NAME_RE.test(name)) {
     throw new CoreInputError(
@@ -49,6 +59,11 @@ export function assertEnvName(name: string): string {
   if (NOT_SETTABLE.has(name)) {
     throw new CoreInputError(
       `${name} is set by kit-deploy itself and cannot be changed by hand`,
+    );
+  }
+  if (RUNTIME_NAME_RE.test(name)) {
+    throw new CoreInputError(
+      `${name} configures the runtime (Node, TLS, proxies, the loader), not the app: not settable`,
     );
   }
   return name;
