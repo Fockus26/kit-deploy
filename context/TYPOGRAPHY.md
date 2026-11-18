@@ -11,14 +11,16 @@
 
 A dense dashboard: the scale barely grows with the screen; large screens get more columns, not bigger text.
 
-| Level | xs (mobile) | md (tablet) | 1920px+ (large desktop) | Line-height | Letter-spacing |
+Breakpoints of the scale from `design/HANDOFF.md` §1: 360–1023 · 1024–1919 · ≥ 1920.
+
+| Level | 360–1023 | 1024–1919 | ≥ 1920 | Line-height | Letter-spacing |
 |---|---|---|---|---|---|
-| h1 (page / project name) | 22px | 24px | 30px | 1.25 | -0.01em |
-| h2 (card / section title) | 15px | 15px | 18px | 1.35 | 0 |
+| h1 (page / project name) | 22px | 24px | 30px | 1.25 | 0 |
+| h2 (card / section title) | 15px | 15px | 18px | 1.4 | 0 |
 | h3 (sub-block) | 14px | 14px | 15px | 1.4 | 0 |
 | body | 14px | 14px | 15px | 1.5 | 0 |
-| table / mono | 13px | 13px | 14px | 1.5 | 0 |
-| small/caption | 12px | 12px | 13px | 1.45 | 0 |
+| table / mono | 13px | 13px | 14px | 1.5 (logs 1.7) | 0 |
+| small/caption | 12px | 12px | 13px | 1.5 | 0 |
 | eyebrow/label | 11px | 11px | 12px | 1.4 | 0.08em, uppercase |
 | metric value (mono) | 20px | 22px | 24px | 1.2 | 0 |
 
