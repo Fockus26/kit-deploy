@@ -43,6 +43,7 @@ import type { Deps, RunResult } from "./deps";
 import { certStatus } from "./domains";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
+import { sampleMetrics } from "./metrics";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
 
 export const CADDYFILE = "/etc/caddy/Caddyfile";
@@ -291,6 +292,8 @@ export class Agent {
         return searchLogs(this.logs, req.params, this.now());
       case "cert.status":
         return certStatus(this.deps, req.params.host);
+      case "metrics.sample":
+        return sampleMetrics(this.deps, this.now, () => this.list());
     }
   }
 

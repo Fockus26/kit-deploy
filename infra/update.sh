@@ -7,8 +7,9 @@
 #
 # Order: the auth secret in web.env if missing → unpack to releases/<sha> → migrate (with the new
 # migrations, before anything restarts)
-# → `current` points at it → kit-agent restarts → the nightly preview sweep timer and the
-# minute domain check timer are installed and enabled → the web container is recreated → the dashboard's
+# → `current` points at it → kit-agent restarts → the nightly preview sweep timer is installed and
+# enabled → the 30 s metrics timer and the minute domain check timer too → the web container is
+# recreated → the dashboard's
 # Caddy site is written if its host resolves → the previews' wildcard site, once the Cloudflare
 # token and *.preview DNS exist → only the last 3 releases are kept.
 # The sites never stop: their containers and Caddy are not touched.
@@ -183,6 +184,24 @@ if [ "$TEST" = 1 ]; then
 else
   [ "$DOMAIN_CHANGED" = 1 ] && systemctl daemon-reload
   systemctl enable -q --now kit-deploy-domain-check.timer
+fi
+
+say "Metrics collector (kit-deploy-metrics.timer)"
+# `kit-deploy metrics collect` as root every 30 s (D015). Same install as the sweep's units.
+METRICS_UNITS=(kit-deploy-metrics.service kit-deploy-metrics.timer)
+METRICS_CHANGED=0
+for u in "${METRICS_UNITS[@]}"; do
+  cmp -s "$REL/infra/$u" "/etc/systemd/system/$u" && continue
+  install -m 0644 -o root -g root "$REL/infra/$u" "/etc/systemd/system/$u.new"
+  mv -f "/etc/systemd/system/$u.new" "/etc/systemd/system/$u"
+  METRICS_CHANGED=1
+done
+[ "$METRICS_CHANGED" = 1 ] && echo "Units installed or updated." || echo "Units unchanged."
+if [ "$TEST" = 1 ]; then
+  echo "TEST: systemctl enable --now kit-deploy-metrics.timer skipped."
+else
+  [ "$METRICS_CHANGED" = 1 ] && systemctl daemon-reload
+  systemctl enable -q --now kit-deploy-metrics.timer
 fi
 
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"

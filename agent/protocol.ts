@@ -190,6 +190,8 @@ export const Request = z.discriminatedUnion("op", [
   }),
   /** The certificate Caddy stores for a host (D029): expiry and issuer, or null. */
   op("cert.status", { host }),
+  /** D015: one reading of containers, the VPS and Caddy's access log (agent/metrics.ts). */
+  op("metrics.sample", {}),
 ]);
 
 export type Request = z.infer<typeof Request>;

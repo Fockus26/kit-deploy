@@ -42,7 +42,7 @@ docker run --rm -e SHA="$SHA" -e SHORT="$SHORT" -v "$(host "$ROOT/build"):/out" 
   [ -d public ] && cp -r public/. /rel/web/public/
   mkdir -p /rel/web/.next/cache
   cp -r drizzle /rel/drizzle
-  mkdir -p /rel/infra && cp infra/install.sh infra/update.sh infra/kit-agent.service infra/kit-deploy-preview-sweep.service infra/kit-deploy-preview-sweep.timer infra/kit-deploy-domain-check.service infra/kit-deploy-domain-check.timer /rel/infra/
+  mkdir -p /rel/infra && cp infra/install.sh infra/update.sh infra/kit-agent.service infra/kit-deploy-preview-sweep.service infra/kit-deploy-preview-sweep.timer infra/kit-deploy-metrics.service infra/kit-deploy-metrics.timer infra/kit-deploy-domain-check.service infra/kit-deploy-domain-check.timer /rel/infra/
   cp -r infra/caddy /rel/infra/caddy
   echo "$SHA" > /rel/VERSION
   tar -C /rel -czf "/out/kit-deploy-$SHORT.tgz" .
