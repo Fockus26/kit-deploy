@@ -156,6 +156,18 @@ describe("db.status", () => {
     expect(r.failures[0]).toContain("upload to (configured)");
   });
 
+  test("a failure naming an earlier remote with credentials is redacted too", async () => {
+    const old = ":s3,secret_access_key=OLDKEY:bucket";
+    const s = setup({
+      "kit-db status": () => ({
+        stdout: `kd_hello: NO BACKUP\nOff-VPS: r2:kit-backups\nLast failures:\nFAIL 2026-11-10T03:30:07+00:00 kd_hello: upload to ${old} (the dump is on this disk)\n`,
+      }),
+    });
+    const r = result(await s.send({ project: "kd_hello" }));
+    expect(JSON.stringify(r)).not.toContain("OLDKEY");
+    expect(r.failures[0]).toContain("upload to (configured) (the dump");
+  });
+
   test("a database in status but not in list is not shown", async () => {
     const s = setup({ "kit-db list": () => ({ stdout: "kd_hello 8 kB\n" }) });
     const r = result(await s.send({ project: "kd_hello" }));

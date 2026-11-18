@@ -184,12 +184,18 @@ export async function dbStatus(deps: Deps, project: string): Promise<DbStatus> {
   const failures = status.failures
     .filter((l) => namesOne(l, names))
     .map((l) => {
-      // An upload failure names the remote: the same label as offVps, never more.
+      // An upload failure names the remote: the same label as offVps, never more. The lines
+      // are history, so a remote used before the current one goes through the same label.
       const line =
         status.remote === null || offVps === null
           ? l
           : l.replaceAll(status.remote, offVps);
-      return clean(line);
+      return clean(
+        line.replace(
+          /(upload to )(\S+)( \(the dump)/,
+          (_, a: string, r: string, b: string) => `${a}${remoteLabel(r)}${b}`,
+        ),
+      );
     });
   return { databases, offVps, failures };
 }
