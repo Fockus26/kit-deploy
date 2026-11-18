@@ -13,6 +13,7 @@ export function SignOutButton() {
     <>
       <Button
         variant="outline"
+        className="w-full"
         disabled={busy}
         aria-busy={busy}
         onClick={async () => {
@@ -31,7 +32,7 @@ export function SignOutButton() {
         <LogOut aria-hidden="true" />
         {busy ? "Cerrando sesión…" : "Cerrar sesión"}
       </Button>
-      <p role="alert" className="mt-3 text-body text-destructive">
+      <p role="alert" className="mt-2 text-caption text-destructive empty:mt-0">
         {failed ? "No se pudo cerrar la sesión. Vuelve a intentarlo." : ""}
       </p>
     </>

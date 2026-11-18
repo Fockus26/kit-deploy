@@ -1,76 +1,74 @@
 @import "tailwindcss";
 
 /*
- * kit-deploy tokens (context/COLORS.md, DESIGN_TOKENS.md, TYPOGRAPHY.md; D007).
- * Dark is the default; light follows prefers-color-scheme. Names follow shadcn/ui's variables
- * so its components read them as they are. The dashboard's real design arrives in phase 05.
+ * kit-deploy tokens (context/COLORS.md, DESIGN_TOKENS.md, TYPOGRAPHY.md; D007, D023).
+ * Names follow shadcn/ui's variables so its components read them as they are.
+ *
+ * Theme (D023): every color is `light-dark(<light>, <dark>)`, resolved by `color-scheme` on
+ * <html>. Dark is the default; `data-theme` (set before paint by the script in app/layout.tsx)
+ * picks light, or "system" to follow prefers-color-scheme. One value per token, no copies.
  */
 :root {
   color-scheme: dark;
-  --background: #0b0d10;
-  --foreground: #e6e8eb;
-  --card: #12151a;
-  --card-foreground: #e6e8eb;
-  --raised: #1a1f27;
-  --primary: #5b9bff;
-  --primary-foreground: #08111f;
-  --primary-text: #7ab0ff;
-  --secondary: #1a1f27;
-  --secondary-foreground: #e6e8eb;
-  --muted-foreground: #9aa3ae;
-  --disabled: #6b7480;
-  --success: #5ee6a0;
-  --success-surface: #10291d;
-  --warning: #ffb86b;
-  --warning-surface: #2e2110;
-  --destructive: #ff8a8a;
-  --destructive-surface: #2e1416;
-  --border: #232830;
-  --input: #5e6776;
-  --ring: #7ab0ff;
-  --selection: #1e3a66;
-  --selection-foreground: #e6e8eb;
-  --scrollbar-thumb: #5e6776;
-  --scrollbar-track: #12151a;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="system"] {
+  color-scheme: light dark;
+}
+
+:root {
+  --background: light-dark(#f6f7f9, #0b0d10);
+  --foreground: light-dark(#0f1419, #e6e8eb);
+  /* Sidebar, mobile header and log viewer (HANDOFF §1). */
+  --nav: light-dark(#ffffff, #0f1216);
+  --card: light-dark(#ffffff, #12151a);
+  --card-foreground: light-dark(#0f1419, #e6e8eb);
+  --raised: light-dark(#eef0f3, #1a1f27);
+  --primary: light-dark(#1f5fd1, #5b9bff);
+  --primary-foreground: light-dark(#ffffff, #08111f);
+  --primary-text: light-dark(#1f5fd1, #7ab0ff);
+  --secondary: light-dark(#eef0f3, #1a1f27);
+  --secondary-foreground: light-dark(#0f1419, #e6e8eb);
+  --muted-foreground: light-dark(#5b6573, #9aa3ae);
+  --disabled: light-dark(#7a8491, #6b7480);
+  --success: light-dark(#0e7a45, #5ee6a0);
+  --success-surface: light-dark(#e7f6ee, #10291d);
+  --warning: light-dark(#8a5200, #ffb86b);
+  --warning-surface: light-dark(#fff4e0, #2e2110);
+  --destructive: light-dark(#b42318, #ff8a8a);
+  --destructive-surface: light-dark(#fdecea, #2e1416);
+  --info: light-dark(#1f5fd1, #7ab0ff);
+  --info-surface: light-dark(#e8f0fd, #122440);
+  /* The filled "Parar producción" button (HANDOFF §1): 6.57:1 light · 8.0:1 dark. */
+  --destructive-solid: light-dark(#b42318, #ff8a8a);
+  --destructive-on: light-dark(#ffffff, #2a0b0d);
+  --border: light-dark(#e1e4e8, #232830);
+  --input: light-dark(#8a94a1, #5e6776);
+  --ring: light-dark(#1f5fd1, #7ab0ff);
+  --selection: light-dark(#c9dbfa, #1e3a66);
+  --selection-foreground: light-dark(#0f1419, #e6e8eb);
+  --scrollbar-thumb: light-dark(#7a8491, #5e6776);
+  --scrollbar-track: light-dark(#eef0f3, #12151a);
+  /* Scrim behind the mobile drawer and dialogs (not text: no contrast pair). */
+  --overlay: light-dark(rgb(15 20 25 / 0.35), rgb(0 0 0 / 0.55));
+  /* DESIGN_TOKENS.md › shadows: only what floats. */
+  --shadow-color-md: light-dark(rgb(15 20 25 / 0.12), rgb(0 0 0 / 0.35));
+  --shadow-color-lg: light-dark(rgb(15 20 25 / 0.18), rgb(0 0 0 / 0.5));
   /* The QR must stay dark on light in both themes for phone cameras. */
   --qr-dark: #0f1419;
   --qr-light: #ffffff;
-}
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --background: #f6f7f9;
-    --foreground: #0f1419;
-    --card: #ffffff;
-    --card-foreground: #0f1419;
-    --raised: #eef0f3;
-    --primary: #1f5fd1;
-    --primary-foreground: #ffffff;
-    --primary-text: #1f5fd1;
-    --secondary: #eef0f3;
-    --secondary-foreground: #0f1419;
-    --muted-foreground: #5b6573;
-    --disabled: #7a8491;
-    --success: #0e7a45;
-    --success-surface: #e7f6ee;
-    --warning: #8a5200;
-    --warning-surface: #fff4e0;
-    --destructive: #b42318;
-    --destructive-surface: #fdecea;
-    --border: #e1e4e8;
-    --input: #8a94a1;
-    --ring: #1f5fd1;
-    --selection: #c9dbfa;
-    --selection-foreground: #0f1419;
-    --scrollbar-thumb: #7a8491;
-    --scrollbar-track: #eef0f3;
-  }
+  /* DESIGN_TOKENS.md › transitions */
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-nav: var(--nav);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-raised: var(--raised);
@@ -87,14 +85,25 @@
   --color-warning-surface: var(--warning-surface);
   --color-destructive: var(--destructive);
   --color-destructive-surface: var(--destructive-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-destructive-solid: var(--destructive-solid);
+  --color-destructive-on: var(--destructive-on);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
   --color-qr-dark: var(--qr-dark);
   --color-qr-light: var(--qr-light);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --shadow-md: 0 8px 24px var(--shadow-color-md);
+  --shadow-lg: 0 16px 48px var(--shadow-color-lg);
+
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: var(--ease-default);
 }
 
 /* Not inline: utilities read these through var(), so the media queries below can resize them. */
@@ -103,36 +112,79 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+  --radius-full: 999px;
 
-  /* DESIGN_TOKENS.md › sizes */
-  --spacing-control: 40px;
+  /* DESIGN_TOKENS.md › sizes. Controls are 44px below 768 (touch), 40px above. */
+  --spacing-control: 44px;
+  --spacing-sheet: 280px;
+  --spacing-sidebar: 240px;
+  --spacing-header: 56px;
   --container-form: 400px;
+  --container-content: 1440px;
 
-  /* TYPOGRAPHY.md › scale (xs; md and 1920px+ below) */
+  /* TYPOGRAPHY.md › scale: 360–1023 here; 1024–1919 and ≥1920 below (HANDOFF §1). */
   --text-h1: 22px;
   --text-h1--line-height: 1.25;
-  --text-h1--letter-spacing: -0.01em;
   --text-h2: 15px;
-  --text-h2--line-height: 1.35;
+  --text-h2--line-height: 1.4;
+  --text-h3: 14px;
+  --text-h3--line-height: 1.4;
   --text-body: 14px;
   --text-body--line-height: 1.5;
   --text-mono: 13px;
   --text-mono--line-height: 1.5;
   --text-caption: 12px;
-  --text-caption--line-height: 1.45;
+  --text-caption--line-height: 1.5;
   --text-eyebrow: 11px;
   --text-eyebrow--line-height: 1.4;
   --text-eyebrow--letter-spacing: 0.08em;
+  --text-metric: 20px;
+  --text-metric--line-height: 1.2;
   /* Inputs on touch screens: iOS does not zoom on focus at 16px (TYPOGRAPHY.md › Rules). */
   --text-input-touch: 16px;
   --text-input-touch--line-height: 1.5;
 
   --ease-default: cubic-bezier(0.2, 0, 0, 1);
+
+  /* HANDOFF §6: skeleton pulse 1.5s; menus and the sheet enter (reduced motion: no motion). */
+  --animate-skeleton: kd-pulse 1.5s ease-in-out infinite;
+  --animate-menu-in: kd-menu-in var(--duration-fast) var(--ease-default);
+  --animate-sheet-in: kd-sheet-in var(--duration-normal) var(--ease-default);
+  --animate-fade-in: kd-fade-in var(--duration-normal) var(--ease-default);
+
+  @keyframes kd-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+  @keyframes kd-menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes kd-sheet-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes kd-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 @media (min-width: 768px) {
   :root {
+    --spacing-control: 40px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
     --text-h1: 24px;
+    --text-metric: 22px;
   }
 }
 
@@ -140,10 +192,12 @@
   :root {
     --text-h1: 30px;
     --text-h2: 18px;
+    --text-h3: 15px;
     --text-body: 15px;
     --text-mono: 14px;
     --text-caption: 13px;
     --text-eyebrow: 12px;
+    --text-metric: 24px;
   }
 }
 
@@ -162,6 +216,30 @@ body {
 
 html {
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+/* Where scrollbar-color is not supported (older Safari). */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 3px solid var(--scrollbar-track);
+  border-radius: var(--radius-full);
+}
+
+/* A link to an anchor lands below the sticky header. */
+:target {
+  scroll-margin-top: var(--spacing-header);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
