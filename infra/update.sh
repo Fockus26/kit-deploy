@@ -7,8 +7,8 @@
 #
 # Order: the auth secret in web.env if missing → unpack to releases/<sha> → migrate (with the new
 # migrations, before anything restarts)
-# → `current` points at it → kit-agent restarts → the nightly preview sweep timer is installed and
-# enabled → the web container is recreated → the dashboard's
+# → `current` points at it → kit-agent restarts → the nightly preview sweep timer and the
+# minute domain check timer are installed and enabled → the web container is recreated → the dashboard's
 # Caddy site is written if its host resolves → the previews' wildcard site, once the Cloudflare
 # token and *.preview DNS exist → only the last 3 releases are kept.
 # The sites never stop: their containers and Caddy are not touched.
@@ -164,6 +164,25 @@ else
   [ "$SWEEP_CHANGED" = 1 ] && systemctl daemon-reload
   systemctl enable -q --now kit-deploy-preview-sweep.timer
   echo "Next run: $(systemctl show -p NextElapseUSecRealtime --value kit-deploy-preview-sweep.timer 2>/dev/null || echo unknown)"
+fi
+
+say "Domain check every minute (kit-deploy-domain-check.timer)"
+# `kit-deploy domain check` as root every minute (phase 05, brief F6): a domain goes into its Caddy
+# site once its DNS resolves to the VPS, then its certificate is followed. Same install as the sweep.
+DOMAIN_UNITS=(kit-deploy-domain-check.service kit-deploy-domain-check.timer)
+DOMAIN_CHANGED=0
+for u in "${DOMAIN_UNITS[@]}"; do
+  cmp -s "$REL/infra/$u" "/etc/systemd/system/$u" && continue
+  install -m 0644 -o root -g root "$REL/infra/$u" "/etc/systemd/system/$u.new"
+  mv -f "/etc/systemd/system/$u.new" "/etc/systemd/system/$u"
+  DOMAIN_CHANGED=1
+done
+[ "$DOMAIN_CHANGED" = 1 ] && echo "Units installed or updated." || echo "Units unchanged."
+if [ "$TEST" = 1 ]; then
+  echo "TEST: systemctl enable --now kit-deploy-domain-check.timer skipped."
+else
+  [ "$DOMAIN_CHANGED" = 1 ] && systemctl daemon-reload
+  systemctl enable -q --now kit-deploy-domain-check.timer
 fi
 
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"

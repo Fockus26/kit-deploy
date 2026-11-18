@@ -1,0 +1,13 @@
+# kit-deploy · runs kit-deploy-domain-check.service every minute. Installed and enabled by
+# infra/update.sh. A run still going when the next is due is not started twice (oneshot).
+[Unit]
+Description=kit-deploy domain check every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=kit-deploy-domain-check.service
+
+[Install]
+WantedBy=timers.target
