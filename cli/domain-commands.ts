@@ -3,24 +3,19 @@
  * minute timer (`domain check`) puts it in its Caddy site once its DNS points to the VPS and
  * follows its certificate (D028, D029). `ls` prints the records to create at the DNS provider.
  */
-import { RESERVED_HOSTS } from "../agent/protocol";
-import { PREVIEW_DOMAIN } from "../lib/core/constants";
-import { defaultHost } from "../lib/core/target";
-import {
-  assertHost,
-  assertProject,
-  CoreInputError,
-} from "../lib/core/validate";
+import { assertProject } from "../lib/core/validate";
 import { AdminError, type AdminStore } from "../lib/db/admin";
-import { DOMAIN_REDIRECTS, type DomainRedirect } from "../lib/db/schema";
+import type { DomainRedirect } from "../lib/db/schema";
 import { type CheckDeps, checkDomains } from "../lib/domains/check";
-import {
-  describeInstructions,
-  dnsInstructions,
-  redirectTarget,
-} from "../lib/domains/dns";
-import { siteHosts } from "../lib/domains/site";
+import { describeInstructions, dnsInstructions } from "../lib/domains/dns";
 import type { DomainRow } from "../lib/domains/store";
+import {
+  addDomain,
+  parseRedirect,
+  projectHost,
+  removeDomain,
+  setDomainRedirect,
+} from "../lib/ops/domains";
 
 export type DomainContext = {
   admin?: () => AdminStore;
@@ -54,49 +49,13 @@ function project(raw: string): string {
   return assertProject(raw);
 }
 
-/** Lowercase, a valid name, not the platform's and not under the previews' wildcard. */
-function host(raw: string): string {
-  const h = assertHost(raw.toLowerCase());
-  if ((RESERVED_HOSTS as readonly string[]).includes(h))
-    throw new CoreInputError(`${h} is the platform's`);
-  if (h === PREVIEW_DOMAIN || h.endsWith(`.${PREVIEW_DOMAIN}`))
-    throw new CoreInputError(`${h} is under ${PREVIEW_DOMAIN}: previews only`);
-  return h;
-}
+const host = projectHost;
+const redirect = parseRedirect;
 
-/** `to-apex` on the command line, `to_apex` in the database. */
-function redirect(raw: string): DomainRedirect {
-  const r = raw.replace(/-/g, "_");
-  if (!(DOMAIN_REDIRECTS as readonly string[]).includes(r))
-    throw new CoreInputError(
-      `invalid redirect "${raw}": none, to-apex or to-www`,
-    );
-  return r as DomainRedirect;
-}
-
-/** The redirect fits the host, and its target is already a domain of the same project. */
-function checkRedirect(
-  rows: readonly DomainRow[],
-  h: string,
-  r: DomainRedirect,
-): void {
-  const to = redirectTarget(h, r);
-  if (to !== null && !rows.some((d) => d.host === to))
-    throw new CoreInputError(
-      `${h} would redirect to ${to}, which is not a domain of this project: add it first`,
-    );
-}
-
-/** Rewrites the project's site file now when it is live; otherwise its next deploy does. */
-async function rewrite(deps: CheckDeps, p: string): Promise<string> {
-  if (!(await deps.liveProjects()).has(p))
-    return `${p} is not live: its next deploy writes the site\n`;
-  const res = await deps.regenerate(p);
-  if (!res.ok)
-    throw new AdminError(
-      `${p}: the site file was not rewritten (${res.error ?? "unknown error"}); retry with kit-deploy regenerate`,
-    );
-  return `${p}'s Caddy site rewritten\n`;
+function siteLine(p: string, site: "rewritten" | "not_live"): string {
+  return site === "rewritten"
+    ? `${p}'s Caddy site rewritten\n`
+    : `${p} is not live: its next deploy writes the site\n`;
 }
 
 async function add(ctx: DomainContext, args: string[]): Promise<Result> {
@@ -115,11 +74,13 @@ async function add(ctx: DomainContext, args: string[]): Promise<Result> {
   if (!rawProject || !rawHost || extra) return fail(DOMAIN_USAGE, 2);
   const p = project(rawProject);
   const h = host(rawHost);
-  if (r !== "none") {
-    const rows = await needDomains(ctx).store.list(p);
-    checkRedirect(rows, h, r);
-  }
-  await needAdmin(ctx).addDomain(p, h, r);
+  await addDomain(
+    {
+      admin: needAdmin(ctx),
+      listDomains: (name) => needDomains(ctx).store.list(name),
+    },
+    { project: p, host: h, redirect: r },
+  );
   return ok(
     `added ${h} to ${p} (pending DNS). Create at the DNS provider: ${describeInstructions(dnsInstructions(h, r))}\nkit-deploy domain check puts it in Caddy within a minute of it resolving to the VPS.\n`,
   );
@@ -177,28 +138,24 @@ async function rm(ctx: DomainContext, args: string[]): Promise<Result> {
   if (!rawProject || !rawHost || extra) return fail(DOMAIN_USAGE, 2);
   const p = project(rawProject);
   const h = host(rawHost);
-  const deps = needDomains(ctx);
-  const rows = await deps.store.list(p);
-  if (!rows.some((d) => d.host === h))
+  const r = await removeDomain(
+    needDomains(ctx),
+    { project: p, host: h },
+    { force },
+  );
+  if (!r.ok) {
+    if (r.reason === "default")
+      return fail(
+        `${h} is ${p}'s default domain: --force to remove it anyway\n`,
+        2,
+      );
+    if (r.reason === "last")
+      return fail(
+        `${h} is the last host ${p}'s site serves: add another one (and let it point) first\n`,
+      );
     return fail(`${h} is not a domain of ${p}\n`);
-  if (h === defaultHost(p) && !force)
-    return fail(
-      `${h} is ${p}'s default domain: --force to remove it anyway\n`,
-      2,
-    );
-  // Production must keep answering: never the last host its site serves.
-  const before = siteHosts(p, rows).hosts;
-  const after = siteHosts(
-    p,
-    rows.filter((d) => d.host !== h),
-  ).hosts;
-  if (before.length > 0 && after.length === 0)
-    return fail(
-      `${h} is the last host ${p}'s site serves: add another one (and let it point) first\n`,
-    );
-  if (!(await deps.store.remove(p, h)))
-    return fail(`${h} is not a domain of ${p}\n`);
-  return ok(`removed ${h} from ${p}\n${await rewrite(deps, p)}`);
+  }
+  return ok(`removed ${h} from ${p}\n${siteLine(p, r.site)}`);
 }
 
 async function setRedirect(
@@ -211,15 +168,15 @@ async function setRedirect(
   const p = project(rawProject);
   const h = host(rawHost);
   const r = redirect(rawRedirect);
-  const deps = needDomains(ctx);
-  const rows = await deps.store.list(p);
-  if (!rows.some((d) => d.host === h))
-    return fail(`${h} is not a domain of ${p}\n`);
-  checkRedirect(rows, h, r);
-  await deps.store.setRedirect(p, h, r);
-  const to = redirectTarget(h, r);
+  const res = await setDomainRedirect(needDomains(ctx), {
+    project: p,
+    host: h,
+    redirect: r,
+  });
+  if (!res.ok) return fail(`${h} is not a domain of ${p}\n`);
+  const to = res.redirectsTo;
   return ok(
-    `${h}: ${to ? `redirects to ${to}` : "serves the site"}\n${await rewrite(deps, p)}`,
+    `${h}: ${to ? `redirects to ${to}` : "serves the site"}\n${siteLine(p, res.site)}`,
   );
 }
 

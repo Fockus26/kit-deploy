@@ -596,10 +596,12 @@ export async function closePreview(
   });
 }
 
-/** Back to the newest kept deployment before the live one. No build, no pull. */
+/** Back to the newest kept deployment before the live one — or to `opts.to`, any kept one (the
+ * panel's "Rollback a este"). No build, no pull. */
 export async function rollback(
   deps: SwitchDeps,
   projectName: string,
+  opts: { to?: string } = {},
 ): Promise<{ from: string | null; to: string }> {
   const ctx = withDefaults(deps);
   const project = await ctx.repo.projectByName(projectName);
@@ -607,16 +609,26 @@ export async function rollback(
   return ctx.repo.withProjectLock(project.id, async () => {
     const kept = await ctx.repo.listKept(project.id);
     const live = kept.find((k) => k.status === "live") ?? null;
-    // One step back in history: the newest kept build older than the live one.
-    const to = kept.find(
-      (k): k is KeptDeployment & { port: number } =>
-        k.status === "superseded" &&
-        k.port !== null &&
-        (!live || k.createdAt < live.createdAt),
-    );
+    const usable = (
+      k: KeptDeployment,
+    ): k is KeptDeployment & { port: number } =>
+      k.status === "superseded" && k.port !== null;
+    // By default one step back in history: the newest kept build older than the live one.
+    const to =
+      opts.to === undefined
+        ? kept.find(
+            (k): k is KeptDeployment & { port: number } =>
+              usable(k) && (!live || k.createdAt < live.createdAt),
+          )
+        : kept.find(
+            (k): k is KeptDeployment & { port: number } =>
+              usable(k) && k.id === opts.to,
+          );
     if (!to)
       throw new SwitchError(
-        `${projectName} has no earlier deployment to roll back to`,
+        opts.to === undefined
+          ? `${projectName} has no earlier deployment to roll back to`
+          : `${projectName} has no kept deployment ${opts.to} to roll back to`,
       );
     const target: ProductionTarget = {
       project: project.name,
