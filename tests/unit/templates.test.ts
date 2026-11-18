@@ -31,7 +31,7 @@ type Workflow = {
   };
   concurrency: { group: string; "cancel-in-progress": boolean };
   permissions: Record<string, string>;
-  jobs: { deploy: Job; "close-preview": Job; "no-preview": Job };
+  jobs: { deploy: Job; "close-preview": Job; "no-preview": Job; off: Job };
 };
 
 describe("templates/Dockerfile", () => {
@@ -77,12 +77,7 @@ describe("templates/dockerignore", () => {
 describe("templates/deploy-vps.yml", () => {
   const raw = read("templates/deploy-vps.yml");
   const wf = Bun.YAML.parse(raw) as Workflow;
-  const {
-    deploy,
-    "close-preview": close,
-    "no-preview": skip,
-    off,
-  } = wf.jobs;
+  const { deploy, "close-preview": close, "no-preview": skip, off } = wf.jobs;
   const steps = deploy.steps;
   const fromThisRepo =
     "github.event.pull_request.head.repo.full_name == github.repository";
