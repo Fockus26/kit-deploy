@@ -1,0 +1,13 @@
+# kit-deploy · runs kit-deploy-images-prune.service nightly at 04:45 (after kit-db's backups and
+# the 04:00 preview sweep, which frees the closed previews' containers). Installed by update.sh.
+[Unit]
+Description=kit-deploy nightly image prune (04:45 + up to 15 min)
+
+[Timer]
+OnCalendar=*-*-* 04:45:00
+RandomizedDelaySec=15min
+Persistent=true
+Unit=kit-deploy-images-prune.service
+
+[Install]
+WantedBy=timers.target

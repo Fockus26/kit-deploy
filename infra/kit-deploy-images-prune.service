@@ -1,0 +1,20 @@
+# kit-deploy · nightly image prune (phase 06, D049): `kit-deploy images prune` keeps the newest 5
+# images of each pinned project repository and every image a container uses (a stopped one is a
+# rollback target); the rest is `docker image rm` without -f. Only pinned repositories
+# (/etc/kit-deploy/images/) are looked at: other images on the VPS are never touched.
+# Started nightly by kit-deploy-images-prune.timer; installed by infra/update.sh. Root.
+#   journalctl -u kit-deploy-images-prune
+[Unit]
+Description=kit-deploy nightly image prune
+After=network-online.target kit-agent.service
+Requires=kit-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kit-deploy images prune
+TimeoutStartSec=15min
+Nice=10
+MemoryMax=128M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
