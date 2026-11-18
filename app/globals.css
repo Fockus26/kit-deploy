@@ -157,6 +157,18 @@
     var(--ease-default);
   --animate-fade-in: kd-fade-in var(--duration-normal) var(--ease-default);
   --animate-dialog-in: kd-dialog-in var(--duration-normal) var(--ease-default);
+  /* Exits (HANDOFF §6): radix keeps the node until the closed-state animation ends. `forwards`
+     holds the last frame, so nothing flashes back before it unmounts. */
+  --animate-menu-out: kd-menu-out var(--duration-fast) var(--ease-default)
+    forwards;
+  --animate-sheet-out: kd-sheet-out var(--duration-normal) var(--ease-default)
+    forwards;
+  --animate-sheet-out-right: kd-sheet-out-right var(--duration-normal)
+    var(--ease-default) forwards;
+  --animate-fade-out: kd-fade-out var(--duration-normal) var(--ease-default)
+    forwards;
+  --animate-dialog-out: kd-dialog-out var(--duration-normal) var(--ease-default)
+    forwards;
 
   @keyframes kd-pulse {
     50% {
@@ -182,6 +194,33 @@
   @keyframes kd-fade-in {
     from {
       opacity: 0;
+    }
+  }
+  @keyframes kd-menu-out {
+    to {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes kd-sheet-out {
+    to {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes kd-sheet-out-right {
+    to {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes kd-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes kd-dialog-out {
+    to {
+      opacity: 0;
+      scale: 0.98;
     }
   }
   /* HANDOFF §6: dialog panel opacity + scale .98 → 1. `scale` (not transform) keeps the centering. */

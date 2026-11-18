@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { StatusBadge } from "@/components/kit/status-badge";
 import { ProjectTabs } from "@/components/layout/project-tabs";
-import { AgentDown } from "@/components/panel/agent-down";
 import { ProjectActions } from "@/components/panel/project-actions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { productionBadge } from "@/lib/kit/panel-format";
@@ -104,7 +104,7 @@ async function ProjectFrame({
           container={state}
         />
       </header>
-      {isUnavailable(container) ? <AgentDown className="mb-6" /> : null}
+      {isUnavailable(container) ? <AgentDownNotice className="mb-6" /> : null}
       <ProjectTabs project={project.name} />
       <div className="pt-6">{children}</div>
     </>

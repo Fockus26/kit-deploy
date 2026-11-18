@@ -86,6 +86,7 @@ export function DatabasesTable({
       getRowId={(r) => r.name}
       empty={
         <EmptyState
+          level={3}
           icon={Database}
           title="Este proyecto aún no tiene bases"
           action={action}

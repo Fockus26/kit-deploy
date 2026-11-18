@@ -2,7 +2,9 @@
 
 import { Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { redeployAction } from "@/app/(panel)/actions/deployments";
+import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { RelativeTime } from "@/components/kit/relative-time";
 import { StatusBadge } from "@/components/kit/status-badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +16,6 @@ import {
 } from "@/components/ui/sheet";
 import { deploymentBadge, formatDuration } from "@/lib/kit/panel-format";
 import type { DeploymentDetail } from "@/lib/panel/data";
-import { AgentDown } from "./agent-down";
 import { RollbackButton } from "./rollback-button";
 import { useServerAction } from "./use-server-action";
 
@@ -39,7 +40,7 @@ function Row({
 
 function Health({ health }: { health: DeploymentDetail["health"] }) {
   if (health === null) return <>Sin contenedor en marcha</>;
-  if ("unavailable" in health) return <AgentDown />;
+  if ("unavailable" in health) return <AgentDownNotice />;
   return (
     <>
       {health.ok ? "Responde" : "No responde"}
@@ -47,6 +48,9 @@ function Health({ health }: { health: DeploymentDetail["health"] }) {
     </>
   );
 }
+
+/** `--duration-normal` of app/globals.css: how long the Sheet takes to leave. */
+const SHEET_EXIT_MS = 200;
 
 /**
  * HANDOFF §3 Despliegues: the detail in a right Sheet (480px at most): image, container, port,
@@ -67,12 +71,27 @@ export function DeploymentSheet({
   const router = useRouter();
   const redeploy = useServerAction(redeployAction);
   const canRedeploy = detail.status === "live";
+  // Closing keeps the Sheet mounted for its exit animation (HANDOFF §6: 200 ms); the URL drops
+  // `?d=` right after, which is what unmounts it.
+  const [open, setOpen] = useState(true);
+  const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (leaving.current) clearTimeout(leaving.current);
+    },
+    [],
+  );
 
   return (
     <Sheet
-      open
-      onOpenChange={(open) => {
-        if (!open) router.replace(closeHref, { scroll: false });
+      open={open}
+      onOpenChange={(next) => {
+        if (next || leaving.current) return;
+        setOpen(false);
+        leaving.current = setTimeout(
+          () => router.replace(closeHref, { scroll: false }),
+          SHEET_EXIT_MS,
+        );
       }}
     >
       <SheetContent side="right" className="overflow-y-auto p-6">

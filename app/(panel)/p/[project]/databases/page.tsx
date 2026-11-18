@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CreateDatabasesForm } from "@/components/databases/create-databases-form";
@@ -6,9 +5,8 @@ import {
   type DatabaseRow,
   DatabasesTable,
 } from "@/components/databases/databases-table";
-import { Notice } from "@/components/kit/notice";
+import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
-import { buttonVariants } from "@/components/ui/button";
 import { backupState, failuresOf } from "@/lib/kit/logs-page";
 import { databases, isUnavailable } from "@/lib/panel/data";
 
@@ -44,23 +42,7 @@ async function Databases({ params }: { params: Promise<{ project: string }> }) {
         </p>
       </div>
       {isUnavailable(data) ? (
-        <Notice
-          tone="destructive"
-          title="No se pudo hablar con kit-agent"
-          actions={
-            <Link
-              href={`/p/${project}/databases`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              Reintentar
-            </Link>
-          }
-        >
-          Los sitios siguen sirviendo: no dependen del panel.{" "}
-          <code className="font-mono text-mono">
-            systemctl status kit-agent
-          </code>
-        </Notice>
+        <AgentDownNotice retryHref={`/p/${project}/databases`} />
       ) : (
         <Loaded project={project} data={data} />
       )}

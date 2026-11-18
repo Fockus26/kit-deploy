@@ -130,7 +130,11 @@ export function LogsExplorer({
       ) : null}
       {empty && !live ? (
         <div className="rounded-lg border border-border bg-card">
-          <EmptyState icon={ScrollText} title="Sin líneas para esta búsqueda">
+          <EmptyState
+            level={3}
+            icon={ScrollText}
+            title="Sin líneas para esta búsqueda"
+          >
             Prueba otro día, otro despliegue o quita el texto y el nivel.
           </EmptyState>
         </div>
@@ -144,6 +148,7 @@ export function LogsExplorer({
           ) : null}
           <LogViewer
             lines={toLines(rows)}
+            follow={live}
             following={following}
             onTogglePause={() => setFollowing((f) => !f)}
             label={label}

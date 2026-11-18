@@ -24,17 +24,22 @@ const LEVEL: Record<LogLevel, string> = {
  * HANDOFF §2 · LogViewer. Presentational: the caller owns `following` and flips it in
  * `onTogglePause`. While following, new lines jump to the end (no animation: it also is the
  * reduced-motion behaviour); scrolling up calls `onTogglePause` once, so it pauses by itself.
+ * `follow={false}` is the static mode of a search: no "Siguiendo/En pausa" bar and no pause
+ * button (nothing arrives), it only opens at the end of what was read.
  */
 export function LogViewer({
   lines,
-  following,
+  follow = true,
+  following = false,
   onTogglePause,
   label,
   className,
 }: {
   lines: LogLine[];
-  following: boolean;
-  onTogglePause: () => void;
+  /** false = static mode (a search), see above. Default true. */
+  follow?: boolean;
+  following?: boolean;
+  onTogglePause?: () => void;
   /** Accessible name of the log, e.g. "Logs de maranatha (producción)". */
   label: string;
   /** Height of the scroll box, e.g. "max-h-96". */
@@ -46,41 +51,50 @@ export function LogViewer({
     const el = box.current;
     if (following && el) el.scrollTop = el.scrollHeight;
   }, [lines, following]);
+  // Static mode: open at the newest line once; "Cargar más" adds older ones on top and must not
+  // pull the reader back down.
+  useEffect(() => {
+    const el = box.current;
+    if (!follow && el) el.scrollTop = el.scrollHeight;
+  }, [follow]);
 
   return (
     <div className="rounded-lg border border-border bg-nav">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-border border-b px-4 py-2">
-        <p className="flex items-center gap-2 text-caption">
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-2 rounded-full",
-              following
-                ? "bg-success motion-safe:animate-pulse"
-                : "bg-muted-foreground",
+      {follow ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-border border-b px-4 py-2">
+          <p className="flex items-center gap-2 text-caption">
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-2 rounded-full",
+                following
+                  ? "bg-success motion-safe:animate-pulse"
+                  : "bg-muted-foreground",
+              )}
+            />
+            {following ? "Siguiendo" : "En pausa"}
+          </p>
+          <Button variant="outline" size="sm" onClick={onTogglePause}>
+            {following ? (
+              <Pause aria-hidden="true" />
+            ) : (
+              <Play aria-hidden="true" />
             )}
-          />
-          {following ? "Siguiendo" : "En pausa"}
-        </p>
-        <Button variant="outline" size="sm" onClick={onTogglePause}>
-          {following ? (
-            <Pause aria-hidden="true" />
-          ) : (
-            <Play aria-hidden="true" />
-          )}
-          {following ? "Pausar" : "Reanudar"}
-        </Button>
-      </div>
+            {following ? "Pausar" : "Reanudar"}
+          </Button>
+        </div>
+      ) : null}
       {/* role=log is a live region; a scrollable region must be focusable for the keyboard. */}
       <div
         ref={box}
         role="log"
         aria-label={label}
-        aria-live={following ? "polite" : "off"}
+        aria-live={follow && following ? "polite" : "off"}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must take focus
         tabIndex={0}
         onScroll={(e) => {
-          if (shouldAutoPause(following, e.currentTarget)) onTogglePause();
+          if (follow && shouldAutoPause(following, e.currentTarget))
+            onTogglePause?.();
         }}
         className={cn(
           "overflow-auto px-4 py-3 font-mono text-mono leading-[1.7] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",

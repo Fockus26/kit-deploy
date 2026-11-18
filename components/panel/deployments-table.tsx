@@ -162,7 +162,7 @@ export function DeploymentsTable({
 }: DeploymentsTableProps) {
   const detailHref = (id: string) => detailHrefOf(detailBase, id);
   const empty = (
-    <EmptyState icon={Rocket} title="Aún no hay despliegues">
+    <EmptyState level={3} icon={Rocket} title="Aún no hay despliegues">
       El primero llega con el siguiente push a {branch}.
     </EmptyState>
   );

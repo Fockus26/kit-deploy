@@ -1,11 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { Field } from "@/components/kit/field";
-import { Notice } from "@/components/kit/notice";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
 import { LogsExplorer } from "@/components/logs/logs-explorer";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import {
@@ -21,7 +20,6 @@ import {
   logsSearch,
   logsTail,
 } from "@/lib/panel/data";
-import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Logs" };
 
@@ -163,23 +161,7 @@ async function Results({
     const here = new URLSearchParams({ env: f.env, day: f.day });
     if (f.level) here.set("level", f.level);
     if (f.query) here.set("q", f.query);
-    return (
-      <Notice
-        tone="destructive"
-        title="No se pudo hablar con kit-agent"
-        actions={
-          <Link
-            href={`/p/${project}/logs?${here}`}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-          >
-            Reintentar
-          </Link>
-        }
-      >
-        Los sitios siguen sirviendo: no dependen del panel.{" "}
-        <code className="font-mono text-mono">systemctl status kit-agent</code>
-      </Notice>
-    );
+    return <AgentDownNotice retryHref={`/p/${project}/logs?${here}`} />;
   }
   const entries: LogRow[] = res.entries.map((e) => ({
     ts: e.ts,

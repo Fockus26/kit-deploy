@@ -13,7 +13,7 @@ export default function DomainsPage({
 }: PageProps<"/p/[project]/domains">) {
   return (
     <>
-      <h1 className="mb-1 font-semibold text-foreground text-h1">Dominios</h1>
+      <h2 className="mb-1 font-semibold text-foreground text-h2">Dominios</h2>
       <p className="mb-8 max-w-3xl text-muted-foreground">
         Cada minuto se comprueba el DNS de los dominios pendientes: en cuanto
         uno apunta al servidor, su certificado se emite solo.

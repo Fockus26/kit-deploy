@@ -349,6 +349,7 @@ export function EnvManager({
                       getRowId={(v) => v.name}
                       empty={
                         <EmptyState
+                          level={3}
                           icon={KeyRound}
                           title={`Sin variables en ${ENV_TAB_LABEL[e]}`}
                         >

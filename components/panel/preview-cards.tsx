@@ -13,7 +13,7 @@ export function PreviewCards({ previews }: { previews: PreviewItem[] }) {
   if (previews.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card">
-        <EmptyState icon={Eye} title="Sin previews">
+        <EmptyState level={3} icon={Eye} title="Sin previews">
           Cada pull request abierto contra el repo tendrá aquí su preview.
         </EmptyState>
       </div>
