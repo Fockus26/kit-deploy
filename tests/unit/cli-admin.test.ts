@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import type { AgentClient } from "../../cli/client";
 import { type CliContext, runCli } from "../../cli/commands";
 import { defaultHost } from "../../lib/core/target";
+import { assertProject } from "../../lib/core/validate";
 import {
   AdminError,
   type AdminStore,
   type NewProject,
 } from "../../lib/db/admin";
+import { addProject, RESERVED_PROJECTS } from "../../lib/ops/projects";
 import { hashToken } from "../../lib/tokens";
 
 const agent: AgentClient = {
@@ -248,6 +250,34 @@ describe("image pins (project add / project pin)", () => {
     ).toBe("no project nope\n");
     expect((await c.run(["project", "pin", "kd_hello"])).code).toBe(2);
     expect((await c.run(["project", "pin", "kd_hello", "a/b/c"])).code).toBe(2);
+    expect(c.pins.size).toBe(0);
+  });
+});
+
+describe("D048: reserved project names", () => {
+  test.each([
+    ...RESERVED_PROJECTS,
+  ])("%p: neither added, pinned nor given databases", async (name) => {
+    const c = cli();
+    const add = await c.run(["project", "add", name, "Fockus26/kd-hello"]);
+    expect(add.code).toBe(2);
+    expect(add.err).toContain("reserved");
+    expect(c.projects).toEqual([]);
+    const pin = await c.run(["project", "pin", name, "Fockus26/kd-hello"]);
+    expect(pin.code).toBe(2);
+    expect(pin.err).toContain("reserved");
+    expect((await c.run(["db", "create", name])).code).toBe(2);
+    expect(c.pins.size).toBe(0);
+    await expect(
+      addProject(c.store, { name, repo: "Fockus26/kd-hello", memoryMb: 512 }),
+    ).rejects.toThrow("reserved");
+    expect(() => assertProject(name)).toThrow("reserved");
+  });
+
+  test("project pin refuses a *_preview name too", async () => {
+    const c = cli();
+    const r = await c.run(["project", "pin", "shop_preview", "cesar/shop"]);
+    expect(r.code).toBe(2);
     expect(c.pins.size).toBe(0);
   });
 });

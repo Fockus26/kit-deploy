@@ -15,7 +15,12 @@ import {
   RESERVED_NAMES,
   RUNTIME_NAME_RE,
 } from "@/lib/core/env";
-import { BRANCH_RE, PROJECT_RE, REPO_RE } from "@/lib/ops/rules";
+import {
+  BRANCH_RE,
+  isReservedProject,
+  PROJECT_RE,
+  REPO_RE,
+} from "@/lib/ops/rules";
 
 /** The Nuevo proyecto select (HANDOFF §3); the server accepts the platform's whole range. */
 export const MEMORY_CHOICES = [256, 512, 1024] as const;
@@ -182,10 +187,15 @@ export const domainRedirectSchema = z.object({
 });
 
 export const projectCreateSchema = z.object({
-  name: projectField.refine((n) => !n.endsWith("_preview"), {
-    message:
-      "No puede terminar en _preview: es el sufijo de las bases de previews.",
-  }),
+  name: projectField
+    .refine((n) => !n.endsWith("_preview"), {
+      message:
+        "No puede terminar en _preview: es el sufijo de las bases de previews.",
+    })
+    .refine((n) => !isReservedProject(n), {
+      message:
+        "Ese nombre está reservado: es el de una base de la plataforma o de Postgres.",
+    }),
   repo: text(MAX.repo, "Falta el repositorio.").regex(REPO_RE, {
     message: "Escribe el repositorio como owner/nombre.",
   }),

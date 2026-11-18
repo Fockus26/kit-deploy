@@ -2,10 +2,35 @@
  * `db.status` (phase 05, brief F11, D035): a project's two kit-db databases — `<project>` and
  * `<project>_preview` — with their size and last backup, read from `kit-db list` and
  * `kit-db status`. Both commands print every database on the central Postgres: only the project's
- * own two lines ever leave this file, never another database's name, size or failure.
+ * own two lines ever leave this file, never another database's name, size or failure. And only
+ * for databases kit-deploy owns (D048): one without its root marker is listed by name as not
+ * managed, with nothing else.
  */
+import { DB_MARKER_MAX_BYTES, dbMarkerPath } from "../lib/core/db-marker";
+import { assertProject } from "../lib/core/validate";
 import type { Deps } from "./deps";
 import { AgentError, isPreviewsName, scrubUrls } from "./ops";
+
+/**
+ * True when `database` has kit-deploy's root marker (lib/core/db-marker): a regular file, read
+ * without following a symlink. Anything else (missing, a symlink, a directory, too big, unreadable)
+ * is not a marker, so the database is not handed out.
+ */
+export async function ownsDatabase(
+  deps: Deps,
+  database: string,
+): Promise<boolean> {
+  try {
+    const r = await deps.readFileFrom(
+      dbMarkerPath(database),
+      0,
+      DB_MARKER_MAX_BYTES,
+    );
+    return r !== null && r.size <= DB_MARKER_MAX_BYTES;
+  } catch {
+    return false;
+  }
+}
 
 export type DatabaseStatus = {
   name: string;
@@ -18,7 +43,11 @@ export type DatabaseStatus = {
 };
 
 export type DbStatus = {
+  /** The project's databases kit-deploy owns. */
   databases: DatabaseStatus[];
+  /** Its databases that exist without kit-deploy's marker: no size, backup or failure lines.
+   * `kit-deploy db adopt <project>` (root) takes them over. */
+  unmanaged: { name: string; env: "production" | "preview" }[];
   /** The off-VPS copy's rclone remote, null when not configured. */
   offVps: string | null;
   /** kit-db's last `FAIL` lines (up to 5) that name one of the project's two databases. */
@@ -159,14 +188,24 @@ export async function dbStatus(deps: Deps, project: string): Promise<DbStatus> {
     { name: project, env: "production" as const },
     { name: `${project}_preview`, env: "preview" as const },
   ];
-  const names = own.map((d) => d.name);
+  // A reserved name (kit_deploy, postgres…) is refused before kit-db is asked.
+  assertProject(project);
   const sizes = parseList(await kitDb(deps, "list"));
   const status = parseStatus(await kitDb(deps, "status"));
 
+  const owned = new Set<string>();
+  for (const { name } of own)
+    if (await ownsDatabase(deps, name)) owned.add(name);
+
   const databases: DatabaseStatus[] = [];
+  const unmanaged: DbStatus["unmanaged"] = [];
   for (const { name, env } of own) {
     const sizeText = sizes.get(name);
     if (sizeText === undefined) continue;
+    if (!owned.has(name)) {
+      unmanaged.push({ name, env });
+      continue;
+    }
     const file = status.backups.get(name) ?? null;
     databases.push({
       name,
@@ -182,7 +221,7 @@ export async function dbStatus(deps: Deps, project: string): Promise<DbStatus> {
 
   const offVps = status.remote === null ? null : remoteLabel(status.remote);
   const failures = status.failures
-    .filter((l) => namesOne(l, names))
+    .filter((l) => namesOne(l, [...owned]))
     .map((l) => {
       // An upload failure names the remote: the same label as offVps, never more. The lines
       // are history, so a remote used before the current one goes through the same label.
@@ -197,5 +236,5 @@ export async function dbStatus(deps: Deps, project: string): Promise<DbStatus> {
         ),
       );
     });
-  return { databases, offVps, failures };
+  return { databases, unmanaged, offVps, failures };
 }

@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { ENV_NAME_RE, ENVIRONMENTS } from "../lib/core/env";
+import { isReservedProject } from "../lib/ops/rules";
 
 export const AGENT_VERSION = "0.1.0";
 
@@ -15,7 +16,11 @@ export const AGENT_VERSION = "0.1.0";
  * variables); stops a client from making the root process buffer without limit. */
 export const MAX_REQUEST_BYTES = 1024 * 1024;
 
-const project = z.string().regex(/^[a-z0-9][a-z0-9_]{0,39}$/);
+const project = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_]{0,39}$/)
+  // The platform's or Postgres' own databases go by these names (D048).
+  .refine((p) => !isReservedProject(p), { message: "reserved name" });
 const sha = z.string().regex(/^[0-9a-f]{7,40}$/);
 const port = z.number().int().min(20000).max(29999);
 

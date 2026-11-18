@@ -43,9 +43,15 @@ import {
   DEFAULT_MEMORY_MB,
   REPO_RE,
 } from "../lib/ops/projects";
+import { isReservedProject, RESERVED_PROJECTS } from "../lib/ops/rules";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
-import { DB_USAGE, dbStatusCommand } from "./db-commands";
+import {
+  DB_USAGE,
+  type DbContext,
+  dbAdoptCommand,
+  dbStatusCommand,
+} from "./db-commands";
 import { type DomainContext, domainCommand } from "./domain-commands";
 import { type EnvContext, envCommand } from "./env-commands";
 import { type LogsContext, logsCommand } from "./logs-commands";
@@ -54,7 +60,8 @@ import { type MetricsContext, metricsCommand } from "./metrics-commands";
 /** What the database-backed commands need; built lazily so `version` works without a database. */
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
 export type CliContext = EnvContext &
-  DomainContext & {
+  DomainContext &
+  DbContext & {
     deploy?: () => DeployContext;
     admin?: () => AdminStore;
     users?: () => UserStore;
@@ -100,6 +107,7 @@ Commands:
                      as they are now (no build); the old one stays for rollback
   rollback <project> back to the previous kept deployment (no build, no pull)
   regenerate         rewrite every live site's Caddy file; start its container if stopped
+                     (also one stopped on purpose: it says which it started)
   project add <project> <owner/repo> [--memory <mb>] [--domain <host>]... [--no-default-domain]
                      register a project; it answers on <project>.fockus.dev unless told not to
   project pin <project> <owner/repo>
@@ -136,6 +144,10 @@ Commands:
   db status <project> [--json]
                      size and last backup of <project> and <project>_preview, the
                      off-VPS copy and the backup failures that name them
+  db adopt <project> [--yes]
+                     (root) take over <project> / <project>_preview that existed before
+                     kit-deploy (kit-db create by hand): only then do they reach its
+                     containers. Without --yes it only says what it would adopt
   env ls <project> <environment>
                      a project's variables in production, preview or development; plain
                      values shown, secrets never
@@ -257,6 +269,11 @@ async function list(client: AgentClient, json: boolean): Promise<Result> {
 }
 
 const PROJECT = /^[a-z0-9][a-z0-9_]{0,39}$/;
+
+/** D048: a project's name is its kit-db database's; these belong to the platform or Postgres. */
+function reservedName(name: string): string {
+  return `invalid project name "${name}": reserved (${RESERVED_PROJECTS.join(", ")} are the platform's or Postgres' own databases)\n`;
+}
 
 async function status(
   client: AgentClient,
@@ -455,6 +472,7 @@ async function dbCreate(
     return fail("usage: kit-deploy db create <project>\n", 2);
   if (!PROJECT.test(project))
     return fail(`invalid project name "${project}"\n`, 2);
+  if (isReservedProject(project)) return fail(reservedName(project), 2);
   let dbs: { database: string; created: boolean }[];
   try {
     dbs = await createDatabases(client, project);
@@ -474,7 +492,11 @@ async function doRegenerate(ctx: CliContext, json: boolean): Promise<Result> {
   if (json) return { code, out: `${JSON.stringify(results)}\n`, err: "" };
   if (results.length === 0) return ok("no live sites\n");
   const out = results
-    .map((r) => (r.ok ? `ok ${r.project}` : `failed ${r.project}: ${r.error}`))
+    .map((r) =>
+      r.ok
+        ? `ok ${r.project}${r.started ? " (its stopped container was started)" : ""}`
+        : `failed ${r.project}: ${r.error}`,
+    )
     .join("\n");
   return { code, out: `${out}\n`, err: "" };
 }
@@ -522,6 +544,7 @@ async function projectAdd(
   const [name, repo, extra] = f.words;
   if (!name || !repo || extra) return fail(usage, 2);
   if (!PROJECT.test(name)) return fail(`invalid project name "${name}"\n`, 2);
+  if (isReservedProject(name)) return fail(reservedName(name), 2);
   if (name.endsWith("_preview"))
     return fail(
       `invalid project name "${name}": _preview is the suffix of every project's previews database\n`,
@@ -592,6 +615,13 @@ async function projectPin(ctx: CliContext, args: string[]): Promise<Result> {
   if (!project || !repo || extra) return fail(usage, 2);
   if (!PROJECT.test(project))
     return fail(`invalid project name "${project}"\n`, 2);
+  if (isReservedProject(project) || project.endsWith("_preview"))
+    return fail(
+      isReservedProject(project)
+        ? reservedName(project)
+        : `invalid project name "${project}": _preview is the suffix of every project's previews database\n`,
+      2,
+    );
   const pin = pinFor(repo);
   if (!ctx.pins?.isRoot)
     return fail(
@@ -751,6 +781,8 @@ export async function runCli(
           return await dbCreate(client, args.slice(1), json);
         if (args[0] === "status")
           return await dbStatusCommand(client, args.slice(1), json);
+        if (args[0] === "adopt")
+          return await dbAdoptCommand(client, ctx, args.slice(1), json);
         return fail(DB_USAGE, 2);
       case "preview":
         if (args[0] === "sweep")

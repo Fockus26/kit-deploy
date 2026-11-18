@@ -11,6 +11,8 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
   const files = new Map<string, string>();
   /** readFileFrom's inode per path (default 1): a new one is a rolled log. */
   const inodes = new Map<string, number>();
+  /** path → target: readFile follows it, readFileFrom refuses it (O_NOFOLLOW, ELOOP). */
+  const symlinks = new Map<string, string>();
   const logs: Record<string, unknown>[] = [];
   const privateFiles: { path: string; content: string }[] = [];
   let httpStatus: number | Error = 200;
@@ -26,7 +28,7 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
       return { code: 0, stdout: "", stderr: "", ...r };
     },
     async readFile(path) {
-      return files.get(path) ?? null;
+      return files.get(symlinks.get(path) ?? path) ?? null;
     },
     async writeFileAtomic(path, content) {
       files.set(path, content);
@@ -54,6 +56,8 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
       logs.push(e);
     },
     async readFileFrom(path, offset, maxBytes) {
+      if (symlinks.has(path))
+        throw Object.assign(new Error(`ELOOP: ${path}`), { code: "ELOOP" });
       const text = files.get(path);
       if (text === undefined) return null;
       const all = Buffer.from(text, "utf8");
@@ -71,6 +75,7 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     runOpts,
     files,
     inodes,
+    symlinks,
     privateFiles,
     logs,
     setHttp(s: number | Error) {

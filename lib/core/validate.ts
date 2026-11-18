@@ -3,6 +3,7 @@
  * `docker run`'s argv goes through here first: kit-agent runs as root, so a value with a
  * space, a brace, a newline or a leading `-` must never reach a config file or a command.
  */
+import { isReservedProject } from "../ops/rules";
 
 export class CoreInputError extends Error {
   constructor(message: string) {
@@ -27,6 +28,10 @@ export function assertProject(name: string): string {
     throw new CoreInputError(
       `invalid project name "${name}": expected ^[a-z0-9][a-z0-9_]{0,39}$`,
     );
+  }
+  // Its database would be one kit-deploy does not own (D048).
+  if (isReservedProject(name)) {
+    throw new CoreInputError(`"${name}" is reserved: not a project name`);
   }
   return name;
 }

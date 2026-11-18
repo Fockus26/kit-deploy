@@ -30,6 +30,7 @@ import {
   type Sealed,
   seal,
 } from "../lib/core/crypto";
+import { dbMarkerContent, dbMarkerPath } from "../lib/core/db-marker";
 import {
   assertEnvName,
   assertEnvValue,
@@ -38,10 +39,12 @@ import {
   isPublicName,
 } from "../lib/core/env";
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
-import { assertImage } from "../lib/core/validate";
-import { dbStatus } from "./databases";
+import { assertImage, assertProject } from "../lib/core/validate";
+import { isReservedProject } from "../lib/ops/rules";
+import { dbStatus, ownsDatabase } from "./databases";
 import type { Deps, RunResult } from "./deps";
 import { certStatus } from "./domains";
+import { Busy, Limiter } from "./limit";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
 import { sampleMetrics } from "./metrics";
@@ -217,6 +220,9 @@ export function parseContainerList(stdout: string): ManagedContainer[] {
     });
 }
 
+/** At most 2 log reads at once, 8 more waiting up to 10 s each (security review L3). */
+export const LOG_READS = { max: 2, queue: 8, waitMs: 10_000 } as const;
+
 export class Agent {
   private readonly reserved = new Map<number, number>();
   /** Derived from master.key on first use; never leaves this process. */
@@ -230,7 +236,27 @@ export class Agent {
     private readonly now: () => number = Date.now,
     /** The log files (D014): only these two ops read them. */
     private readonly logs: LogDeps = systemLogDeps,
+    /** logs.tail / logs.search scan whole files: two at a time, a few more waiting (L3). */
+    private readonly logReads: Limiter = new Limiter(
+      LOG_READS.max,
+      LOG_READS.queue,
+      LOG_READS.waitMs,
+    ),
   ) {}
+
+  /** A log read in its turn; past the queue or the wait, command_failed "busy" (L3). */
+  private async readLogs<T>(task: () => Promise<T>): Promise<T> {
+    try {
+      return await this.logReads.run(task);
+    } catch (e) {
+      if (e instanceof Busy)
+        throw new AgentError(
+          "command_failed",
+          `log reads are busy (${e.message}): retry in a moment`,
+        );
+      throw e;
+    }
+  }
 
   execute(req: Request): Promise<unknown> {
     switch (req.op) {
@@ -288,9 +314,11 @@ export class Agent {
       case "env.build":
         return this.buildEnv(req.params);
       case "logs.tail":
-        return tailLogs(this.logs, req.params, this.now());
+        return this.readLogs(() => tailLogs(this.logs, req.params, this.now()));
       case "logs.search":
-        return searchLogs(this.logs, req.params, this.now());
+        return this.readLogs(() =>
+          searchLogs(this.logs, req.params, this.now()),
+        );
       case "cert.status":
         return certStatus(this.deps, req.params.host);
       case "metrics.sample":
@@ -542,13 +570,24 @@ export class Agent {
   /**
    * DATABASE_URL from `kit-db url` (production: `<project>`, preview: `<project>_preview`), read at
    * each start and never stored (César 2026-11-17: after `kit-db rotate`, a redeploy is enough).
-   * A project without that database runs without it. Neither the URL nor kit-db's output ever
-   * reaches a response or a log.
+   * A project without that database runs without it, and so does one whose database kit-deploy
+   * does not own (no root marker, D048): kit-db is not even asked. Neither the URL nor kit-db's
+   * output ever reaches a response or a log.
    */
   private async managedLines(target: Target): Promise<string> {
     // `shop_preview` in production would be `shop`'s previews database (security review U5).
-    if (isPreviewsName(target.project)) return "";
+    if (isPreviewsName(target.project) || isReservedProject(target.project))
+      return "";
     const db = databaseName(target);
+    if (!(await ownsDatabase(this.deps, db))) {
+      this.deps.log({
+        event: "env.managed",
+        database: db,
+        databaseUrl: false,
+        reason: "not_managed",
+      });
+      return "";
+    }
     const r = await this.deps.run(["kit-db", "url", db]);
     const url = r.stdout.trim();
     if (r.code !== 0 || !DB_URL.test(url)) {
@@ -558,19 +597,34 @@ export class Agent {
     return `DATABASE_URL=${url}\n`;
   }
 
-  /** `kit-db create` for production's and the previews' databases. Its stdout carries the URLs
-   * with the password: it is dropped, never returned or logged. */
+  /** `kit-db create` for production's and the previews' databases, each marked as kit-deploy's
+   * (D048). Its stdout carries the URLs with the password: it is dropped, never returned or
+   * logged. One that exists without the marker is not taken: nothing is created and root adopts
+   * it (`kit-deploy db adopt`) if it really is the project's. */
   private async createDatabases(project: string) {
+    assertProject(project);
     if (isPreviewsName(project)) {
       throw new AgentError(
         "bad_request",
         `${project}: a name ending in _preview is another project's previews database`,
       );
     }
-    const out: { database: string; created: boolean }[] = [];
-    for (const database of [project, `${project}_preview`]) {
+    const databases = [project, `${project}_preview`];
+    const existing = new Set<string>();
+    for (const database of databases) {
       const exists = await this.deps.run(["kit-db", "url", database]);
-      if (exists.code === 0) {
+      if (exists.code !== 0) continue;
+      if (!(await ownsDatabase(this.deps, database))) {
+        throw new AgentError(
+          "not_managed",
+          `${database} already exists and kit-deploy did not create it: if it is ${project}'s, as root: kit-deploy db adopt ${project}`,
+        );
+      }
+      existing.add(database);
+    }
+    const out: { database: string; created: boolean }[] = [];
+    for (const database of databases) {
+      if (existing.has(database)) {
         out.push({ database, created: false });
         continue;
       }
@@ -583,6 +637,10 @@ export class Agent {
           `kit-db create ${database} failed (exit ${r.code}): ${scrubUrls(tail(r.stderr))}`,
         );
       }
+      await this.deps.writePrivateFile(
+        dbMarkerPath(database),
+        dbMarkerContent("created", new Date(this.now())),
+      );
       out.push({ database, created: true });
     }
     return out;

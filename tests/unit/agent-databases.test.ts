@@ -12,6 +12,8 @@ import { Request, type Response } from "../../agent/protocol";
 import type { AgentClient } from "../../cli/client";
 import { runCli } from "../../cli/commands";
 import { age } from "../../cli/db-commands";
+import { dbMarkerPath } from "../../lib/core/db-marker";
+import type { AdminStore } from "../../lib/db/admin";
 import { fakeDeps } from "./agent-fakes";
 
 const LIST = [
@@ -40,12 +42,18 @@ const STATUS = [
 
 type Handler = (argv: readonly string[]) => Partial<RunResult>;
 
-function setup(handlers: Record<string, Handler> = {}) {
+/** kd_hello's two databases carry kit-deploy's marker (D048) unless told otherwise. */
+function setup(
+  handlers: Record<string, Handler> = {},
+  marked: readonly string[] = ["kd_hello", "kd_hello_preview"],
+) {
   const f = fakeDeps({
     "kit-db list": () => ({ stdout: LIST }),
     "kit-db status": () => ({ stdout: STATUS }),
     ...handlers,
   });
+  for (const db of marked)
+    f.files.set(dbMarkerPath(db), "created by kit-deploy\n");
   const agent = new Agent(f.deps);
   const send = (params: Record<string, unknown>) =>
     dispatch(
@@ -74,6 +82,7 @@ const result = (r: Response) => {
       sizeText: string;
       lastBackup: { file: string; at: string | null } | null;
     }[];
+    unmanaged: { name: string; env: string }[];
     offVps: string | null;
     failures: string[];
   };
@@ -125,6 +134,7 @@ describe("db.status", () => {
     const r = result(await setup().send({ project: "shop" }));
     expect(r).toEqual({
       databases: [],
+      unmanaged: [],
       offVps: "r2:kit-backups",
       failures: [],
     });
@@ -308,5 +318,122 @@ describe("kit-deploy db status", () => {
     expect(age(at, t + 5 * 60_000)).toBe("5 min ago");
     expect(age(at, t + 5 * 3_600_000)).toBe("5 h ago");
     expect(age(at, t + 3 * 86_400_000)).toBe("3 d ago");
+  });
+
+  test("D048: a database without the marker is 'not managed', with how to adopt it", async () => {
+    const s = setup({}, ["kd_hello_preview"]);
+    const r = await runCli(["db", "status", "kd_hello"], s.client);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("not managed by kit-deploy: kd_hello (");
+    expect(r.out).toContain("kit-deploy db adopt kd_hello");
+    expect(r.out).not.toContain("7629 kB");
+    expect(r.out).not.toContain("not created");
+  });
+});
+
+describe("D048: db.status for databases kit-deploy does not own", () => {
+  test("listed by name only: no size, no backup, no failure lines", async () => {
+    const r = result(await setup({}, []).send({ project: "kd_hello" }));
+    expect(r).toEqual({
+      databases: [],
+      unmanaged: [
+        { name: "kd_hello", env: "production" },
+        { name: "kd_hello_preview", env: "preview" },
+      ],
+      offVps: "r2:kit-backups",
+      failures: [],
+    });
+    const text = JSON.stringify(r);
+    for (const detail of ["7629", "12 MB", "dump", "FAIL"])
+      expect(text).not.toContain(detail);
+  });
+
+  test("one marked, one not: only the marked one has details and failures", async () => {
+    const r = result(
+      await setup({}, ["kd_hello_preview"]).send({ project: "kd_hello" }),
+    );
+    expect(r.databases.map((d) => d.name)).toEqual(["kd_hello_preview"]);
+    expect(r.unmanaged).toEqual([{ name: "kd_hello", env: "production" }]);
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain("kd_hello_preview:");
+  });
+
+  test("a symlink is not a marker", async () => {
+    const s = setup({}, []);
+    s.symlinks.set(dbMarkerPath("kd_hello"), "/etc/kit-deploy/master.key");
+    s.files.set("/etc/kit-deploy/master.key", "KEY");
+    const r = result(await s.send({ project: "kd_hello" }));
+    expect(r.unmanaged.map((u) => u.name)).toContain("kd_hello");
+  });
+});
+
+describe("D048: kit-deploy db adopt", () => {
+  function adoptSetup(opts: { root?: boolean; marked?: string[] } = {}) {
+    const s = setup({}, opts.marked ?? []);
+    const written: string[] = [];
+    const ctx = {
+      admin: () =>
+        ({
+          projectRepo: async (p: string) =>
+            p === "kd_hello" ? "cesar/kd-hello" : null,
+        }) as unknown as AdminStore,
+      dbMarks: {
+        isRoot: opts.root ?? true,
+        write: async (db: string) => {
+          written.push(db);
+        },
+      },
+    };
+    const adopt = (...args: string[]) =>
+      runCli(["db", "adopt", ...args], s.client, ctx);
+    return { ...s, written, adopt };
+  }
+
+  test("without --yes it says what it would adopt and writes nothing", async () => {
+    const s = adoptSetup();
+    const r = await s.adopt("kd_hello");
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("kd_hello (production)");
+    expect(r.err).toContain("kd_hello_preview (preview)");
+    expect(r.err).toContain("--yes");
+    expect(s.written).toEqual([]);
+  });
+
+  test("with --yes it marks the ones not yet marked", async () => {
+    const s = adoptSetup({ marked: ["kd_hello_preview"] });
+    const r = await s.adopt("kd_hello", "--yes");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("adopted kd_hello");
+    expect(s.written).toEqual(["kd_hello"]);
+  });
+
+  test("nothing to adopt: both marked, or neither exists", async () => {
+    const both = adoptSetup({ marked: ["kd_hello", "kd_hello_preview"] });
+    const r = await both.adopt("kd_hello", "--yes");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("nothing to adopt");
+    expect(both.written).toEqual([]);
+  });
+
+  test("root only, a registered project only, never a reserved or previews name", async () => {
+    const notRoot = adoptSetup({ root: false });
+    const r = await notRoot.adopt("kd_hello", "--yes");
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("needs root");
+    expect(notRoot.calls).toEqual([]);
+
+    const s = adoptSetup();
+    expect((await s.adopt("shop", "--yes")).err).toContain("no project shop");
+    for (const name of [
+      "kit_deploy",
+      "postgres",
+      "template0",
+      "kd_hello_preview",
+    ])
+      expect((await s.adopt(name, "--yes")).code).toBe(2);
+    expect((await s.adopt()).code).toBe(2);
+    expect((await s.adopt("kd_hello", "extra")).code).toBe(2);
+    expect(s.calls).toEqual([]);
+    expect(s.written).toEqual([]);
   });
 });
