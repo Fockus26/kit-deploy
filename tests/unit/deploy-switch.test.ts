@@ -152,7 +152,8 @@ describe("processProject (deploy)", () => {
     expect(ops()).toEqual([]);
     expect(rows[0]).toMatchObject({
       status: "failed",
-      error: "kd_hello has no domains",
+      error:
+        "kd_hello has no domain to serve yet (none resolves to the VPS): kit-deploy domain ls kd_hello",
     });
   });
 

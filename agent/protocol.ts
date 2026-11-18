@@ -118,6 +118,12 @@ export const Request = z.discriminatedUnion("op", [
     target: productionTarget,
     hosts: z.array(host).min(1).max(50),
     port,
+    /** `www` ↔ apex (D028): each `from` answers with a 308 to `to`, which must be one of `hosts`
+     * (renderSite checks it). */
+    redirects: z
+      .array(z.strictObject({ from: host, to: host }))
+      .max(50)
+      .optional(),
   }),
   op("site.remove", { target: productionTarget }),
   z.strictObject({ id, op: z.literal("preview.write"), params: previewSite }),
@@ -154,6 +160,8 @@ export const Request = z.discriminatedUnion("op", [
       .regex(/^\/[A-Za-z0-9._~/-]{0,200}$/)
       .optional(),
   }),
+  /** The certificate Caddy stores for a host (D029): expiry and issuer, or null. */
+  op("cert.status", { host }),
 ]);
 
 export type Request = z.infer<typeof Request>;
