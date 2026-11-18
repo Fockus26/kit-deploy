@@ -4,8 +4,10 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
+  doublePrecision,
   index,
   integer,
   pgTable,
@@ -153,6 +155,22 @@ export const deployTokens = pgTable(
   ],
 );
 
+/** D028: whether a host serves the site or only redirects to its `www` / apex sibling. */
+export const DOMAIN_REDIRECTS = ["none", "to_apex", "to_www"] as const;
+export type DomainRedirect = (typeof DOMAIN_REDIRECTS)[number];
+export const DOMAIN_STATUSES = [
+  "pending_dns",
+  "issuing",
+  "ready",
+  "error",
+] as const;
+export type DomainStatus = (typeof DOMAIN_STATUSES)[number];
+/** `domains.last_error` is a sentence for César, cut to this. */
+export const DOMAIN_ERROR_MAX = 300;
+
+const oneOf = (col: string, values: readonly string[]) =>
+  sql.raw(`${col} in (${values.map((v) => `'${v}'`).join(", ")})`);
+
 /** The hosts a project's production answers on. A preview's host is derived (D001), not stored. */
 export const domains = pgTable(
   "domains",
@@ -163,9 +181,33 @@ export const domains = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     /** Lowercase DNS name; one project per host. */
     host: text("host").notNull().unique(),
+    /** `to_apex` on `www.<apex>` / `to_www` on `<apex>`: this host only answers with a 308 to the
+     * other one, which must be a domain of the same project (D028). */
+    redirect: text("redirect", { enum: DOMAIN_REDIRECTS })
+      .notNull()
+      .default("none"),
+    /** pending_dns → (DNS resolves to the VPS) issuing → (Caddy has its certificate) ready;
+     * error when that stalls or the certificate nears expiry. `kit-deploy domain check`. */
+    status: text("status", { enum: DOMAIN_STATUSES })
+      .notNull()
+      .default("pending_dns"),
+    /** The last time `domain check` looked at it. */
+    dnsCheckedAt: timestamp("dns_checked_at", { withTimezone: true }),
+    /** When its DNS first resolved to the VPS. Set = the host is in its Caddy site (D028). */
+    dnsOkAt: timestamp("dns_ok_at", { withTimezone: true }),
+    /** The certificate Caddy holds for it (D029). */
+    certNotAfter: timestamp("cert_not_after", { withTimezone: true }),
+    /** Why it is not ready, short and for César; never a secret. */
+    lastError: text("last_error"),
     createdAt: createdAt(),
   },
   (t) => [
+    check("domains_redirect", oneOf("redirect", DOMAIN_REDIRECTS)),
+    check("domains_status", oneOf("status", DOMAIN_STATUSES)),
+    check(
+      "domains_last_error_length",
+      sql`char_length(${t.lastError}) <= ${sql.raw(String(DOMAIN_ERROR_MAX))}`,
+    ),
     check(
       "domains_host_format",
       sql`${t.host} ~ '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'`,
@@ -468,5 +510,79 @@ export const previewSessions = pgTable(
     ),
     index("preview_sessions_user").on(t.userId),
     index("preview_sessions_expires").on(t.expiresAt),
+  ],
+);
+
+// ── Metrics (brief F9, D015) ────────────────────────────────────────────────────────────────
+
+export const METRIC_SCOPES = ["vps", "container", "requests"] as const;
+export type MetricScope = (typeof METRIC_SCOPES)[number];
+export const METRIC_RESOLUTIONS = ["1m", "1h"] as const;
+export type MetricResolution = (typeof METRIC_RESOLUTIONS)[number];
+
+/**
+ * `kit-deploy metrics collect` (every 30 s) writes 1-minute rows from kit-agent's `metrics.sample`
+ * and rolls them into 1-hour rows; 1-minute rows live 48 h, 1-hour rows 30 days (D015).
+ *
+ * One row per (scope, subject, resolution, bucket):
+ * - `vps` / `vps`: memory, disk, load and CPUs of the machine;
+ * - `container` / its name: CPU % (100 per core) and memory against its limit;
+ * - `requests` / `<project>/<env>`: requests and 5xx from Caddy's access log, every host of that
+ *   project's production (`domains`) or of one PR's preview.
+ * Averages are over `samples` readings, so a later reading of the same minute is merged, not
+ * added. A project's rows are by name, not by foreign key: they outlive nothing for long (30 days).
+ */
+export const metricSamples = pgTable(
+  "metric_samples",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scope: text("scope").$type<MetricScope>().notNull(),
+    subject: text("subject").notNull(),
+    project: text("project"),
+    /** `production` or `pr-<n>`. */
+    environment: text("environment"),
+    resolution: text("resolution").$type<MetricResolution>().notNull(),
+    /** Start of the minute or hour (UTC). */
+    bucket: timestamp("bucket", { withTimezone: true }).notNull(),
+    samples: integer("samples").notNull().default(1),
+    cpuPct: doublePrecision("cpu_pct"),
+    /** A container's memory and limit; the machine's used and total. */
+    memBytes: bigint("mem_bytes", { mode: "number" }),
+    memLimitBytes: bigint("mem_limit_bytes", { mode: "number" }),
+    diskBytes: bigint("disk_bytes", { mode: "number" }),
+    diskTotalBytes: bigint("disk_total_bytes", { mode: "number" }),
+    load1: doublePrecision("load1"),
+    cpus: integer("cpus"),
+    requests: integer("requests"),
+    requests5xx: integer("requests_5xx"),
+  },
+  (t) => [
+    check("metric_samples_scope", inList("scope", METRIC_SCOPES)),
+    check(
+      "metric_samples_resolution",
+      inList("resolution", METRIC_RESOLUTIONS),
+    ),
+    check(
+      "metric_samples_subject",
+      sql`(${t.scope} = 'vps' and ${t.subject} = 'vps' and ${t.project} is null and ${t.environment} is null)
+        or (${t.scope} <> 'vps' and ${t.project} ~ '^[a-z0-9][a-z0-9_]{0,39}$' and ${t.environment} ~ '^(production|pr-[1-9][0-9]{0,5})$')`,
+    ),
+    check(
+      "metric_samples_requests_subject",
+      sql`${t.scope} <> 'requests' or ${t.subject} = ${t.project} || '/' || ${t.environment}`,
+    ),
+    check("metric_samples_samples", sql`${t.samples} >= 1`),
+    check(
+      "metric_samples_requests_range",
+      sql`${t.requests} is null or (${t.requests} >= 0 and ${t.requests5xx} between 0 and ${t.requests})`,
+    ),
+    uniqueIndex("metric_samples_slot").on(
+      t.scope,
+      t.subject,
+      t.resolution,
+      t.bucket,
+    ),
+    index("metric_samples_project").on(t.project, t.resolution, t.bucket),
+    index("metric_samples_prune").on(t.resolution, t.bucket),
   ],
 );

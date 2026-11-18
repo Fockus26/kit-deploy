@@ -9,6 +9,8 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     { timeoutMs?: number; env?: Record<string, string> } | undefined
   > = [];
   const files = new Map<string, string>();
+  /** readFileFrom's inode per path (default 1): a new one is a rolled log. */
+  const inodes = new Map<string, number>();
   const logs: Record<string, unknown>[] = [];
   const privateFiles: { path: string; content: string }[] = [];
   let httpStatus: number | Error = 200;
@@ -51,6 +53,16 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     log(e) {
       logs.push(e);
     },
+    async readFileFrom(path, offset, maxBytes) {
+      const text = files.get(path);
+      if (text === undefined) return null;
+      const all = Buffer.from(text, "utf8");
+      return {
+        ino: inodes.get(path) ?? 1,
+        size: all.length,
+        data: all.subarray(offset, offset + maxBytes),
+      };
+    },
   };
 
   return {
@@ -58,6 +70,7 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     calls,
     runOpts,
     files,
+    inodes,
     privateFiles,
     logs,
     setHttp(s: number | Error) {

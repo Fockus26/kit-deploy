@@ -1,0 +1,22 @@
+# kit-deploy · metrics collector (D015, brief F9): one `metrics.sample` from kit-agent (docker stats,
+# /proc, df, Caddy's access log) into metric_samples, with the 1 h rollups and the pruning
+# (1-min rows 48 h, 1-h rows 30 days). Started by kit-deploy-metrics.timer every 30 s; installed
+# by infra/update.sh. Root, like the sweep: it reads /etc/kit-deploy/cli.env. It changes nothing on
+# the machine: the agent only reads. Warnings (a part it could not read) in the journal:
+#   journalctl -u kit-deploy-metrics
+[Unit]
+Description=kit-deploy metrics collector
+After=network-online.target kit-agent.service
+Wants=network-online.target
+Requires=kit-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kit-deploy metrics collect
+# A sample takes a few seconds (docker stats waits for one reading); a stuck one must not pile up.
+TimeoutStartSec=25s
+Nice=10
+MemoryMax=128M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only

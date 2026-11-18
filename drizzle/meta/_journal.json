@@ -64,6 +64,20 @@
       "when": 1794958024759,
       "tag": "0008_env_runtime_names",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794965383225,
+      "tag": "0009_metric_samples",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794967684607,
+      "tag": "0010_domain_status",
+      "breakpoints": true
     }
   ]
 }

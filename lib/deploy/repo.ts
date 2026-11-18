@@ -1,4 +1,5 @@
 /** What the switch needs from the database. `drizzleSwitchRepo` is the real one. */
+import type { Redirect } from "@/lib/core/caddy";
 import type { Sealed } from "@/lib/core/crypto";
 import type { DeploymentStatus } from "@/lib/db/schema";
 
@@ -14,6 +15,8 @@ export type ClaimedDeployment = {
   project: { id: string; name: string; repo: string; memoryMb: number };
   /** The project's production hosts (`domains`); a preview's host is derived (`previewHost`). */
   hosts: string[];
+  /** Hosts that only 308 to one of `hosts` (D028); absent = none. */
+  redirects?: Redirect[];
 };
 
 /** A production deployment whose container still exists (live or kept for rollback). */
@@ -46,12 +49,14 @@ export type ProjectInfo = {
   repo: string;
   memoryMb: number;
   hosts: string[];
+  redirects?: Redirect[];
 };
 
 export type LiveSite = {
   deploymentId: string;
   project: string;
   hosts: string[];
+  redirects?: Redirect[];
   container: string;
   port: number;
 };
