@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import type { OpName } from "../../agent/protocol";
 import type { AgentClient } from "../../cli/client";
+import type { ActionResult } from "../../lib/panel/actions/core";
 import {
   rebuildProject,
   redeployProject,
@@ -37,7 +38,7 @@ afterEach(() => {
   (console.error as any).mockRestore?.();
 });
 
-type Action = (deps: ActionDeps, raw: unknown) => Promise<{ ok: boolean }>;
+type Action = (deps: ActionDeps, raw: unknown) => Promise<ActionResult>;
 const ACTIONS: [string, Action][] = [
   ["setEnvVar", setEnvVar],
   ["removeEnvVar", removeEnvVar],
