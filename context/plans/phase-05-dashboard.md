@@ -5,19 +5,17 @@
 > squash-merged on green CI, QA once at the end (memory `qa-at-end-not-per-unit`).
 > Main folder: `C:\Users\Cesar\Documents\Work\kit-deploy` · Phase file: `phases/05-DASHBOARD.md`
 
-**No `design/HANDOFF.md`:** César never ran the brief through Claude Design. The UI is built from
-`design/BRIEF-kit-deploy.md` (§4 visual system, §5 constraints, §6 pages, §7 states) and the
-`context/` tokens (D007), conservatively — recorded in **D021** (W1). If a handoff arrives later,
-it wins and the differences become a polish unit.
+**Design:** canvas made in-session from the brief, approved by César 2026-11-17
+(https://claude.ai/artifact/BM2D4sybuXcLoczzjw9b5m) → `design/HANDOFF.md` (D021, W1 commits it).
 
 ## Waves
 
 | Wave | Units (branch · what · main files) | Depends on | Status |
 |---|---|---|---|
-| 1 | W1 `feat/dashboard-shell` · UI 01+02: tokens check, theme switch, sidebar/header layout behind the session, `(panel)` route group · `app/(panel)/`, `components/layout/`, `app/globals.css` | — | in progress |
-| 1 | W2 `feat/agent-logs` · D014: agent follows container output to daily files (14 d, gzip), ops `logs.tail`/`logs.search`, CLI `logs` · `agent/logs.ts`, `cli/logs-commands.ts` | — | in progress |
-| 1 | W3 `feat/metrics` · D015: migration 0009 `metric_samples`, sampler (docker stats 30 s + Caddy access log), rollups, CLI `metrics` · `agent/metrics.ts`, `lib/metrics/`, `infra/` timer | — | in progress |
-| 1 | W4 `feat/domains-backend` · F6: domain add/remove/list with www redirect choice, DNS resolve check every minute, cert state/expiry; migration 0010 · `lib/domains/`, `lib/core/caddy.ts`, `cli/domain-commands.ts` | W3 merged first (migration number) | in progress |
+| 1 | W1 `feat/dashboard-shell` · UI 01+02: tokens check, theme switch, sidebar/header layout behind the session, `(panel)` route group · `app/(panel)/`, `components/layout/`, `app/globals.css` | — | in progress (handoff) |
+| 1 | W2 `feat/agent-logs` · D014: agent follows container output to daily files (14 d, gzip), ops `logs.tail`/`logs.search`, CLI `logs` · `agent/logs.ts`, `cli/logs-commands.ts` | — | merged #44 |
+| 1 | W3 `feat/metrics` · D015: migration 0009 `metric_samples`, sampler (docker stats 30 s + Caddy access log), rollups, CLI `metrics` · `agent/metrics.ts`, `lib/metrics/`, `infra/` timer | — | merged #46 |
+| 1 | W4 `feat/domains-backend` · F6: domain add/remove/list with www redirect choice, DNS resolve check every minute, cert state/expiry; migration 0010 · `lib/domains/`, `lib/core/caddy.ts`, `cli/domain-commands.ts` | W3 merged first (migration number) | merged #47 |
 | 2 | W5 `feat/ui-components` · UI 03: StatusBadge, CopyValue, RelativeTime, Meter, DataTable (TanStack), ConfirmDialog, LogViewer, Sparkline (shadcn Chart) · `components/kit/` | W1 | pending |
 | 2 | W6 `feat/panel-data` · read layer + Server Actions (env set/rm, rollback/redeploy/restart/stop, domain add/rm, db create, new project + token), QA seed of realistic data · `lib/panel/`, `app/(panel)/actions/`, `scripts/qa-seed.ts` | W2–W4 | pending |
 | 2 | W7 `feat/agent-db-status` · F11: ops `db.list`/`db.status` (size, connections, last backup) via kit-db · `agent/`, `cli/` | — | pending |

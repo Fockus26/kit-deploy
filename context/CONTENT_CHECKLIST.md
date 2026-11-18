@@ -20,5 +20,12 @@
 | 12 | Copy of the "preview no existe" page (title, one sentence, link to the dashboard): realistic Spanish placeholder, César confirms | `infra/caddy/pages/preview-missing.html` | phase 03 U1 | 03 | Pending |
 | 13 | Copy of `/login`, `/enrol` (3 steps, expired-link error) and the signed-in placeholder at `/`: realistic Spanish placeholder, César confirms | `app/login/`, `app/enrol/`, `lib/auth/messages.ts` | phase 03 U3 | 03 | Pending |
 | 14 | Copy of the "preview dormido" page (title, one sentence: why it sleeps and that its next push wakes it; project · PR): realistic Spanish placeholder, César confirms | `infra/caddy/pages/preview-asleep.html` | phase 03 U5 | 03 | Pending |
+| 15 | Copy of the Inicio placeholder (title, subtitle): realistic Spanish placeholder, César confirms | `app/(panel)/page.tsx` | phase 05 W1 | 05 | Pending |
+| 16 | Copy of the project header placeholder (state, domain, branch@SHA, actions) | `app/(panel)/p/[project]/layout.tsx` | phase 05 W1 | 05 | Pending |
+| 17 | Copy of the Resumen tab placeholder | `app/(panel)/p/[project]/page.tsx` | phase 05 W1 | 05 | Pending |
+| 20 | Spanish words of the kit components: Copiar / Copiado / No se pudo copiar, "casi lleno", Siguiendo / En pausa / Pausar / Reanudar, Cargando …, Cancelar, state names (Activo, Listo, Construyendo, Dormido, Guardado, Falló, Error, Verificando DNS, Emitiendo certificado, Aviso) and relative times (hace unos segundos, hace N min, hace N h, ayer, hace N días): from HANDOFF §2, César confirms | `components/kit/*`, `lib/kit/relative-time.ts` | phase 05 W5 | 05 | Pending |
+| 21 | Sample copy of the dev gallery (project names, SHAs, log lines, notices): invented for screenshots only, never reaches production (404) | `app/(panel)/dev/componentes/gallery.tsx` | phase 05 W5 | 05 | Pending |
+| 22 | Deployments table shows only the SHA: commit message and author are not stored (brief §6 Despliegues asks for them) — César decides: store them at deploy or leave SHA only | `lib/panel/data/` | phase 05 W6 | 05 | Pending |
+| 23 | Previews show "#<n>" without the PR title (not stored) — César decides: store it or leave the number | `lib/panel/data/` | phase 05 W6 | 05 | Pending |
 
 <!-- Mark "Resolved" (do not delete the row) when it is done and the code is updated. -->

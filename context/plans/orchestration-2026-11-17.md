@@ -50,9 +50,9 @@ Three units (W2, W3, W4) add agent operations. To keep the rebases trivial:
   the sweep's lines; append, do not reorder.
 - Op names: `logs.tail`, `logs.search` (W2) · `metrics.sample` (W3) · `cert.status`,
   `dns.resolve` (W4). Error codes: the existing `ErrorCode` union only.
-- If, when you open the PR, `origin/main` already moved and conflicts, `git rebase origin/main`
-  (never merge main into your branch, never force-push over someone else's work: your own branch
-  is fine to `--force-with-lease` after a rebase).
+- If `origin/main` moved and conflicts: `git merge origin/main` (a normal merge commit; the PR is
+  squash-merged) and a plain push. **Never rebase pushed commits or force-push** (auto mode denies
+  it; CLAUDE.md forbids it).
 
 ## César's decisions for this batch
 

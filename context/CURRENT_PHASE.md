@@ -10,15 +10,18 @@
 Close checks passed on the VPS; phase security-review done (F1 fixed in #42). A real kd-hello run of
 build-env / secret in container / rebuild waits for César's steps (Blocked).
 
-**Phase 05 — Dashboard (in progress, in parallel with the phase-04 ship)** · wave 1 of 4 ·
+**Phase 05 — Dashboard (in progress, in parallel with the phase-04 ship)** · wave 3 of 4 ·
 plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brief (D021).
 
 | Unit | PR | Status |
 |---|---|---|
-| W1 shell (layout, theme, session for QA) | — | running |
-| W2 agent logs (D014) | — | running |
-| W3 metrics (D015, migration 0009) | — | running |
-| W4 domains backend (F6, migration 0010) | — | running |
+| W1 shell + design/HANDOFF.md (D021–D023, qa-session) | #49 | merged (ab876fe) |
+| W2 agent logs (D014; D024 Docker API, D025 50 MiB/day cap) | #44 | merged (7554d09) |
+| W3 metrics (D015; D026–D027, migration 0009) | #46 (replaces #45) | merged (87a3746)
+| W4 domains backend (F6; D028–D029, migration 0010) | #47 | merged (4f3a83c) |
+| W7 db status (F11; D035 no connections in v1) | #48 | merged |
+| W5 UI components (D030–D031) | #50 | merged |
+| W6 panel data + Server Actions (D032–D034) | #51 | merged · a project created from the panel needs `ssh kit-vps kit-deploy project pin` (D034) |
 
 ## Blocked (actions for César or external)
 

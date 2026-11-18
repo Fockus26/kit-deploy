@@ -289,3 +289,168 @@ from the page serves HTTPS with no manual step besides the DNS record".
 ### Closing
 Changeset: minor — "Dominios: estado de DNS y certificado, redirección www, `domain ls` y
 `domain rm`."
+
+---
+
+# Wave 2 of phase 05
+
+Design: `design/HANDOFF.md` (approved 2026-11-17) wins over the brief for anything visual.
+Update a branch with `git merge origin/main` + plain push — never rebase pushed commits or
+force-push. Write `.qa/progress.md` from your first wip commit. Hand-written SQL in a migration:
+keep it apart and re-add it after `db:generate`.
+
+Reserved: W5 D030–D031, rows 20–21 · W6 D032–D034, rows 22–23, migration 0011 if needed ·
+W7 D035, no rows, no migration.
+
+## W7 — `feat/agent-db-status`
+
+You are worker **W7**. Decisions: **D035**. Model · effort: **opus · medium** (root agent op).
+Docker: **no**.
+
+### What César asks
+Brief F11: "The project's page shows its databases (`kit-db list`/`status`) and creates them."
+The Bases page (HANDOFF §3 "Bases de datos") shows per database: name, environment (production /
+preview), size, last backup + whether it is OK, and "Crear base" (the existing `db.create` op).
+
+### Where it is
+- `agent/ops.ts:531-600` — how the agent already runs `kit-db url` / `kit-db create` (argv, no
+  shell, output never echoed); `databaseName()` at `agent/ops.ts:83` (`<project>` and
+  `<project>_preview`).
+- kit-db itself: `C:\Users\Cesar\.claude\kit-reference\vps\kit-db` lines 103-114. `list` prints
+  `datname size` (pg_size_pretty, space-separated, psql unaligned); `status` prints
+  `<db>: <file>.dump | NO BACKUP` per database, `Off-VPS: <remote | NOT CONFIGURED>`, then
+  `Last failures:` and up to 5 `FAIL …` lines. Read it, do not change it (it belongs to the kit).
+- Shared files rule (brief "Shared shapes"): new `agent/databases.ts`, op appended at the end of
+  `Request`, one `case`, CLI in `cli/db-commands.ts` (there may already be `db create` in
+  `cli/commands.ts` — keep it working, move it only if trivial).
+
+### Approach decided
+- Op `db.status { project }` → `{ databases: [{ name, env: "production" | "preview", sizeBytes |
+  null, sizeText, lastBackup: { file, at } | null }], offVps: string | null, failures: string[]
+  (only lines naming one of this project's two databases, scrubbed) }` — only the project's own
+  `<project>` / `<project>_preview`, never other databases' names or sizes. Parse the backup file
+  name's timestamp (look at kit-db's `backup_one` for its format).
+- Connections: kit-db has no command for them → **not shown in v1**; record in D035 (the Bases
+  page drops that column).
+- CLI `kit-deploy db status <project> [--json]`.
+
+### How to verify
+Tests with fakes for both outputs (including NO BACKUP, NOT CONFIGURED, a failure line of another
+database that must be filtered out, odd spacing), op schema. typecheck, lint, `bun run test`,
+`build:agent`, `build:cli`; `security-review` on your diff (run it with your slot's path).
+
+### Closing
+Changeset: minor — "Bases de datos: tamaño y último backup de cada base del proyecto
+(`kit-deploy db status`)."
+
+## W5 — `feat/ui-components`
+
+You are worker **W5**. Decisions: **D030–D031**. CONTENT_CHECKLIST rows: **20–21**. Model · effort:
+**sonnet · medium**. Docker: **yes** (only you this wave, for qa:local + `scripts/qa-session.ts` from
+W1 — its header has the commands). Launched after W1 (`feat/dashboard-shell`) is merged.
+
+### What César asks
+Phase 05 UI 03, `phases/ui/03-COMPONENTS.md`: the components of `design/HANDOFF.md` §2, exactly as
+specified there (measures, variants, every state, a11y) — StatusBadge, StatusDot, CopyValue,
+RelativeTime, Meter (card + table), Sparkline + MetricCard, DataTable, ConfirmDialog (normal +
+type-the-name destructive), LogViewer, Field set (Input/Textarea/Checkbox/Radio with error state),
+Notice, EmptyState, Skeleton. Button variants (§2 row Button) on `components/ui/button.tsx`.
+
+### Where it is
+- `components/ui/` — shadcn primitives (W1 added sheet, dropdown-menu, skeleton on `radix-ui`).
+- `app/globals.css` — tokens (W1 added `--nav`, `--destructive-solid`, `--destructive-on`,
+  `--overlay` and the type scale). Do not add tokens: a missing one goes in your report.
+- New: `components/kit/*.tsx`, one file per component; a dev-only gallery route
+  `app/(panel)/_kit/page.tsx`? — **no**: private routes with `_` are not routed in Next; use
+  `app/(panel)/dev/componentes/page.tsx` guarded by `process.env.NODE_ENV !== "production"`
+  (`notFound()` in production) for screenshots and axe.
+
+### Approach decided
+- Authorized dependencies: `@tanstack/react-table`, `recharts` (via shadcn Chart pattern),
+  shadcn `alert-dialog`, `tabs`, `radio-group`, `checkbox`, `textarea`, `tooltip`, `breadcrumb` if W1
+  did not add it. Nothing else.
+- Components are presentational: props in, no data fetching, no Server Actions. LogViewer takes
+  `lines` + `following` + `onTogglePause`; auto-pause when the user scrolls up.
+- Spanish copy of the states as in HANDOFF §2 / §5b.
+
+### How to verify
+- Unit tests for pure logic (RelativeTime formatting with a fixed clock, Meter thresholds 85/95,
+  ConfirmDialog name match, LogViewer auto-pause decision) in `tests/unit/kit-*.test.ts`.
+- The gallery page with qa:local + qa-session: axe light and dark at 320 and 1440, keyboard on
+  dialog (focus trap, Esc, focus return), tabs, copy; reduced-motion. Screenshots of the gallery.
+- typecheck, lint, `bun run test`, `bun run build`.
+
+### Closing
+Changeset: minor — "Panel: componentes base (estados, medidores, tablas, diálogos, visor de logs)."
+
+## W6 — `feat/panel-data`
+
+You are worker **W6**. Decisions: **D032–D034**. CONTENT_CHECKLIST rows: **22–23**. Migration:
+**0011** only if unavoidable. Model · effort: **opus · high** (Server Actions over secrets, agent
+and auth). Docker: **no** (W5 has it; use unit tests). Launched after W1 is merged.
+
+### What César asks
+Phase 05 server pieces: everything the pages need to read and every action they trigger, so the
+page units of wave 3 are presentation only. Phase close: "A variable can be set from the page and
+is never readable afterwards if secret" and "a domain added from the page serves HTTPS with no
+manual step besides the DNS record"; "security-review of the server actions".
+
+### Where it is
+- Session: `lib/panel/session.ts` (`panelUser()`, W1) — every read and every action calls it
+  first; a missing session in an action returns a typed 401 result, never a redirect.
+- Logic that today only the CLI reaches — **extract to `lib/ops/<topic>.ts`, call it from both the
+  CLI and the actions, keep the CLI's behaviour and tests green**:
+  `cli/env-commands.ts` (env set/rm with seal + audit in one transaction; actor `web:<user id>`
+  via a `webActor()` next to `sshActor()` in `lib/db/env-store.ts:41`),
+  `cli/commands.ts:350` `redeploy`, `lib/deploy/switch.ts:600` `rollback`, `:649` `regenerate`,
+  `lib/deploy/rebuild.ts` `dispatchRebuild`, `cli/domain-commands.ts:255` (add with redirect, rm,
+  check one project now), `lib/db/admin.ts` (project add) + `lib/tokens.ts` (deploy token, shown
+  once), the agent's `container.stop` / `container.start` for Parar / Reiniciar, `db.create`.
+- Agent client from the web: `lib/deploy/runtime.ts` (`socketClient`).
+- Readers already there: `lib/metrics/read.ts`, `lib/domains/store.ts`, `lib/domains/dns.ts`
+  (`dnsInstructions`), `lib/db/env-store.ts`, `lib/preview/store.ts`, `lib/deploy/drizzle-repo.ts`.
+  Logs: agent `logs.tail` / `logs.search`. Databases: agent `db.status` (W7, may land during your
+  unit — if not merged, code against its documented shape in W7's prompt and say so).
+
+### Approach decided
+- Read layer `lib/panel/data/*.ts` (server-only): `homeData()`, `projectOverview(p)`,
+  `deployments(p, filter)`, `previews(p)`, `envList(p, environment)` (names, kind, updated, and the
+  value **only** for plain vars via `env.reveal`; secrets never leave the agent — the type of a
+  secret row has no value field), `domainsData(p)`, `logsTail/logsSearch`, `databases(p)`,
+  `settingsData()` (passkeys, tokens with last use, audit page). Agent down → a typed
+  `{ unavailable: "agent" }` the page renders as the HANDOFF §5b error, never a throw.
+- Server Actions in `app/(panel)/actions/<topic>.ts` (`"use server"`): zod schemas shared with the
+  forms (`lib/panel/schemas.ts`: trim + min + max per field as the columns), result type
+  `{ ok: true, … } | { ok: false, code, message }` in Spanish; idempotent where a double submit is
+  possible (env set = upsert; domain add of an existing host = ok; project add with the same name =
+  conflict message); `revalidatePath` of the page. Destructive ones (stop, rollback, rm variable,
+  rm domain, revoke token) take the confirmation value (project or host name) and check it on the
+  server too.
+- Secret value from a form: read once from `FormData`, sealed by the agent, never logged, never
+  returned, never put in a revalidation payload or error message. Write a test that a failed seal's
+  error message does not contain the value.
+- Post-save notice data: `env set` returns `{ needs: "redeploy" | "rebuild" | null }`
+  (`NEXT_PUBLIC_*` in production/preview → rebuild).
+- New project returns the deploy token **once** in the action result; never stored in plain.
+- QA seed: `scripts/qa-seed.ts` (refuses non-local DATABASE_URL exactly like `scripts/qa-session.ts`)
+  inserting realistic demo rows (the HANDOFF/canvas data: maranatha + kd_hello, 5 deployments,
+  3 previews, env names, 5 domains in each status, metric samples for 24 h, audit rows) so wave 3
+  can screenshot every state. Env values seeded as names only (no agent locally → plain values
+  render the "agent unavailable" state; document it).
+
+### Known traps
+- Next 16 Server Actions: read `node_modules/next/dist/docs/` on actions, `revalidatePath`,
+  `cacheComponents` — data reads must be inside Suspense / dynamic.
+- `proxy.ts` must not redirect POSTs (it does not today; keep a test).
+- CSRF: Server Actions' origin check stays on; do not add an `allowedOrigins` wildcard.
+- The web container talks only to the agent socket (D011) — never `docker`, never the master key.
+
+### How to verify
+Unit tests per action (session missing → 401 result, schema rejects, confirmation mismatch,
+idempotency, secret never in output/errors, needs redeploy/rebuild), per reader (agent down →
+unavailable), CLI tests still green after the extraction. typecheck, lint, `bun run test`,
+`bun run build`. `security-review` on your diff (pass it your slot path) — High/Critical fixed here.
+
+### Closing
+Changeset: minor — "Panel: lectura de datos y acciones (variables, despliegues, dominios, bases,
+proyectos) con las mismas reglas que el CLI."

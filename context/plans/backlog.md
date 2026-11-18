@@ -32,3 +32,8 @@ One block per item: what, why, version.
 - **What:** cache shared across instances.
 - **Why:** only if a site ever runs more than one instance. Brief: v2.
 - **Version:** v2
+
+## Panel: `Date.now()` during prerender (phase 05 W5, seen in passing)
+- **What:** every panel route logs "unstable value `Date.now()` while prerendering" from `dashboardUser` (`lib/auth/session.ts:36`, default param `now = Date.now()`) called by `app/(panel)/layout.tsx`. Compute `now` inside the function after `await connection()`.
+- **Why:** noise in dev, risk of a cached wrong session check. Goes into W12 (states/polish).
+- **Version:** v1 (phase 05 W12)
