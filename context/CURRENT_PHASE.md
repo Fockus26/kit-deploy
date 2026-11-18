@@ -18,9 +18,11 @@ Plan agreed 2026-11-17: `plans/04-variables.md` (U1–U8). Phase 03: everything 
 | U6 `env pull` (Development to a pipe/file only; dotenv-safe quoting checked with @next/env) | #38 | merged |
 | U7 `/api/v1/build-env` + template (BuildKit secret, BUILD_ENV_HASH) + derived Server Actions key | #39 | merged |
 | U8a `redeploy` (generation per deployment, migration 0007, container `-g<n>`) | #40 | merged |
-| U8b `rebuild` (workflow_dispatch + `{sha, rebuild}`) | #41 | open |
+| U8b `rebuild` (workflow_dispatch + `{sha, rebuild}`) | #41 | merged |
+| F1 runtime names refused (PATH, NODE_*, LD_*, *_PROXY, ...; migration 0008) | #42 | merged |
+| Sweep sees `-g<n>` preview containers | #43 | merged |
 
-All units written. Left: phase security-review (running), then the VPS release with César's OK and the close checks on the VPS.
+All units merged; install test in Docker ALL PASS (94) on main + #43. Phase security-review done (1 MEDIUM, fixed in #42). Left: install test in Docker, then the VPS release with César's OK and the close checks on the VPS.
 
 Log: `PHASE_LOG/04-variables.md`.
 
@@ -29,7 +31,7 @@ Log: `PHASE_LOG/04-variables.md`.
 - [ ] A secret set from `ssh kit-vps kit-deploy env set` is never readable afterwards (CLI, API, DB dump)
 - [ ] `env pull` writes a `.env.local` that runs kd-hello locally
 - [ ] A backup of `kit_deploy` alone cannot decrypt any variable
-- [ ] security-review of crypto and build-env
+- [x] security-review of crypto and build-env (per unit + phase review 2026-11-17: F1 fixed in #42)
 - [ ] (phase 03 leftover) the dashboard cookie is host-only in the browser
 
 ## Blocked (actions for César or external)

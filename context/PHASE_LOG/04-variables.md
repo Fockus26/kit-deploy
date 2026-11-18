@@ -99,3 +99,16 @@ write to the GitHub status token).
 - Rebuild: `kit-deploy rebuild <p>` (root, platform GitHub token) → workflow_dispatch
   `rebuild=true` → `{sha, rebuild: true}` → next generation of the live commit. Previews: push.
 - Needs César: token Actions: Read and write; new deploy-vps.yml in kd-hello.
+
+## Phase security-review (2026-11-17)
+
+- Diff 92fbf71..feat/rebuild. One MEDIUM (conf 8), F1: a compromised web could set runtime names
+  (HTTPS_PROXY, NODE_TLS_REJECT_UNAUTHORIZED=0, LD_PRELOAD, …) on a pinned container and read its
+  secrets on the wire. Fixed in #42: RUNTIME_NAME_RE refused at seal, DB CHECK (0008), agent at start.
+- Below threshold, fixed: sweep ignored `-g<n>` preview containers (#43).
+- Caveats kept (not fixable by name rules): a compromised web can still change app variables
+  (API_BASE_URL, swap AUTH_SECRET) or see the Server Actions key; containers kept for rollback keep
+  removed/rotated secrets; one token per repo, so PR code can ask for production's build env.
+- Guarantees: secrets never read back (holds, with the caveats above); DB backup can't decrypt
+  (holds); build-env only public + key (holds); DATABASE_URL only to pinned containers (holds);
+  no cross-project path (holds).
