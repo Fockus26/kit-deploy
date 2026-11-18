@@ -194,6 +194,10 @@ export const Request = z.discriminatedUnion("op", [
   op("metrics.sample", {}),
   /** D035: size and last backup of `<project>` and `<project>_preview` (agent/databases.ts). */
   op("db.status", { project }),
+  /** Phase 06: the database's, the dashboard's and the previews' certificates (agent/domains.ts). */
+  op("platform.certs", {}),
+  /** Phase 06: kit-db's last dump per database and its FAIL lines (agent/databases.ts). */
+  op("backups.status", {}),
 ]);
 
 export type Request = z.infer<typeof Request>;

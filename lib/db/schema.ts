@@ -599,3 +599,75 @@ export const metricSamples = pgTable(
     index("metric_samples_prune").on(t.resolution, t.bucket),
   ],
 );
+
+// ── Alerts (phase 06, brief F10, D002) ─────────────────────────────────────────────────────
+
+export const ALERT_KINDS = [
+  /** A production site's /api/health failing. */
+  "site_down",
+  /** A certificate that expires in under 14 days (a project domain or the platform's). */
+  "cert_expiring",
+  /** The VPS disk past 80 %. */
+  "disk",
+  /** The VPS memory tight. */
+  "memory",
+  /** kit-db's backup of a database failed (or is a day and a half old). */
+  "backup_failed",
+  /** A project's last production deployment failed. */
+  "deploy_failed",
+] as const;
+export type AlertKind = (typeof ALERT_KINDS)[number];
+
+/**
+ * One row per incident: opened when its check has failed long enough, resolved when it has been
+ * fine long enough (lib/alerts/rules.ts). `key` names the subject (`site_down:shop`); only one
+ * open row per key. The emails go out in one digest per run: `notified_at` / `resolved_notified_at`
+ * stay null until Brevo took the email, so a failed send is retried by the next run.
+ * Never a secret in `title` or `detail`.
+ */
+export const alerts = pgTable(
+  "alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: text("key").notNull(),
+    kind: text("kind", { enum: ALERT_KINDS }).notNull(),
+    /** By name, like audit_log: the incident outlives the project. */
+    project: text("project"),
+    title: text("title").notNull(),
+    detail: text("detail").notNull().default(""),
+    openedAt: timestamp("opened_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    resolvedNotifiedAt: timestamp("resolved_notified_at", {
+      withTimezone: true,
+    }),
+  },
+  (t) => [
+    check("alerts_kind", inList("kind", ALERT_KINDS)),
+    check(
+      "alerts_key_format",
+      sql`${t.key} ~ '^[a-z_]+(:[A-Za-z0-9_.*-]{1,253})?$'`,
+    ),
+    uniqueIndex("alerts_open_key").on(t.key).where(sql`resolved_at is null`),
+    index("alerts_opened").on(t.openedAt.desc()),
+  ],
+);
+
+/**
+ * The streak of each check subject (failing or fine, and for how many runs in a row), so an alert
+ * opens or resolves only after its rule's count (no email for one slow minute). A row whose
+ * subject is no longer checked is pruned after a day.
+ */
+export const alertChecks = pgTable("alert_checks", {
+  key: text("key").primaryKey(),
+  failing: boolean("failing").notNull(),
+  streak: integer("streak").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

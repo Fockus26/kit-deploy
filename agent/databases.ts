@@ -199,3 +199,50 @@ export async function dbStatus(deps: Deps, project: string): Promise<DbStatus> {
     });
   return { databases, offVps, failures };
 }
+
+export type BackupFailure = {
+  /** From kit-db's `date -Is`; null when the line has no readable time. */
+  at: string | null;
+  db: string;
+  /** Why, cleaned like db.status' lines (no URL, the remote by its label only). */
+  why: string;
+};
+
+export type BackupsStatus = {
+  /** Every database kit-db backs up, with its newest dump's time (null: none, or not kit-db's
+   * name format). */
+  databases: { name: string; lastBackupAt: string | null }[];
+  failures: BackupFailure[];
+};
+
+/**
+ * `backups.status` (phase 06, brief F10): `kit-db status` for the whole central Postgres, for the
+ * alerts check (root CLI). Names and times only: no size, no URL.
+ */
+export async function backupsStatus(deps: Deps): Promise<BackupsStatus> {
+  const status = parseStatus(await kitDb(deps, "status"));
+  const offVps = status.remote === null ? null : remoteLabel(status.remote);
+  const databases = [...status.backups.entries()].map(([name, file]) => ({
+    name,
+    lastBackupAt: file === null ? null : backupTime(name, file),
+  }));
+  const failures: BackupFailure[] = [];
+  for (const line of status.failures) {
+    const m = /^FAIL\s+(\S+)\s+([a-z][a-z0-9_]*):\s*(.*)$/.exec(line);
+    if (!m?.[2]) continue;
+    const t = Date.parse(m[1] ?? "");
+    let why = m[3] ?? "";
+    if (status.remote !== null && offVps !== null)
+      why = why.replaceAll(status.remote, offVps);
+    why = why.replace(
+      /(upload to )(\S+)( \(the dump)/,
+      (_, a: string, r: string, b: string) => `${a}${remoteLabel(r)}${b}`,
+    );
+    failures.push({
+      at: Number.isNaN(t) ? null : new Date(t).toISOString(),
+      db: m[2],
+      why: clean(why),
+    });
+  }
+  return { databases, failures };
+}

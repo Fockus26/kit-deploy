@@ -39,9 +39,9 @@ import {
 } from "../lib/core/env";
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
-import { dbStatus } from "./databases";
+import { backupsStatus, dbStatus } from "./databases";
 import type { Deps, RunResult } from "./deps";
-import { certStatus } from "./domains";
+import { certStatus, platformCerts } from "./domains";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
 import { sampleMetrics } from "./metrics";
@@ -297,6 +297,10 @@ export class Agent {
         return sampleMetrics(this.deps, this.now, () => this.list());
       case "db.status":
         return dbStatus(this.deps, req.params.project);
+      case "platform.certs":
+        return platformCerts(this.deps);
+      case "backups.status":
+        return backupsStatus(this.deps);
     }
   }
 
