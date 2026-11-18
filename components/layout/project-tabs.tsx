@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * A project's sections (brief §6 "Proyecto", row 2). Links, not ARIA tabs: each one is its own
- * page, so the current one carries `aria-current="page"` plus an underline and weight, never
- * color alone. Cron arrives in phase 06: shown, disabled, and saying so.
+ * page, so the current one carries `aria-current="page"` plus a 2px underline and weight 600,
+ * never color alone (HANDOFF §2 Tabs). Cron arrives in phase 06: shown, disabled, and saying so.
  */
 export const PROJECT_TABS = [
   { segment: "", label: "Resumen" },
@@ -29,14 +29,14 @@ export function projectTabHref(project: string, segment: string): string {
 }
 
 const TAB =
-  "-mb-px inline-flex min-h-control shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-body";
+  "-mb-px inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-body";
 
 export function ProjectTabs({ project }: { project: string }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Secciones del proyecto" className="border-border border-b">
       {/* Narrow screens scroll the row inside its own box, never the page. */}
-      <ul className="-mx-4 flex overflow-x-auto px-4 lg:mx-0 lg:px-0">
+      <ul className="flex overflow-x-auto">
         {PROJECT_TABS.map((tab) => {
           if ("disabled" in tab) {
             return (
@@ -46,7 +46,7 @@ export function ProjectTabs({ project }: { project: string }) {
                   className={cn(TAB, "border-transparent text-disabled")}
                 >
                   {tab.label}
-                  <span className="rounded-sm border border-border px-1 text-caption text-muted-foreground">
+                  <span className="rounded-sm border border-border px-1 text-eyebrow text-muted-foreground uppercase">
                     {tab.disabled}
                   </span>
                 </span>
@@ -64,7 +64,7 @@ export function ProjectTabs({ project }: { project: string }) {
                   TAB,
                   "rounded-t-md focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2",
                   active
-                    ? "border-primary font-medium text-foreground"
+                    ? "border-primary font-semibold text-foreground"
                     : "border-transparent text-muted-foreground hover:border-input hover:text-foreground",
                 )}
               >

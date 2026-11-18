@@ -21,7 +21,7 @@
 :root {
   --background: light-dark(#f6f7f9, #0b0d10);
   --foreground: light-dark(#0f1419, #e6e8eb);
-  /* Sidebar and log panels (COLORS.md › background.nav); light has no separate shade. */
+  /* Sidebar, mobile header and log viewer (HANDOFF §1). */
   --nav: light-dark(#ffffff, #0f1216);
   --card: light-dark(#ffffff, #12151a);
   --card-foreground: light-dark(#0f1419, #e6e8eb);
@@ -39,7 +39,11 @@
   --warning-surface: light-dark(#fff4e0, #2e2110);
   --destructive: light-dark(#b42318, #ff8a8a);
   --destructive-surface: light-dark(#fdecea, #2e1416);
+  --info: light-dark(#1f5fd1, #7ab0ff);
   --info-surface: light-dark(#e8f0fd, #122440);
+  /* The filled "Parar producción" button (HANDOFF §1): 6.57:1 light · 8.0:1 dark. */
+  --destructive-solid: light-dark(#b42318, #ff8a8a);
+  --destructive-on: light-dark(#ffffff, #2a0b0d);
   --border: light-dark(#e1e4e8, #232830);
   --input: light-dark(#8a94a1, #5e6776);
   --ring: light-dark(#1f5fd1, #7ab0ff);
@@ -48,7 +52,7 @@
   --scrollbar-thumb: light-dark(#7a8491, #5e6776);
   --scrollbar-track: light-dark(#eef0f3, #12151a);
   /* Scrim behind the mobile drawer and dialogs (not text: no contrast pair). */
-  --overlay: light-dark(rgb(15 20 25 / 0.4), rgb(0 0 0 / 0.6));
+  --overlay: light-dark(rgb(15 20 25 / 0.35), rgb(0 0 0 / 0.55));
   /* DESIGN_TOKENS.md › shadows: only what floats. */
   --shadow-color-md: light-dark(rgb(15 20 25 / 0.12), rgb(0 0 0 / 0.35));
   --shadow-color-lg: light-dark(rgb(15 20 25 / 0.18), rgb(0 0 0 / 0.5));
@@ -81,7 +85,10 @@
   --color-warning-surface: var(--warning-surface);
   --color-destructive: var(--destructive);
   --color-destructive-surface: var(--destructive-surface);
+  --color-info: var(--info);
   --color-info-surface: var(--info-surface);
+  --color-destructive-solid: var(--destructive-solid);
+  --color-destructive-on: var(--destructive-on);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -107,19 +114,19 @@
   --radius-lg: 8px;
   --radius-full: 999px;
 
-  /* DESIGN_TOKENS.md › sizes */
-  --spacing-control: 40px;
+  /* DESIGN_TOKENS.md › sizes. Controls are 44px below 768 (touch), 40px above. */
+  --spacing-control: 44px;
+  --spacing-sheet: 280px;
   --spacing-sidebar: 240px;
   --spacing-header: 56px;
   --container-form: 400px;
   --container-content: 1440px;
 
-  /* TYPOGRAPHY.md › scale (xs; md and 1920px+ below) */
+  /* TYPOGRAPHY.md › scale: 360–1023 here; 1024–1919 and ≥1920 below (HANDOFF §1). */
   --text-h1: 22px;
   --text-h1--line-height: 1.25;
-  --text-h1--letter-spacing: -0.01em;
   --text-h2: 15px;
-  --text-h2--line-height: 1.35;
+  --text-h2--line-height: 1.4;
   --text-h3: 14px;
   --text-h3--line-height: 1.4;
   --text-body: 14px;
@@ -127,7 +134,7 @@
   --text-mono: 13px;
   --text-mono--line-height: 1.5;
   --text-caption: 12px;
-  --text-caption--line-height: 1.45;
+  --text-caption--line-height: 1.5;
   --text-eyebrow: 11px;
   --text-eyebrow--line-height: 1.4;
   --text-eyebrow--letter-spacing: 0.08em;
@@ -138,9 +145,43 @@
   --text-input-touch--line-height: 1.5;
 
   --ease-default: cubic-bezier(0.2, 0, 0, 1);
+
+  /* HANDOFF §6: skeleton pulse 1.5s; menus and the sheet enter (reduced motion: no motion). */
+  --animate-skeleton: kd-pulse 1.5s ease-in-out infinite;
+  --animate-menu-in: kd-menu-in var(--duration-fast) var(--ease-default);
+  --animate-sheet-in: kd-sheet-in var(--duration-normal) var(--ease-default);
+  --animate-fade-in: kd-fade-in var(--duration-normal) var(--ease-default);
+
+  @keyframes kd-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+  @keyframes kd-menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes kd-sheet-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes kd-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 @media (min-width: 768px) {
+  :root {
+    --spacing-control: 40px;
+  }
+}
+
+@media (min-width: 1024px) {
   :root {
     --text-h1: 24px;
     --text-metric: 22px;

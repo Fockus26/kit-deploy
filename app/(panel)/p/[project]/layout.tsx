@@ -12,10 +12,11 @@ export default function ProjectLayout({
   return (
     <Suspense
       fallback={
-        <>
-          <Skeleton className="mb-4 h-8 w-64" />
-          <Skeleton className="mb-6 h-control w-full" />
-        </>
+        <div aria-busy="true">
+          <p className="mb-3 text-muted-foreground">Cargando el proyecto…</p>
+          <Skeleton className="mb-3 h-3.5 w-1/2" />
+          <Skeleton className="h-3.5 w-3/4" />
+        </div>
       }
     >
       <ProjectFrame params={params}>{children}</ProjectFrame>
@@ -35,11 +36,11 @@ async function ProjectFrame({
   if (!project) notFound();
   return (
     <>
-      <header className="mb-4">
-        <p className="mb-1 text-eyebrow text-muted-foreground uppercase">
+      <header className="mb-6">
+        <p className="mb-1 font-medium text-eyebrow text-muted-foreground uppercase">
           Proyecto
         </p>
-        <h1 className="break-all font-mono font-semibold text-foreground text-h1">
+        <h1 className="wrap-anywhere font-mono font-semibold text-foreground text-h1">
           {project.name}
         </h1>
         {/* PLACEHOLDER (CONTENT_CHECKLIST row 16): status, domain, branch@SHA and the

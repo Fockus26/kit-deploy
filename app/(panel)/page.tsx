@@ -18,7 +18,15 @@ export default function Home() {
         El estado del servidor, las alertas abiertas y la tabla de proyectos
         aparecerán aquí.
       </p>
-      <Suspense fallback={<Skeleton className="h-32 w-full" />}>
+      <Suspense
+        fallback={
+          <div aria-busy="true">
+            <p className="mb-3 text-muted-foreground">Cargando proyectos…</p>
+            <Skeleton className="mb-3 h-3.5 w-3/4" />
+            <Skeleton className="h-3.5 w-1/2" />
+          </div>
+        }
+      >
         <Projects />
       </Suspense>
     </>

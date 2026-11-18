@@ -61,10 +61,11 @@ export function ThemeSwitch() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={`Tema: ${THEME_LABELS[theme]}`}
-        className="inline-flex size-control items-center justify-center rounded-md text-muted-foreground hover:bg-raised hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+        aria-label={`Tema: ${THEME_LABELS[theme]}. Cambiar tema`}
+        className="inline-flex min-h-8 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-3 font-medium text-caption text-foreground hover:bg-raised focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
       >
         <Icon aria-hidden="true" className="size-4" />
+        {THEME_LABELS[theme]}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Tema</DropdownMenuLabel>

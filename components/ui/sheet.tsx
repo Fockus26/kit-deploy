@@ -6,7 +6,7 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 // shadcn/ui Sheet (new-york, radix-ui), on kit-deploy's tokens. Only the left side is used
-// (the mobile navigation); no enter/exit animation: the project has no animation plugin.
+// (the mobile navigation), 280px (HANDOFF §3). It enters from the left; it closes without one.
 
 function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -34,12 +34,12 @@ function SheetContent({
     <SheetPrimitive.Portal>
       <SheetPrimitive.Overlay
         data-slot="sheet-overlay"
-        className="fixed inset-0 z-50 bg-overlay"
+        className="fixed inset-0 z-50 animate-fade-in bg-overlay"
       />
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-sidebar flex-col border-border border-r bg-nav shadow-lg outline-none",
+          "fixed inset-y-0 left-0 z-50 flex h-full w-sheet animate-sheet-in flex-col border-border border-r bg-nav shadow-lg outline-none",
           className,
         )}
         {...props}

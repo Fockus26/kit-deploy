@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderGit2, House, Plus, Settings } from "lucide-react";
+import { FolderGit2, House, Layers, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type * as React from "react";
@@ -11,7 +11,21 @@ import { SignOutButton } from "./sign-out-button";
 export const NEW_PROJECT_PATH = "/new";
 export const SETTINGS_PATH = "/settings";
 
-/** The panel's navigation: the fixed sidebar from `lg`, and the drawer's content below it. */
+/** HANDOFF §5: lucide `Layers` in primary + "kit-deploy" 15/600, until a logo of its own. */
+export function Logo({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <Link
+      href="/"
+      onClick={onNavigate}
+      className="inline-flex items-center gap-2 rounded-sm font-semibold text-foreground text-h2 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+    >
+      <Layers aria-hidden="true" className="size-4 text-primary" />
+      kit-deploy
+    </Link>
+  );
+}
+
+/** The panel's navigation (HANDOFF §2 Sidebar): the sidebar from 1024px, and the sheet below. */
 export function SidebarNav({
   projects,
   email,
@@ -19,7 +33,7 @@ export function SidebarNav({
 }: {
   projects: PanelProject[];
   email: string;
-  /** The drawer closes itself when a link is followed. */
+  /** The sheet closes itself when a link is followed. */
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -27,7 +41,7 @@ export function SidebarNav({
     pathname === `/p/${name}` || pathname.startsWith(`/p/${name}/`);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <nav aria-label="Principal" className="flex-1 overflow-y-auto px-3 py-4">
+      <nav aria-label="Principal" className="flex-1 overflow-y-auto p-3">
         <ul className="flex flex-col gap-1">
           <li>
             <NavLink
@@ -43,12 +57,12 @@ export function SidebarNav({
 
         <h2
           id="nav-proyectos"
-          className="mt-6 mb-2 px-3 text-eyebrow text-muted-foreground uppercase"
+          className="mt-6 mb-2 px-2 font-medium text-eyebrow text-muted-foreground uppercase"
         >
           Proyectos
         </h2>
         {projects.length === 0 ? (
-          <p className="px-3 text-caption text-muted-foreground">
+          <p className="px-2 text-caption text-muted-foreground">
             Aún no hay proyectos.
           </p>
         ) : (
@@ -93,10 +107,12 @@ export function SidebarNav({
         </ul>
       </nav>
 
-      <div className="border-border border-t px-3 py-4">
-        <p className="mb-3 px-3 text-caption text-muted-foreground">
+      <div className="border-border border-t p-3">
+        <p className="mb-3 px-2 text-caption text-muted-foreground">
           Sesión de{" "}
-          <span className="break-all font-mono text-foreground">{email}</span>
+          <span className="font-mono text-foreground wrap-anywhere">
+            {email}
+          </span>
         </p>
         <SignOutButton />
       </div>
@@ -125,16 +141,18 @@ function NavLink({
       onClick={onNavigate}
       aria-current={current ? "page" : undefined}
       className={cn(
-        // The current item: raised surface, a primary bar on the left and weight, not color alone.
-        "flex min-h-control items-center gap-2 rounded-md border-l-2 px-3 py-2 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+        // Current: raised surface + weight 500 + aria-current (HANDOFF §2), not color alone.
+        "flex min-h-9 items-center gap-2 rounded-md px-2 py-1 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
         current
-          ? "border-primary bg-raised font-medium text-foreground"
-          : "border-transparent text-muted-foreground hover:bg-raised hover:text-foreground",
+          ? "bg-raised font-medium text-foreground"
+          : "text-muted-foreground hover:bg-raised/60 hover:text-foreground",
       )}
     >
       <Icon aria-hidden={true} className="size-4 shrink-0" />
-      {/* Names up to 40 characters wrap instead of being cut. */}
-      <span className={cn("min-w-0 break-all", mono && "font-mono text-mono")}>
+      {/* Names up to 40 characters wrap anywhere instead of being cut. */}
+      <span
+        className={cn("min-w-0 wrap-anywhere", mono && "font-mono text-mono")}
+      >
         {children}
       </span>
     </Link>
