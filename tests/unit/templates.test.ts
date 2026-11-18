@@ -31,7 +31,7 @@ type Workflow = {
   };
   concurrency: { group: string; "cancel-in-progress": boolean };
   permissions: Record<string, string>;
-  jobs: { deploy: Job; "close-preview": Job; "no-preview": Job };
+  jobs: { deploy: Job; "close-preview": Job; "no-preview": Job; off: Job };
 };
 
 describe("templates/Dockerfile", () => {
@@ -77,10 +77,23 @@ describe("templates/dockerignore", () => {
 describe("templates/deploy-vps.yml", () => {
   const raw = read("templates/deploy-vps.yml");
   const wf = Bun.YAML.parse(raw) as Workflow;
-  const { deploy, "close-preview": close, "no-preview": skip } = wf.jobs;
+  const { deploy, "close-preview": close, "no-preview": skip, off } = wf.jobs;
   const steps = deploy.steps;
   const fromThisRepo =
     "github.event.pull_request.head.repo.full_name == github.repository";
+
+  test("switch: every job needs KIT_DEPLOY_ENABLED, and when it is off one notice says so", () => {
+    for (const job of [deploy, close, skip]) {
+      expect(job.if?.startsWith("vars.KIT_DEPLOY_ENABLED == 'true' && (")).toBe(
+        true,
+      );
+    }
+    expect(off.if).toBe("vars.KIT_DEPLOY_ENABLED != 'true'");
+    expect(off.permissions).toEqual({});
+    expect(off.steps[0]?.run).toContain("::notice");
+    expect(off.steps[0]?.run).not.toContain("exit 1");
+    expect(JSON.stringify(off)).not.toContain("secrets.");
+  });
 
   test("production: push to main and manual runs, as before", () => {
     expect(wf.on.push.branches).toEqual(["main"]);

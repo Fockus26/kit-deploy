@@ -7,6 +7,11 @@
 #
 # `pull_request`, never `pull_request_target`: a PR's code must not run with the secrets. PRs from
 # forks (and Dependabot's) get no secrets and a read-only GITHUB_TOKEN, so they get no preview.
+#
+# Switch: no job deploys until the repository variable KIT_DEPLOY_ENABLED is "true"
+# (`gh variable set KIT_DEPLOY_ENABLED --body true -R <owner/repo>`), the last step of setting
+# the project up (templates/MIGRATING.md). Off, every run says so with a notice and fails
+# nothing: the repo can carry the workflow before its token exists, or while Vercel still deploys.
 name: Deploy (VPS)
 
 on:
@@ -37,11 +42,12 @@ jobs:
   deploy:
     # Production (push, manual run) and a PR's preview (opened, synchronize, reopened) of this repo.
     if: >-
+      vars.KIT_DEPLOY_ENABLED == 'true' && (
       github.event_name != 'pull_request' || (
         github.event.action != 'closed' &&
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.actor != 'dependabot[bot]'
-      )
+      ) )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -147,10 +153,11 @@ jobs:
   close-preview:
     # The PR was closed (merged or not): its preview goes. Idempotent on kit-deploy's side.
     if: >-
+      vars.KIT_DEPLOY_ENABLED == 'true' && (
       github.event_name == 'pull_request' &&
       github.event.action == 'closed' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]'
+      github.actor != 'dependabot[bot]' )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -178,13 +185,24 @@ jobs:
   no-preview:
     # A PR from a fork or from Dependabot: no secrets, so no preview. Said, not failed.
     if: >-
+      vars.KIT_DEPLOY_ENABLED == 'true' && (
       github.event_name == 'pull_request' && (
         github.event.pull_request.head.repo.full_name != github.repository ||
         github.actor == 'dependabot[bot]'
-      )
+      ) )
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions: {}
     steps:
       - name: Skip
         run: echo "::notice title=No preview::This PR comes from a fork or from Dependabot, which get no KIT_DEPLOY_TOKEN, so kit-deploy builds no preview for it."
+
+  off:
+    # The switch is off: nothing is built or deployed, and the run says why.
+    if: vars.KIT_DEPLOY_ENABLED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Skip
+        run: echo "::notice title=kit-deploy is off::The repository variable KIT_DEPLOY_ENABLED is not \"true\", so this run deploys nothing. Turn it on with gh variable set KIT_DEPLOY_ENABLED --body true once the project is registered and KIT_DEPLOY_TOKEN is set."
