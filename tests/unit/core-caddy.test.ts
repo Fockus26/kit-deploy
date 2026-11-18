@@ -335,6 +335,8 @@ describe("upstream keepalive (Caddy closes idle app sockets before Node's 5 s)",
     expect(previews.match(/^\t*import kit_upstream$/gm)?.length).toBe(3);
     // update.sh writes the dashboard site with printf: its tabs are literal `\t`.
     const update = readFileSync("infra/update.sh", "utf8");
-    expect(update).toContain(String.raw`\t\t\tkeepalive ${UPSTREAM_KEEPALIVE}\n`);
+    expect(update).toContain(
+      String.raw`\t\t\tkeepalive ${UPSTREAM_KEEPALIVE}\n`,
+    );
   });
 });
