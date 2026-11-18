@@ -121,6 +121,8 @@
   --spacing-sidebar: 240px;
   --spacing-header: 56px;
   --container-form: 400px;
+  /* HANDOFF §3 "Nuevo proyecto": the form card's max width. */
+  --container-form-wide: 560px;
   --container-content: 1440px;
 
   /* TYPOGRAPHY.md › scale: 360–1023 here; 1024–1919 and ≥1920 below (HANDOFF §1). */
