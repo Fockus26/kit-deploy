@@ -454,3 +454,191 @@ unavailable), CLI tests still green after the extraction. typecheck, lint, `bun 
 ### Closing
 Changeset: minor — "Panel: lectura de datos y acciones (variables, despliegues, dominios, bases,
 proyectos) con las mismas reglas que el CLI."
+
+---
+
+# Wave 3 of phase 05 — pages
+
+On `main` be528ac: shell (W1), `components/kit/*` (W5, gallery at `/dev/componentes` in dev),
+read layer `lib/panel/data/index.ts` (W6: `homeData`, `projectOverview`, `deployments`,
+`deploymentDetail`, `previews`, `envList`, `domainsData`, `logFilters`, `logsTail`, `logsSearch`,
+`databases`, `settingsData`; each returns data or `{ unavailable: "agent" }` — test with
+`isUnavailable`) and Server Actions `app/(panel)/actions/{env,deployments,domains,projects}.ts`
+(signature `(prev, formData)` for `useActionState`; result `{ ok: true … } | { ok: false, code,
+message }`). Pages are **presentation only**: no new queries, no new actions. If a page needs data
+the layer does not give, the conservative fallback + "Decisión tomada / alternativa" + report it.
+
+Spec: `design/HANDOFF.md` §3 (the page's section), §2 (components), §5b (states). Canvas for the
+drawn pages: https://claude.ai/artifact/BM2D4sybuXcLoczzjw9b5m (you cannot open it; HANDOFF has
+every value). Headings: h1 = page title; h2 = each section as HANDOFF §3 names it.
+
+**Every page shows:** its data · loading (Skeleton inside the section, Suspense) · empty
+(EmptyState) · agent unavailable (Notice destructive per §5b, rest of the page usable) — the
+product of states for each section.
+
+**Docker: yes for every unit this wave.** The Postgres container `qa-kit-deploy-pg` is shared and
+already running; `qa:local -- --port <your port>` creates your own `qa_<port>` database. Then
+`bun scripts/qa-session.ts --port <p> --demo` and `bun scripts/qa-seed.ts --port <p>` (header of
+each script). Do not stop or remove the containers. Screenshots: `pr-screenshots.ts` cannot carry
+a session — do as W5 did: a Playwright script in `.qa/` with `storageState: ".qa/session.json"`,
+PNGs into `.pr-shots/`, then `bun run shots:publish`.
+
+Gates per unit: a11y (axe light+dark at 320/768/1440, keyboard on every form and dialog),
+typecheck, lint, `bun run test`, `bun run build`. Update with `git merge origin/main` + plain push.
+
+Reserved: W8 D036–D037 rows 24–26 · W9 D038–D039 rows 27–29 · W10 D040 rows 30–31 ·
+W11 D041–D042 rows 32–34. No migrations in this wave. Changesets: minor each.
+
+## W8 — `feat/page-home-project`
+Model · effort: **sonnet · medium**. Files: `app/(panel)/page.tsx` (Inicio), `app/(panel)/p/[project]/
+layout.tsx` (project header + actions; you are the only unit touching it), `p/[project]/page.tsx`
+(Resumen), new `p/[project]/deployments/page.tsx` (+ detail in a right Sheet 480px, `?d=<id>`).
+HANDOFF §3 "Inicio", "Proyecto · cabecera", "Pestañas", "Métricas", "Despliegues recientes +
+Previews activos", "Logs en vivo" (LogViewer polling `logsTail` every 2 s through a small route
+handler or server action you add **only** as a thin wrapper of `logsTail` — say which),
+"Despliegues". Header actions: Redeploy (primary), Rollback (ConfirmDialog naming both SHAs),
+Reiniciar, Parar (type-the-name ConfirmDialog, destructive-solid); < 768 "Más acciones" dropdown.
+`/p/<unknown>` must answer **404** (today 200: `notFound()` inside Suspense — call it before any
+streaming, e.g. check existence in the layout outside Suspense). Changeset: "Panel: Inicio,
+resumen del proyecto y despliegues."
+
+## W9 — `feat/page-env-domains-previews`
+Model · effort: **opus · medium** (the secret form). Files: new `p/[project]/env/page.tsx`,
+`p/[project]/domains/page.tsx`, `p/[project]/previews/page.tsx`. HANDOFF §3 "Variables",
+"Dominios", "Previews". Variables: the value field is `type` text in a textarea but the secret
+value is never put back into the form state after submit (reset the field on success and on
+error); `autocomplete="off"`, `spellcheck=false`; the post-save Notice from the action's `needs`
+(rebuild → Rebuild button = `rebuildAction`; redeploy → `redeployAction`); delete with
+type-the-name ConfirmDialog. Domains: add form with the 3 redirect radios, the DNS instructions of
+the selected/last-added host with CopyValue, "Comprobar ahora" = `checkDomainsAction`, remove
+with type-the-host ConfirmDialog, cert expiry ≤ 14 days in `--warning`. Previews: list + the
+"N de 4 encendidos" Notice. Changeset: "Panel: variables, dominios y previews."
+
+## W10 — `feat/page-logs-databases`
+Model · effort: **sonnet · medium**. Files: new `p/[project]/logs/page.tsx`,
+`p/[project]/databases/page.tsx`. HANDOFF §3 "Logs" (filters from `logFilters`: deployment, day of
+the last 14, literal search, level; live follow polling `logsTail` every 2 s via a thin wrapper —
+if W8 already merged one, reuse it, else add `app/(panel)/p/[project]/logs/tail/route.ts` and tell
+the orchestrator; search with "Cargar más" using the `before` cursor; Descargar = the current
+result as a `.log` text file built client-side) and "Bases de datos" (DataTable without the
+connections column — D035; "Backup" = StatusBadge Listo if `lastBackup` < 36 h and no failure,
+Aviso otherwise, with the failure text; "Crear base" = `createDatabasesAction`). Changeset:
+"Panel: logs con búsqueda y seguimiento, y bases de datos."
+
+## W11 — `feat/page-new-settings`
+Model · effort: **opus · medium** (deploy token shown once, passkeys). Files: new
+`app/(panel)/new/page.tsx`, `app/(panel)/settings/page.tsx`, restyle of `app/login/*` and
+`app/enrol/*` to HANDOFF §3 "Login" with the shell's tokens (keep every auth behaviour and test).
+New project: form (`createProjectAction`), then the token card shown once from the action result
+(never in a URL, never re-fetchable; "Ya lo guardé" clears it from state), plus the `project pin`
+SSH line the result carries (D034). Settings: Acceso (passkeys list from `settingsData`, "Añadir
+passkey" through Better Auth's client as `/enrol` does — if it needs an enrolment flow the layer
+lacks, show the list read-only + the SSH command `ssh -t kit-vps kit-deploy user create` hint and
+report it), TOTP and recovery codes status (read-only in v1 unless the layer offers regenerate),
+Alertas (disabled card "Llega en la fase 06"), Tokens (revoke with ConfirmDialog =
+`revokeTokenAction`, "Nuevo token" = `createTokenAction` shown once), Auditoría (DataTable,
+"Cargar más" with the cursor). Changeset: "Panel: nuevo proyecto, ajustes y acceso con el estilo
+del panel."
+
+---
+
+# Wave 4 of phase 05 — states, polish, fixes (last wave)
+
+On `main` after #55: every page of HANDOFF §3 exists. This wave closes the phase. Same rules as
+wave 3 (Docker: yes for W12 — shared `qa-kit-deploy-pg`, your own `qa_<port>`; flows on
+`qa:local -- --preview`; update with `git merge origin/main` + plain push). Reserved: W12
+D043–D044 rows 35–37 · W13 D045–D046 (D046 = the phase's closing decision, see W13), no rows.
+Migration 0011 only for W13 and only if unavoidable.
+
+## W12 — `feat/panel-states-polish`
+Model · effort: **sonnet · medium**. Files: `app/(panel)/**`, `app/not-found.tsx`,
+`app/(panel)/error.tsx` / `global-error.tsx`, `components/**`, `infra/caddy/pages/*.html`.
+
+1. **States (HANDOFF §5b, phases/ui/06-STATES.md):** panel 404 inside the shell (copy of §5b),
+   500 (`error.tsx`: "Algo falló en el panel" + Reintentar + the request id/digest in mono),
+   `global-error.tsx` minimal; every panel route has its loading Skeleton (Suspense) — audit them;
+   preview "dormido" / "no existe" Caddy pages restyled with the same tokens inline (system-ui,
+   no external fonts, max 480 card, both themes via `prefers-color-scheme`), keeping their copy
+   (CONTENT_CHECKLIST 12, 14) and anything `infra/test/*` checks in them.
+2. **One heading rule:** project name = h1 in `p/[project]/layout.tsx`, sub-page titles = h2 —
+   fix the pages that use h1 (`env`, `domains`, `previews`); `EmptyState` gets a `level` prop
+   (default 2) and the sections with h3 pass 3 (Ajustes › Passkeys).
+3. **Unify the agent-down notice:** `components/kit/agent-down-notice.tsx` (W9) and
+   `components/panel/agent-down.tsx` (W8) → one, every caller moved, the other file deleted only
+   if nothing imports it (it is our own new file from this phase, so deleting it is fine).
+4. **LogViewer:** no "En pausa/Reanudar" on a static search (a `follow={false}` mode).
+5. **Exit animations** of dropdown, Sheet and dialog per HANDOFF §6 (entry exists; exit missing).
+6. **Responsive sweep (phases/ui/08-RESPONSIVE-POLISH.md):** every panel route at 320, 360, 768,
+   1024, 1440, 1920, light and dark, with `qa-seed` data: no horizontal scroll, no clipped text,
+   button rows wrap, tables scroll in their box, 200 % zoom at 1280. Leave the guard versioned:
+   `scripts/qa/panel-reflow.mjs` (node + Playwright, storageState `.qa/session.json`) that walks
+   every route and fails on `scrollWidth > clientWidth`; run it on main (before) and your branch.
+Changeset: patch — "Panel: pantallas de error y carga, y ajustes de responsive y accesibilidad."
+
+## W13 — `fix/panel-server-polish`
+Model · effort: **opus · medium** (auth session, audit). Docker: **no**. Files: `lib/**`,
+`app/(panel)/actions/**` only if a signature changes, `tests/unit/**`. Not UI.
+
+1. `lib/auth/session.ts:36` `now = Date.now()` default param makes every panel route log
+   "unstable value Date.now() while prerendering" (and once left a page hung): compute `now` inside
+   after the request-time API (`await connection()` or the headers read) — read
+   `node_modules/next/dist/docs/` on cacheComponents first. Test.
+2. `addDomain`: `www.<host>` with `to_apex` and no apex in the project → a specific Spanish
+   message (what to add first), not "Ese dominio no es válido.".
+3. `stopProject` / `restartProject` of an unknown project → 404 result, not 409.
+4. Audit: check whether `project.add`, `token.create`, `token.revoke`, domain add/rm, rollback,
+   redeploy, stop, restart from the panel write `audit_log`. The table's `AUDIT_ACTIONS` is
+   `["env.set","env.remove"]` (`lib/db/schema.ts:248`) — if the brief's Ajustes › Auditoría ("qué
+   variable o acción") needs them, widen it (migration 0011 with the new check values; no data
+   change) and write a row in the same transaction as each action, actor `web:<id>` / `ssh:<user>`,
+   never a value. Record the call in D045.
+5. **D046 · phase 05 closing:** one decision file summarising what phase 05 shipped and deferred
+   (passkeys from Ajustes → v1.x, connections column → none, commit message/author and PR title
+   not stored → CONTENT_CHECKLIST 22–23, Cron → phase 06, alerts → phase 06). Status Confirmed.
+Changeset: patch — "Panel: mensajes de error más claros, auditoría de las acciones y sin avisos de
+renderizado."
+
+## W14 — `fix/phase05-security` (phase security review, 2026-11-18)
+
+Model · effort: **opus · high**. Docker: **no**. Decisions **D047–D048**. Migration: none expected.
+The phase-05 security review (read-only, over 0107675..189125c) found these; fix them with tests.
+Do not touch `app/**` UI files (W12 is there) beyond a message string if unavoidable.
+
+**M1 · "Parar" does not stick.** `lib/deploy/switch.ts:677-678` `regenerate` starts a stopped
+container; `lib/ops/deploy.ts:81-94` `stopProduction` leaves the deployment `live`;
+`lib/ops/domains.ts:305-316` `rewriteSite` (domain rm / redirect, panel and CLI) and
+`lib/domains/check.ts:115-121` (root timer every minute) call `regenerate`. A stopped site comes
+back by itself. Fix: `regenerate(sw, { project, start: false })` for site-only rewrites (rewriteSite,
+checkDomains) — rewrite the Caddy file, never start a container; keep `kit-deploy regenerate`
+(explicit, after a reboot) starting as today. Decide whether a stopped production must also be
+remembered (deployment state or a flag) so `regenerate` itself respects it; record in D047. Tests:
+stop → domain rm / redirect / check run → container still stopped.
+
+**M2 · Project names that collide with databases kit-deploy does not own.** Names are only checked
+by `PROJECT_RE` + the `_preview` suffix (`lib/ops/rules.ts:149`, `lib/panel/schemas.ts:184-188`,
+`lib/ops/projects.ts:53`); `agent/ops.ts:548-558` `managedLines` injects `kit-db url <project>` into
+the pinned image; `agent/databases.ts:150-181` `db.status` reports that database. A project named
+`kit_deploy` (the platform's own DB) or another client's database name gets its URL / status. Fix:
+1. Reserved names refused everywhere a project is created or pinned (`kit_deploy`, `postgres`,
+   `template0`, `template1`, and anything else kit-db or the platform uses — grep), panel and CLI,
+   with a Spanish message on the panel.
+2. The agent injects the managed `DATABASE_URL` and answers `db.status` **only for databases
+   kit-deploy owns**: `db.create` writes a root marker (`/etc/kit-deploy/dbs/<name>`, 0600, dir 0700,
+   no secret inside); a new root-only CLI `kit-deploy db adopt <project>` (SSH, prints what it
+   adopts, asks for `--yes`) writes it for a database that existed before (maranatha in phase 07).
+   Without the marker: no `DATABASE_URL`, and `db.status` returns the database as "no gestionada"
+   without size/backup details. `infra/update.sh` must not break existing projects: document in D048
+   that kd_hello has no database today, and whether the release needs a one-time adopt.
+3. `projectPin` (`cli/commands.ts:587-609`) refuses reserved names.
+
+**L1** `agent/domains.ts:45-47` reads Caddy's cert with `deps.readFile` (follows symlinks, no cap):
+use `readFileFrom(path, 0, 64 KiB)` (regular file, O_NOFOLLOW). Test with a symlink and an
+oversized file in the fakes.
+**L3** `logs.tail` / `logs.search` unserialized in the root daemon (`agent/ops.ts:290-293`,
+`agent/logs.ts:553-566`): a semaphore of 2 concurrent log reads; extra requests wait (bounded) or
+get `command_failed` "ocupado" — decide, test.
+
+Leave **L2** (metrics.sample callable by the group) and **L4** (shared 50 MiB cap) to the backlog —
+say so in the PR. Verify: typecheck, lint, `bun run test`, `build:agent`, `build:cli`; run
+`security-review` on your slot's diff. Changeset: patch — "Seguridad: un sitio parado sigue
+parado y los proyectos no pueden tomar bases ajenas."

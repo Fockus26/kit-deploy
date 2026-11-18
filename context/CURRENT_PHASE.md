@@ -10,7 +10,7 @@
 Close checks passed on the VPS; phase security-review done (F1 fixed in #42). A real kd-hello run of
 build-env / secret in container / rebuild waits for César's steps (Blocked).
 
-**Phase 05 — Dashboard (in progress, in parallel with the phase-04 ship)** · wave 3 of 4 ·
+**Phase 05 — Dashboard: code done 2026-11-18** (#44–#57, #61) · all 4 waves merged ·
 plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brief (D021).
 
 | Unit | PR | Status |
@@ -22,8 +22,18 @@ plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brie
 | W7 db status (F11; D035 no connections in v1) | #48 | merged |
 | W5 UI components (D030–D031) | #50 | merged |
 | W6 panel data + Server Actions (D032–D034) | #51 | merged · a project created from the panel needs `ssh kit-vps kit-deploy project pin` (D034) |
+| W8 Inicio + Proyecto + Despliegues (D036 proxy 404 after a real session, D037) | #55 | merged |
+| W12 states + responsive polish (D043–D044, reflow guard scripts/qa/panel-reflow.mjs) | #57 | merged (53771f4) |
+| W13 server polish + audit (D045, migration 0011) + D046 closing | #56 | merged |
+| Phase security review (0107675..189125c): 0 C · 0 H · 2 M · 4 L | — | done 2026-11-18 |
+| W14 security fixes M1 stop sticks (D050) + M2 DB ownership marker + reserved names (D051) + L1 + L3 | #61 | merged (5c36b94) |
+| W9 Variables + Dominios + Previews (D038–D039) | #53 | merged (6c08db2) |
+| W10 Logs + Bases (D040, logs/tail + logs/search routes) | #52 | merged (df3eb20) |
+| W11 Nuevo proyecto + Ajustes + login (D041–D042) | #54 | merged |
 
 ## Blocked (actions for César or external)
+
+- **Phase 05 close:** César's OK for the phase ship (release of main + Docker install test + `ship.sh`), then on the VPS: migrations 0009–0011 applied, timers `kit-deploy-metrics` and `kit-deploy-domain-check` active, a secret set from the panel is never readable, a domain added from the panel serves HTTPS with only the DNS record. Phase 07: `ssh kit-vps kit-deploy db adopt maranatha --yes` (D051).
 
 - Phase 04 (César): master.key into the password manager (CONTENT_CHECKLIST #4);
   `ssh kit-vps kit-deploy project pin kd_hello Fockus26/kd-hello`; Actions: Read and write on the
