@@ -19,6 +19,7 @@ import { type Digest, evaluate, notify } from "../../lib/alerts/engine";
 import type { Observation } from "../../lib/alerts/rules";
 import { CADDY_CERTS_DIR } from "../../lib/core/constants";
 import { fakeDeps } from "./agent-fakes";
+import { DB_PEM, DEPLOY_PEM, WILDCARD_PEM } from "./alerts-certs";
 import { memoryAlertStore } from "./alerts-fakes";
 
 const T0 = Date.parse("2026-11-18T12:00:00Z");
@@ -280,7 +281,6 @@ describe("Brevo", () => {
   });
 });
 
-const pem = (f: string) => readFileSync(`tests/unit/fixtures/${f}`, "utf8");
 const LE = `${CADDY_CERTS_DIR}/acme-v02.api.letsencrypt.org-directory`;
 const STATUS = [
   "shop: shop-20261118-033001.dump",
@@ -295,14 +295,11 @@ const STATUS = [
 
 function agentSetup() {
   const f = fakeDeps({ "kit-db status": () => ({ stdout: STATUS }) });
-  f.files.set(DB_CERT_PATH, pem("db.fockus.dev.pem"));
-  f.files.set(
-    `${LE}/deploy.fockus.dev/deploy.fockus.dev.crt`,
-    pem("deploy.fockus.dev.pem"),
-  );
+  f.files.set(DB_CERT_PATH, DB_PEM);
+  f.files.set(`${LE}/deploy.fockus.dev/deploy.fockus.dev.crt`, DEPLOY_PEM);
   f.files.set(
     `${LE}/wildcard_.preview.fockus.dev/wildcard_.preview.fockus.dev.crt`,
-    pem("wildcard.preview.fockus.dev.pem"),
+    WILDCARD_PEM,
   );
   const agent = new Agent(f.deps);
   const client: AgentClient = {
