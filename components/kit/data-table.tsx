@@ -59,7 +59,7 @@ export function DataTable<T extends RowData>({
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       {/* Focusable so the keyboard can scroll it (axe: scrollable-region-focusable). */}
       <section
-        className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="relative overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must take focus
         tabIndex={0}
         aria-label={caption}

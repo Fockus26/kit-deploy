@@ -299,9 +299,7 @@ export function Gallery() {
             onConfirm={() => setConfirmed("rollback")}
           />
           <ConfirmDialog
-            trigger={
-              <Button variant="destructive-text">Parar producción</Button>
-            }
+            trigger={<Button variant="destructive-text">Parar sitio</Button>}
             title="Parar producción de maranatha"
             description="El sitio dejará de responder hasta el próximo despliegue."
             confirmLabel="Parar producción"

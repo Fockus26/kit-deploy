@@ -70,3 +70,16 @@ describe("log follow", () => {
     expect(shouldAutoPause(false, up)).toBe(false);
   });
 });
+
+describe("cn (tailwind-merge with the type scale)", () => {
+  test("a font-size token does not remove a text color", async () => {
+    const { cn } = await import("@/lib/utils");
+    expect(cn("text-primary-foreground", "text-caption")).toBe(
+      "text-primary-foreground text-caption",
+    );
+    expect(cn("text-caption", "text-body")).toBe("text-body");
+    expect(cn("text-foreground", "text-muted-foreground")).toBe(
+      "text-muted-foreground",
+    );
+  });
+});
