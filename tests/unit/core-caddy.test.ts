@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { renderPreviewSite, renderSite } from "../../lib/core/caddy";
+import { UPSTREAM_KEEPALIVE } from "../../lib/core/constants";
 import { CoreInputError } from "../../lib/core/validate";
 
 const prod = { project: "kd_hello", env: "production" } as const;
@@ -17,7 +19,11 @@ describe("renderSite", () => {
         "# Written by kit-deploy for kd_hello — do not edit by hand: `kit-deploy regenerate` rewrites it.",
         "hello.fockus.dev {",
         "\timport kit_access_log",
-        "\treverse_proxy 127.0.0.1:20417",
+        "\treverse_proxy 127.0.0.1:20417 {",
+        "\t\ttransport http {",
+        "\t\t\tkeepalive 4s",
+        "\t\t}",
+        "\t}",
         "}",
         "",
       ].join("\n"),
@@ -241,7 +247,11 @@ describe("renderSite with redirects (D028)", () => {
         "# Written by kit-deploy for kd_hello — do not edit by hand: `kit-deploy regenerate` rewrites it.",
         "example.com, kd-hello.fockus.dev {",
         "\timport kit_access_log",
-        "\treverse_proxy 127.0.0.1:20417",
+        "\treverse_proxy 127.0.0.1:20417 {",
+        "\t\ttransport http {",
+        "\t\t\tkeepalive 4s",
+        "\t\t}",
+        "\t}",
         "}",
         "",
         "www.example.com {",
@@ -308,5 +318,23 @@ describe("renderSite with redirects (D028)", () => {
         ],
       }),
     ).toThrow("listed twice");
+  });
+});
+
+describe("upstream keepalive (Caddy closes idle app sockets before Node's 5 s)", () => {
+  test("is below Node's default keepAliveTimeout", () => {
+    const m = /^(\d+)s$/.exec(UPSTREAM_KEEPALIVE);
+    expect(m).not.toBeNull();
+    expect(Number(m?.[1])).toBeLessThan(5);
+  });
+
+  test("the previews' snippet and the dashboard site use the same value", () => {
+    const previews = readFileSync("infra/caddy/kit-previews.caddy", "utf8");
+    expect(previews).toContain(`\t\tkeepalive ${UPSTREAM_KEEPALIVE}\n`);
+    // Every proxy in the previews file imports it: the exchange, forward_auth and the app.
+    expect(previews.match(/^\t*import kit_upstream$/gm)?.length).toBe(3);
+    // update.sh writes the dashboard site with printf: its tabs are literal `\t`.
+    const update = readFileSync("infra/update.sh", "utf8");
+    expect(update).toContain(String.raw`\t\t\tkeepalive ${UPSTREAM_KEEPALIVE}\n`);
   });
 });
