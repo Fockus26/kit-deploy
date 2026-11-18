@@ -3,6 +3,7 @@
  * dashboard). Behind an interface so the commands are tested without Postgres.
  */
 import { eq } from "drizzle-orm";
+import { type AuditEntry, writeAudit } from "./audit";
 import { type DomainRedirect, deployTokens, domains, projects } from "./schema";
 import type { Db } from "./store";
 
@@ -22,14 +23,17 @@ export class AdminError extends Error {
   }
 }
 
+/** Each write takes its audit row (D045), committed in the same transaction; the CLI's calls pass
+ * none yet. */
 export interface AdminStore {
   /** The project and its domains, in one transaction. */
-  addProject(p: NewProject): Promise<{ id: string }>;
+  addProject(p: NewProject, audit?: AuditEntry): Promise<{ id: string }>;
   /** A new host waits in `pending_dns` until `domain check` sees it point to the VPS (D028). */
   addDomain(
     project: string,
     host: string,
     redirect?: DomainRedirect,
+    audit?: AuditEntry,
   ): Promise<void>;
   /** The project's `owner/name`, or null when there is no such project. */
   projectRepo(project: string): Promise<string | null>;
@@ -40,6 +44,7 @@ export interface AdminStore {
     project: string,
     tokenHash: string,
     label: string,
+    audit?: AuditEntry,
   ): Promise<{ id: string }>;
 }
 
@@ -60,7 +65,7 @@ export function drizzleAdminStore(db: Db): AdminStore {
   };
 
   return {
-    async addProject(p) {
+    async addProject(p, audit) {
       try {
         return await db.transaction(async (tx) => {
           const [row] = await tx
@@ -80,6 +85,7 @@ export function drizzleAdminStore(db: Db): AdminStore {
               .insert(domains)
               .values(p.hosts.map((host) => ({ projectId: row.id, host })));
           }
+          if (audit) await writeAudit(tx, audit);
           return row;
         });
       } catch (e) {
@@ -92,10 +98,13 @@ export function drizzleAdminStore(db: Db): AdminStore {
       }
     },
 
-    async addDomain(project, host, redirect = "none") {
+    async addDomain(project, host, redirect = "none", audit) {
       const id = await projectId(project);
       try {
-        await db.insert(domains).values({ projectId: id, host, redirect });
+        await db.transaction(async (tx) => {
+          await tx.insert(domains).values({ projectId: id, host, redirect });
+          if (audit) await writeAudit(tx, audit);
+        });
       } catch (e) {
         if (isUnique(e))
           throw new AdminError(`${host} already belongs to a project`);
@@ -119,14 +128,17 @@ export function drizzleAdminStore(db: Db): AdminStore {
       return p?.branch ?? null;
     },
 
-    async addToken(project, tokenHash, label) {
+    async addToken(project, tokenHash, label, audit) {
       const id = await projectId(project);
-      const [row] = await db
-        .insert(deployTokens)
-        .values({ projectId: id, tokenHash, label })
-        .returning({ id: deployTokens.id });
-      if (!row) throw new Error("insert returned no row");
-      return row;
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(deployTokens)
+          .values({ projectId: id, tokenHash, label })
+          .returning({ id: deployTokens.id });
+        if (!row) throw new Error("insert returned no row");
+        if (audit) await writeAudit(tx, audit);
+        return row;
+      });
     },
   };
 }

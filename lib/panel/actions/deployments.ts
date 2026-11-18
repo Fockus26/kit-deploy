@@ -3,6 +3,8 @@
  * Reiniciar and Parar, with the CLI's rules (lib/ops/deploy.ts, lib/deploy/switch.ts). Parar and
  * Rollback take the project's name typed in their dialog and check it here again.
  */
+import type { AuditEntry } from "@/lib/db/audit";
+import { webActor } from "@/lib/db/env-store";
 import { processProject, rollback, SwitchError } from "@/lib/deploy/switch";
 import { OpsError } from "@/lib/ops/agent";
 import {
@@ -33,6 +35,26 @@ function refresh(deps: ActionDeps, project: string) {
   deps.revalidate("/");
 }
 
+/**
+ * The audit row of what already happened (D045): a failed write is logged, never turned into a
+ * failure of an action that did run (the container is stopped either way).
+ */
+async function audited(deps: ActionDeps, entry: AuditEntry) {
+  try {
+    await deps.audit.record(entry);
+  } catch (e) {
+    console.error(
+      `panel audit ${entry.action}:`,
+      e instanceof Error ? e.message : e,
+    );
+  }
+}
+
+/** Stop and restart look for a live container: an unknown project is a 404 before that. */
+async function known(deps: ActionDeps, project: string) {
+  return (await deps.admin.projectRepo(project)) !== null;
+}
+
 export type RedeployResult = ActionResult<{
   deployment: { id: string; sha: string; generation: number };
   /** True when a second submit found the first one's deployment still on its way. */
@@ -53,7 +75,7 @@ export async function redeployProject(
     redeploySchema,
     raw,
     { action: "redeploy" },
-    async ({ project, pr }) => {
+    async ({ project, pr }, user) => {
       const scope = pr ?? null;
       const open = await deps.openDeployment(project, scope);
       if (open) return { ok: true, deployment: open, already: true };
@@ -72,6 +94,13 @@ export async function redeployProject(
               e instanceof Error ? e.message : e,
             );
           }
+        });
+        await audited(deps, {
+          actor: webActor(user.userId),
+          action: "project.redeploy",
+          project,
+          environment: scope === null ? "production" : "preview",
+          name: scope === null ? null : `PR #${scope}`,
         });
         refresh(deps, project);
         return { ok: true, deployment: queued, already: false };
@@ -106,7 +135,7 @@ export async function rollbackProject(
     rollbackSchema,
     raw,
     { action: "rollback" },
-    async ({ project, confirm, to }) => {
+    async ({ project, confirm, to }, user) => {
       if (!confirms(confirm, project)) return confirmationFailure(project);
       const t0 = now();
       try {
@@ -115,6 +144,13 @@ export async function rollbackProject(
           project,
           to === undefined ? {} : { to },
         );
+        await audited(deps, {
+          actor: webActor(user.userId),
+          action: "project.rollback",
+          project,
+          environment: "production",
+          name: r.to,
+        });
         refresh(deps, project);
         return {
           ok: true,
@@ -191,13 +227,20 @@ export async function stopProject(
     stopSchema,
     raw,
     { action: "stop" },
-    async ({ project, confirm }) => {
+    async ({ project, confirm }, user) => {
+      if (!(await known(deps, project))) return failure("not_found", NOT_FOUND);
       if (!confirms(confirm, project)) return confirmationFailure(project);
       try {
         const r = await stopProduction(
           { agent: deps.agent, repo: deps.switch.repo },
           project,
         );
+        await audited(deps, {
+          actor: webActor(user.userId),
+          action: "project.stop",
+          project,
+          environment: "production",
+        });
         refresh(deps, project);
         return { ok: true, ...r };
       } catch (e) {
@@ -218,12 +261,19 @@ export async function restartProject(
     projectOnlySchema,
     raw,
     { action: "restart" },
-    async ({ project }) => {
+    async ({ project }, user) => {
+      if (!(await known(deps, project))) return failure("not_found", NOT_FOUND);
       try {
         const r = await restartProduction(
           { agent: deps.agent, repo: deps.switch.repo },
           project,
         );
+        await audited(deps, {
+          actor: webActor(user.userId),
+          action: "project.restart",
+          project,
+          environment: "production",
+        });
         refresh(deps, project);
         return { ok: true, ...r };
       } catch (e) {

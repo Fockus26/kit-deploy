@@ -10,6 +10,7 @@ import {
   type AdminStore,
   type NewProject,
 } from "../../lib/db/admin";
+import type { AuditEntry } from "../../lib/db/audit";
 import type { EnvStore, StoredVar } from "../../lib/db/env-store";
 import type { TokenRow, TokenStore } from "../../lib/db/tokens";
 import type { ActionDeps } from "../../lib/panel/actions/deps";
@@ -101,6 +102,8 @@ export function memoryAdmin(
   projects: { name: string; repo: string; branch?: string }[] = [
     { name: "kd_hello", repo: "fockus26/kd-hello" },
   ],
+  /** Where the audit rows written with each change go (the same transaction in Postgres). */
+  audit: AuditEntry[] = [],
 ) {
   const added: NewProject[] = [];
   const domains: { project: string; host: string; redirect: string }[] = [];
@@ -108,20 +111,22 @@ export function memoryAdmin(
     [];
   const has = (n: string) => projects.find((p) => p.name === n);
   const admin: AdminStore = {
-    async addProject(p) {
+    async addProject(p, entry) {
       if (has(p.name) || projects.some((x) => x.repo === p.repo))
         throw new AdminError(
           `a project named ${p.name}, its repo or one of its domains already exists`,
         );
       projects.push({ name: p.name, repo: p.repo, branch: p.productionBranch });
       added.push(p);
+      if (entry) audit.push(entry);
       return { id: `p_${p.name}` };
     },
-    async addDomain(project, host, redirect = "none") {
+    async addDomain(project, host, redirect = "none", entry) {
       if (!has(project)) throw new AdminError(`no project ${project}`);
       if (domains.some((d) => d.host === host))
         throw new AdminError(`${host} already belongs to a project`);
       domains.push({ project, host, redirect });
+      if (entry) audit.push(entry);
     },
     async projectRepo(project) {
       return has(project)?.repo ?? null;
@@ -130,17 +135,18 @@ export function memoryAdmin(
       const p = has(project);
       return p ? (p.branch ?? "main") : null;
     },
-    async addToken(project, hash, label) {
+    async addToken(project, hash, label, entry) {
       if (!has(project)) throw new AdminError(`no project ${project}`);
       const id = `00000000-0000-4000-8000-${String(tokens.length + 1).padStart(12, "0")}`;
       tokens.push({ project, hash, label, id });
+      if (entry) audit.push(entry);
       return { id };
     },
   };
-  return { admin, added, domains, tokens };
+  return { admin, added, domains, tokens, audit };
 }
 
-export function memoryTokens(rows: TokenRow[] = []) {
+export function memoryTokens(rows: TokenRow[] = [], audit: AuditEntry[] = []) {
   const store: TokenStore = {
     async list() {
       return [...rows];
@@ -148,14 +154,15 @@ export function memoryTokens(rows: TokenRow[] = []) {
     async find(id) {
       return rows.find((r) => r.id === id) ?? null;
     },
-    async revoke(id, now = new Date()) {
+    async revoke(id, now = new Date(), entry) {
       const r = rows.find((x) => x.id === id);
       if (!r || r.revokedAt) return false;
       r.revokedAt = now;
+      if (entry) audit.push(entry);
       return true;
     },
   };
-  return { store, rows };
+  return { store, rows, audit };
 }
 
 /** Everything an action needs, in memory; `user: null` is a request without a session. */
@@ -169,13 +176,20 @@ export function actionWorld(
   } = {},
 ) {
   const env = memoryEnv();
-  const admin = memoryAdmin();
-  const tokens = memoryTokens();
+  const audit: AuditEntry[] = [];
+  const admin = memoryAdmin(undefined, audit);
+  const tokens = memoryTokens([], audit);
   const fa = fakeAgent();
   const agent = opts.agent ?? fa.agent;
   const repo = memoryRepo(opts.rows ?? []);
   const sw = switchDeps(agent, repo);
   const domains = domainWorld([], { projects: ["kd_hello"], live: [] });
+  const removeHost = domains.deps.store.remove;
+  domains.deps.store.remove = async (project, host, entry) => {
+    const gone = await removeHost(project, host);
+    if (gone && entry) audit.push(entry);
+    return gone;
+  };
   const later: (() => Promise<void>)[] = [];
   const revalidated: string[] = [];
   const deps: ActionDeps = {
@@ -190,8 +204,20 @@ export function actionWorld(
     github: opts.github ?? (() => null),
     later: (task) => void later.push(task),
     revalidate: (path) => void revalidated.push(path),
+    audit: { record: async (entry) => void audit.push(entry) },
   };
-  return { deps, env, admin, tokens, fa, repo, domains, later, revalidated };
+  return {
+    deps,
+    env,
+    admin,
+    tokens,
+    fa,
+    repo,
+    domains,
+    later,
+    revalidated,
+    audit,
+  };
 }
 
 /** A FormData as the browser sends it. */

@@ -332,6 +332,31 @@ describe("closed list of routes", () => {
       ),
     ).toBeNull();
   });
+
+  test("the clock is read only after the session lookup (no Date.now() in a prerender)", async () => {
+    const calls: string[] = [];
+    const T = Date.parse("2026-11-17T12:00:00Z");
+    const source = (expiresAt: number) => ({
+      api: {
+        async getSession() {
+          calls.push("getSession");
+          return {
+            session: { expiresAt: new Date(expiresAt) },
+            user: { id: "u1", email: "c@example.com" },
+          };
+        },
+      },
+    });
+    const clock = () => {
+      calls.push("now");
+      return T;
+    };
+    expect(await dashboardUser(source(T + 1000), new Headers(), clock)).toEqual(
+      { userId: "u1", email: "c@example.com" },
+    );
+    expect(calls).toEqual(["getSession", "now"]);
+    expect(await dashboardUser(source(T), new Headers(), clock)).toBeNull();
+  });
 });
 
 describe("rate limit", () => {
