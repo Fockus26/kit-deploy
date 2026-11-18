@@ -19,6 +19,7 @@ import { safeNextPath } from "@/lib/auth/next-path";
 type Busy = "passkey" | "code" | null;
 type CodeMode = "totp" | "recovery";
 
+// PLACEHOLDER (CONTENT_CHECKLIST row 34): provisional copy until César confirms it.
 const CODE_COPY: Record<
   CodeMode,
   { heading: string; label: string; hint: string; other: string }

@@ -34,6 +34,7 @@ export default function SettingsPage({ searchParams }: PageProps<"/settings">) {
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="font-semibold text-foreground text-h1">Ajustes</h1>
+        {/* PLACEHOLDER (CONTENT_CHECKLIST row 34): Ajustes texts are provisional. */}
         <p className="text-muted-foreground">
           Cómo entras al panel, los tokens con los que despliega GitHub y lo que
           ha pasado.
