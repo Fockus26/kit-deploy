@@ -58,7 +58,11 @@ function offenders() {
     if (r.width === 0 || r.right <= vw + 1) continue;
     // Inside a box that scrolls or clips on its own: not a leak.
     let boxed = false;
-    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    for (
+      let p = el.parentElement;
+      p && p !== document.body;
+      p = p.parentElement
+    ) {
       const o = getComputedStyle(p);
       if (/(auto|scroll|hidden|clip)/.test(o.overflowX)) {
         boxed = true;
@@ -66,8 +70,13 @@ function offenders() {
       }
     }
     if (boxed) continue;
-    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 4).join(".") : "";
-    out.push(`${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""} right=${Math.round(r.right)} vw=${vw}`);
+    const cls =
+      typeof el.className === "string"
+        ? el.className.trim().split(/\s+/).slice(0, 4).join(".")
+        : "";
+    out.push(
+      `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""} right=${Math.round(r.right)} vw=${vw}`,
+    );
     if (out.length >= 5) break;
   }
   return out;
@@ -87,10 +96,17 @@ for (const theme of THEMES) {
     await ctx.addInitScript((t) => localStorage.setItem("kd-theme", t), theme);
     const page = await ctx.newPage();
     for (const route of ROUTES) {
-      await page.goto(base + route, { waitUntil: "domcontentloaded", timeout: 120000 });
+      await page.goto(base + route, {
+        waitUntil: "domcontentloaded",
+        timeout: 120000,
+      });
       // Loading skeletons are aria-busy: wait for the real content.
       await page
-        .waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, { timeout: 60000 })
+        .waitForFunction(
+          () => !document.querySelector('[aria-busy="true"]'),
+          null,
+          { timeout: 60000 },
+        )
         .catch(() => {});
       await page.waitForTimeout(250);
       const list = await page.evaluate(offenders);
@@ -102,8 +118,17 @@ for (const theme of THEMES) {
       r.list = list;
       checked++;
       if (r.sw > r.cw) {
-        failures.push({ route, theme, width: label, scrollWidth: r.sw, clientWidth: r.cw, offenders: r.list });
-        console.log(`FAIL ${route} ${theme} ${label}: scrollWidth ${r.sw} > ${r.cw}\n     ${r.list.join("\n     ")}`);
+        failures.push({
+          route,
+          theme,
+          width: label,
+          scrollWidth: r.sw,
+          clientWidth: r.cw,
+          offenders: r.list,
+        });
+        console.log(
+          `FAIL ${route} ${theme} ${label}: scrollWidth ${r.sw} > ${r.cw}\n     ${r.list.join("\n     ")}`,
+        );
       }
     }
     await ctx.close();
