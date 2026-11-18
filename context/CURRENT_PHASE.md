@@ -24,7 +24,8 @@ locally like kit-agent (OK). Waiting on César.
   `gh variable set KIT_DEPLOY_ENABLED --body true`. Then one week without an incident; Vercel off.
 - **Phase 06 close (César):** Brevo done 2026-11-18 (fockus.dev authenticated, sender alertas@fockus.dev,
   restricted key, IP allowlist on with the VPS v4+v6 — projects still on Vercel can't send by Brevo until
-  migrated; alerts.env written, `alerts test` arrived). Left: each alert on purpose and a real cron job
+  migrated; alerts.env written, `alerts test` arrived). site_down on purpose 2026-11-18 (docker stop kd_hello: opened at the 3rd failing minute, resolved
+  after 5 OK, one email each). Left: other alerts if wanted and a real cron job
   (CRON_SECRET in production). Copy and thresholds: CONTENT_CHECKLIST #38–#39.
 
 - **Phase 05 close (César):** sign in at deploy.fockus.dev with the passkey, set a secret variable on kd_hello from Variables, check it shows only `••••`/Reemplazar and is never readable, then delete it. Shipped and domain HTTPS check done 2026-11-18.
@@ -57,7 +58,7 @@ locally like kit-agent (OK). Waiting on César.
 | 03 | Previews | done 2026-11-17 (browser cookie check pending) |
 | 04 | Variables and databases | done 2026-11-17 (real kd-hello run pending César's steps) |
 | 05 | Dashboard (kit UI phases in `phases/ui/`) | shipped 2026-11-18 (passkey + secret check pending César) |
-| 06 | Alerts and cron | shipped 2026-11-18, email delivery OK (alerts on purpose + real cron pending) |
+| 06 | Alerts and cron | shipped 2026-11-18, email + site_down on purpose OK (real cron pending, phase 07) |
 | 07 | First real project: maranatha | code done 2026-11-18 (César's VPS steps + one week pending) |
 | 08 | Back into the kit | pending |
 | 09 | Final QA ("Done when") | pending |
