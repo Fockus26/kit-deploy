@@ -1,6 +1,7 @@
 /** What the panel's actions work with; lib/panel/runtime.ts builds the real ones, tests fakes. */
 import type { AgentClient } from "@/cli/client";
 import type { AdminStore } from "@/lib/db/admin";
+import type { AuditStore } from "@/lib/db/audit";
 import type { EnvStore } from "@/lib/db/env-store";
 import type { TokenStore } from "@/lib/db/tokens";
 import type { GitHubRequest } from "@/lib/deploy/github";
@@ -29,4 +30,7 @@ export type ActionDeps = SessionSource & {
   later(task: () => Promise<void>): void;
   /** `revalidatePath` of the pages that show what changed. */
   revalidate(path: string, type?: "page" | "layout"): void;
+  /** Audit rows of what kit-agent or the switch did (D045); database-only changes write theirs
+   * in their own transaction instead. */
+  audit: AuditStore;
 };

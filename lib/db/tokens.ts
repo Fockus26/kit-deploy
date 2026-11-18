@@ -3,6 +3,7 @@
  * store never reads or returns it. Behind an interface so the panel is tested without Postgres.
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { type AuditEntry, writeAudit } from "./audit";
 import { deployTokens, projects } from "./schema";
 import type { Db } from "./store";
 
@@ -20,8 +21,9 @@ export interface TokenStore {
   list(): Promise<TokenRow[]>;
   /** The token's project, or null for no such token. */
   find(id: string): Promise<TokenRow | null>;
-  /** False when it was already revoked (or never existed). */
-  revoke(id: string, now?: Date): Promise<boolean>;
+  /** False when it was already revoked (or never existed). `audit` is written, in the same
+   * transaction, only when this call revoked it. */
+  revoke(id: string, now?: Date, audit?: AuditEntry): Promise<boolean>;
 }
 
 export function drizzleTokenStore(db: Db): TokenStore {
@@ -48,13 +50,17 @@ export function drizzleTokenStore(db: Db): TokenStore {
       return row ?? null;
     },
 
-    async revoke(id, now = new Date()) {
-      const rows = await db
-        .update(deployTokens)
-        .set({ revokedAt: now })
-        .where(and(eq(deployTokens.id, id), isNull(deployTokens.revokedAt)))
-        .returning({ id: deployTokens.id });
-      return rows.length > 0;
+    async revoke(id, now = new Date(), audit) {
+      return db.transaction(async (tx) => {
+        const rows = await tx
+          .update(deployTokens)
+          .set({ revokedAt: now })
+          .where(and(eq(deployTokens.id, id), isNull(deployTokens.revokedAt)))
+          .returning({ id: deployTokens.id });
+        if (rows.length === 0) return false;
+        if (audit) await writeAudit(tx, audit);
+        return true;
+      });
     },
   };
 }

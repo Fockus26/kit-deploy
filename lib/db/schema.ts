@@ -287,7 +287,20 @@ export const envVars = pgTable(
   ],
 );
 
-export const AUDIT_ACTIONS = ["env.set", "env.remove"] as const;
+/** Ajustes › Auditoría: "qué variable o acción" (D045). Appended only: the check lists them. */
+export const AUDIT_ACTIONS = [
+  "env.set",
+  "env.remove",
+  "project.add",
+  "token.create",
+  "token.revoke",
+  "domain.add",
+  "domain.remove",
+  "project.redeploy",
+  "project.rollback",
+  "project.stop",
+  "project.restart",
+] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /**

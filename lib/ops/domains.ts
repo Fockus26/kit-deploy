@@ -76,7 +76,8 @@ export async function addDomain(
     listDomains: (project: string) => Promise<DomainRow[]>;
   },
   input: { project: string; host: string; redirect?: DomainRedirect },
-  opts: { idempotent?: boolean } = {},
+  /** `actor`: who, for the audit row written with the host (D045); none = no row. */
+  opts: { idempotent?: boolean; actor?: string } = {},
 ): Promise<{ host: string; redirect: DomainRedirect; already: boolean }> {
   const p = assertProject(input.project);
   const h = projectHost(input.host);
@@ -87,7 +88,14 @@ export async function addDomain(
   if (opts.idempotent && existing)
     return { host: h, redirect: existing.redirect, already: true };
   if (r !== "none") checkRedirect(rows, h, r);
-  await deps.admin.addDomain(p, h, r);
+  await deps.admin.addDomain(
+    p,
+    h,
+    r,
+    opts.actor
+      ? { actor: opts.actor, action: "domain.add", project: p, name: h }
+      : undefined,
+  );
   return { host: h, redirect: r, already: false };
 }
 
@@ -96,7 +104,7 @@ export type RemoveRefusal = "not_found" | "default" | "last";
 export async function removeDomain(
   deps: CheckDeps,
   input: { project: string; host: string },
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; actor?: string } = {},
 ): Promise<
   | { ok: true; host: string; site: "rewritten" | "not_live" }
   | { ok: false; host: string; reason: RemoveRefusal }
@@ -116,7 +124,15 @@ export async function removeDomain(
   ).hosts;
   if (before.length > 0 && after.length === 0)
     return { ok: false, host: h, reason: "last" };
-  if (!(await deps.store.remove(p, h)))
+  const audit = opts.actor
+    ? {
+        actor: opts.actor,
+        action: "domain.remove" as const,
+        project: p,
+        name: h,
+      }
+    : undefined;
+  if (!(await deps.store.remove(p, h, audit)))
     return { ok: false, host: h, reason: "not_found" };
   return { ok: true, host: h, site: await rewriteSite(deps, p) };
 }

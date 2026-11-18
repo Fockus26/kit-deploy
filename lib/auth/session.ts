@@ -30,10 +30,15 @@ export function canEnrol(s: SessionLike, now = Date.now()): boolean {
   return until != null && time(until) > now && time(s.session.expiresAt) > now;
 }
 
+/**
+ * `now` is read only after the session lookup, never as a default parameter: with Cache
+ * Components a `Date.now()` before any request-time work is "unstable while prerendering"
+ * (lib/panel/session.ts awaits `connection()` first and passes it).
+ */
 export async function dashboardUser(
   auth: SessionSource,
   request: Request | Headers,
-  now = Date.now(),
+  now?: () => number,
 ): Promise<DashboardUser | null> {
   const headers = request instanceof Headers ? request : request.headers;
   let s: SessionLike | null;
@@ -43,7 +48,7 @@ export async function dashboardUser(
     // A broken cookie or the database down: not signed in, never a 500 that leaks why.
     return null;
   }
-  if (!s || isEnrolmentSession(s) || time(s.session.expiresAt) <= now)
-    return null;
+  if (!s || isEnrolmentSession(s)) return null;
+  if (time(s.session.expiresAt) <= (now ?? Date.now)()) return null;
   return { userId: s.user.id, email: s.user.email };
 }
