@@ -15,6 +15,13 @@ The project also needs:
 - The `KIT_DEPLOY_TOKEN` repository secret: César pastes it in GitHub; it never goes through
   the chat or a file.
 - If its production branch is not `main`, the `branches:` of `deploy-vps.yml` changed to match.
+- The repository variable `KIT_DEPLOY_ENABLED=true` (`gh variable set KIT_DEPLOY_ENABLED --body true`):
+  until then every run of `deploy-vps.yml` only prints a notice, so the workflow can be merged before
+  the project is registered or while Vercel still deploys.
+- An app with an origin check (Better Auth `trustedOrigins`…) adds `KIT_DEPLOY_PREVIEW_URL`, the
+  preview's own `https://` origin, set by kit-agent on preview containers.
+
+Moving a project from Vercel: [`MIGRATING.md`](MIGRATING.md).
 
 Runtime variables are not baked in: kit-agent passes them to the container (phase 04).
 `NEXT_PUBLIC_*` need a build, so they arrive as build args in phase 04 (Production and Preview;
