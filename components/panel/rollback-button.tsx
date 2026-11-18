@@ -1,7 +1,7 @@
 "use client";
 
 import { Undo2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { rollbackAction } from "@/app/(panel)/actions/deployments";
 import { ConfirmDialog } from "@/components/kit/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,6 @@ export function RollbackButton({
   onResult?: (r: RollbackResult) => void;
   onPending?: (pending: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const { state, pending, run } = useServerAction(rollbackAction);
   const report = useRef(onResult);
   report.current = onResult;
@@ -56,19 +55,18 @@ export function RollbackButton({
   const target = to.sha ? <Sha value={to.sha} /> : "el despliegue anterior";
   return (
     <div className="flex flex-col items-start gap-1">
-      <Button
-        variant="outline"
-        size={size}
-        disabled={disabled}
-        loading={pending}
-        onClick={() => setOpen(true)}
-      >
-        <Undo2 aria-hidden="true" />
-        {label}
-      </Button>
       <ConfirmDialog
-        open={open}
-        onOpenChange={setOpen}
+        trigger={
+          <Button
+            variant="outline"
+            size={size}
+            disabled={disabled}
+            loading={pending}
+          >
+            <Undo2 aria-hidden="true" />
+            {label}
+          </Button>
+        }
         title={`Rollback de ${project}${to.sha ? ` a ${to.sha}` : ""}`}
         description={
           <p>

@@ -49,6 +49,7 @@ export function ProjectActions({
   const [notice, setNotice] = useState<Outcome | null>(null);
   const hint = useId();
   const menu = useRef<HTMLButtonElement>(null);
+  const stopButton = useRef<HTMLButtonElement>(null);
   const fromMenu = useRef(false);
   const shas = useRef({ target: rollback.sha });
   shas.current = { target: rollback.sha };
@@ -93,6 +94,7 @@ export function ProjectActions({
             {restartLabel}
           </Button>
           <Button
+            ref={stopButton}
             variant="destructive-text"
             disabled={!canStop || busy}
             aria-describedby={hasLive ? undefined : hint}
@@ -169,9 +171,10 @@ export function ProjectActions({
         open={stopOpen}
         onOpenChange={(open) => {
           setStopOpen(open);
-          // The menu item that opened it is gone: focus goes back to the menu's button.
-          if (!open && fromMenu.current) {
-            setTimeout(() => menu.current?.focus(), 0);
+          // No trigger inside the dialog: focus goes back to what opened it.
+          if (!open) {
+            const back = fromMenu.current ? menu : stopButton;
+            setTimeout(() => back.current?.focus(), 0);
           }
         }}
         title={`Parar producción de ${project}`}

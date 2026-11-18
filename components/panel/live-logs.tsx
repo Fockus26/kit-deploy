@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { type LogLine, LogViewer } from "@/components/kit/log-viewer";
+import { logTime } from "@/lib/kit/panel-format";
 
 /** HANDOFF §3 Logs en vivo: the box asks for the tail every 2 s while it is following. */
 export const POLL_MS = 2000;
 const REQUEST_TIMEOUT_MS = 8000;
 
 /**
- * The LogViewer of a project's production, fed by `/api/panel/logs` (a wrapper of `logsTail`).
+ * The LogViewer of a project's production, fed by `/p/<project>/logs/tail` (W10's wrapper of `logsTail`).
  * `initial` is what the server read with the page. Paused (by the button or by scrolling up) it
  * stops asking, so what is being read does not move; "Reanudar" asks again at once. A failed
  * poll keeps the lines and says so under the box.
@@ -32,16 +33,24 @@ export function LiveLogs({
     async function poll() {
       try {
         const res = await fetch(
-          `/api/panel/logs?project=${encodeURIComponent(project)}&env=production&lines=${lines}`,
+          `/p/${encodeURIComponent(project)}/logs/tail?env=production`,
           {
             cache: "no-store",
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           },
         );
         if (!res.ok) throw new Error(String(res.status));
-        const body = (await res.json()) as { lines: LogLine[] };
+        const body = (await res.json()) as {
+          entries: { ts: string; level: LogLine["level"]; line: string }[];
+        };
         if (alive) {
-          setShown(body.lines);
+          setShown(
+            body.entries.slice(-lines).map((e) => ({
+              time: logTime(e.ts),
+              level: e.level,
+              text: e.line,
+            })),
+          );
           setStale(false);
         }
       } catch {

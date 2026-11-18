@@ -117,7 +117,7 @@
   /* DESIGN_TOKENS.md › sizes. Controls are 44px below 768 (touch), 40px above. */
   --spacing-control: 44px;
   --spacing-sheet: 280px;
-  --spacing-sheet-detail: 480px;
+  --container-sheet-detail: 480px;
   --spacing-sidebar: 240px;
   --spacing-header: 56px;
   --container-form: 400px;
