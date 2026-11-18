@@ -39,6 +39,7 @@ import {
 } from "../lib/core/env";
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
+import { dbStatus } from "./databases";
 import type { Deps, RunResult } from "./deps";
 import { certStatus } from "./domains";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
@@ -294,6 +295,8 @@ export class Agent {
         return certStatus(this.deps, req.params.host);
       case "metrics.sample":
         return sampleMetrics(this.deps, this.now, () => this.list());
+      case "db.status":
+        return dbStatus(this.deps, req.params.project);
     }
   }
 

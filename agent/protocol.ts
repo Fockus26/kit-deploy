@@ -192,6 +192,8 @@ export const Request = z.discriminatedUnion("op", [
   op("cert.status", { host }),
   /** D015: one reading of containers, the VPS and Caddy's access log (agent/metrics.ts). */
   op("metrics.sample", {}),
+  /** D035: size and last backup of `<project>` and `<project>_preview` (agent/databases.ts). */
+  op("db.status", { project }),
 ]);
 
 export type Request = z.infer<typeof Request>;
