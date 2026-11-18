@@ -1,0 +1,48 @@
+# Phase 05 — Dashboard · wave plan
+
+> Written by `orchestrate` on 2026-11-17. César: "continúa con la fase 5 sin interrupción hasta
+> completarla, puedes mergear" — so waves run one after another in the same session, PRs are
+> squash-merged on green CI, QA once at the end (memory `qa-at-end-not-per-unit`).
+> Main folder: `C:\Users\Cesar\Documents\Work\kit-deploy` · Phase file: `phases/05-DASHBOARD.md`
+
+**No `design/HANDOFF.md`:** César never ran the brief through Claude Design. The UI is built from
+`design/BRIEF-kit-deploy.md` (§4 visual system, §5 constraints, §6 pages, §7 states) and the
+`context/` tokens (D007), conservatively — recorded in **D021** (W1). If a handoff arrives later,
+it wins and the differences become a polish unit.
+
+## Waves
+
+| Wave | Units (branch · what · main files) | Depends on | Status |
+|---|---|---|---|
+| 1 | W1 `feat/dashboard-shell` · UI 01+02: tokens check, theme switch, sidebar/header layout behind the session, `(panel)` route group · `app/(panel)/`, `components/layout/`, `app/globals.css` | — | in progress |
+| 1 | W2 `feat/agent-logs` · D014: agent follows container output to daily files (14 d, gzip), ops `logs.tail`/`logs.search`, CLI `logs` · `agent/logs.ts`, `cli/logs-commands.ts` | — | in progress |
+| 1 | W3 `feat/metrics` · D015: migration 0009 `metric_samples`, sampler (docker stats 30 s + Caddy access log), rollups, CLI `metrics` · `agent/metrics.ts`, `lib/metrics/`, `infra/` timer | — | in progress |
+| 1 | W4 `feat/domains-backend` · F6: domain add/remove/list with www redirect choice, DNS resolve check every minute, cert state/expiry; migration 0010 · `lib/domains/`, `lib/core/caddy.ts`, `cli/domain-commands.ts` | W3 merged first (migration number) | in progress |
+| 2 | W5 `feat/ui-components` · UI 03: StatusBadge, CopyValue, RelativeTime, Meter, DataTable (TanStack), ConfirmDialog, LogViewer, Sparkline (shadcn Chart) · `components/kit/` | W1 | pending |
+| 2 | W6 `feat/panel-data` · read layer + Server Actions (env set/rm, rollback/redeploy/restart/stop, domain add/rm, db create, new project + token), QA seed of realistic data · `lib/panel/`, `app/(panel)/actions/`, `scripts/qa-seed.ts` | W2–W4 | pending |
+| 2 | W7 `feat/agent-db-status` · F11: ops `db.list`/`db.status` (size, connections, last backup) via kit-db · `agent/`, `cli/` | — | pending |
+| 3 | W8 `feat/page-home-project` · Inicio + Proyecto/Resumen + Despliegues (+detalle) | W5, W6 | pending |
+| 3 | W9 `feat/page-env-domains-previews` · Variables + Dominios + Previews | W5, W6 | pending |
+| 3 | W10 `feat/page-logs-databases` · Logs + Bases de datos | W5, W6, W7 | pending |
+| 3 | W11 `feat/page-new-settings` · Nuevo proyecto + Ajustes (acceso, tokens, auditoría; alertas = fase 06) + login restyle | W5, W6 | pending |
+| 4 | W12 `feat/panel-states-polish` · UI 06+08: 404/500/empty/loading/error, Caddy preview pages restyle, responsive sweep 320–1920 | wave 3 | pending |
+
+Cut rule: units that touch the same files go in different waves; cross-cutting work last.
+Cron page = phase 06 (the tab exists, disabled with "Fase 06").
+
+## Current wave: 1
+
+- Brief and prompts: `context/plans/orchestration-2026-11-17.md` / `…-prompts.md`
+- PRs: —
+- QA: at the end (phase 09), per César.
+
+## Closings
+
+| Wave | PRs | QA (C · H · M · L) | Moves to the next | Data not deleted |
+|---|---|---|---|---|
+
+## Start prompt for the next wave
+
+```
+/orchestrate wave 2 of phase 05. Plan: context/plans/phase-05-dashboard.md
+```

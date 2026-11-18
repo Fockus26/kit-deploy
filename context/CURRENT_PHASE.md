@@ -5,52 +5,42 @@
 
 ## Now
 
-**Phase:** 04 — Variables and databases (in progress) · **Track:** own, infrastructure first (D018)
-Plan agreed 2026-11-17: `plans/04-variables.md` (U1–U8). Phase 03: everything done but the browser check of the host-only cookie (César); its log is `PHASE_LOG/03-previews.md`.
+**Phase 04 — Variables and databases: done 2026-11-17** (#33–#43, plan `plans/04-variables.md`, log
+`PHASE_LOG/04-variables.md`). On the VPS: release 01076756b752 (2026-11-18), migrations 0006–0008.
+Close checks passed on the VPS; phase security-review done (F1 fixed in #42). A real kd-hello run of
+build-env / secret in container / rebuild waits for César's steps (Blocked).
+
+**Phase 05 — Dashboard (in progress, in parallel with the phase-04 ship)** · wave 1 of 4 ·
+plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brief (D021).
 
 | Unit | PR | Status |
 |---|---|---|
-| U1 core crypto (AES-256-GCM, HKDF, AAD) + migration 0006 `env_vars`, `audit_log` | #33 | merged (c7c8789) · not on the VPS (goes with the phase release) |
-| U2 agent `env.seal` / `env.reveal` (plain or Development only; Prod/Preview secrets `forbidden`) | #34 | merged (28b6ca3) |
-| U3 CLI `env ls / set / rm` (stdin, no echo; audit in the same transaction) | #35 | merged |
-| U4 switch: variables into the container + root-pinned image repo (security review HIGH fixed) | #36 | merged |
-| U5 managed DATABASE_URL (kit-db url at each start, pinned image only) + `db create`; no `*_preview` projects | #37 | merged |
-| U6 `env pull` (Development to a pipe/file only; dotenv-safe quoting checked with @next/env) | #38 | merged |
-| U7 `/api/v1/build-env` + template (BuildKit secret, BUILD_ENV_HASH) + derived Server Actions key | #39 | merged |
-| U8a `redeploy` (generation per deployment, migration 0007, container `-g<n>`) | #40 | merged |
-| U8b `rebuild` (workflow_dispatch + `{sha, rebuild}`) | #41 | merged |
-| F1 runtime names refused (PATH, NODE_*, LD_*, *_PROXY, ...; migration 0008) | #42 | merged |
-| Sweep sees `-g<n>` preview containers | #43 | merged |
-
-All units merged; install test in Docker ALL PASS (94) on main + #43. Phase security-review done (1 MEDIUM, fixed in #42). Left: install test in Docker, then the VPS release with César's OK and the close checks on the VPS.
-
-Log: `PHASE_LOG/04-variables.md`.
-
-## Closes when (phase 04)
-
-- [ ] A secret set from `ssh kit-vps kit-deploy env set` is never readable afterwards (CLI, API, DB dump)
-- [ ] `env pull` writes a `.env.local` that runs kd-hello locally
-- [ ] A backup of `kit_deploy` alone cannot decrypt any variable
-- [x] security-review of crypto and build-env (per unit + phase review 2026-11-17: F1 fixed in #42)
-- [ ] (phase 03 leftover) the dashboard cookie is host-only in the browser
+| W1 shell (layout, theme, session for QA) | — | running |
+| W2 agent logs (D014) | — | running |
+| W3 metrics (D015, migration 0009) | — | running |
+| W4 domains backend (F6, migration 0010) | — | running |
 
 ## Blocked (actions for César or external)
 
-- Each new project's repo must be added to the GitHub status token (GitHub → the token → Repository
-  access); no reinstall. The token expires: when it does, re-run `ship.sh … --install --github-token`.
-
+- Phase 04 (César): master.key into the password manager (CONTENT_CHECKLIST #4);
+  `ssh kit-vps kit-deploy project pin kd_hello Fockus26/kd-hello`; Actions: Read and write on the
+  GitHub status token; new deploy-vps.yml + Dockerfile into kd-hello; `db create kd_hello` only if
+  it needs a DB. Then the first real build-env / secret-in-container / rebuild run on kd-hello.
+- Phase 03 leftover: the dashboard cookie is host-only in the browser (César).
+- Each new project's repo must be added to the GitHub status token (Repository access); when the
+  token expires, re-run `ship.sh … --install --github-token`.
 - QA pendiente: once at the end (phase 09), per César 2026-11-10.
-- With the phase release: `ssh kit-vps kit-deploy project pin kd_hello Fockus26/kd-hello` (U4).
-- César: add Actions: Read and write to the GitHub status token (phase 04 U8, rebuild).
 - CONTENT_CHECKLIST #12, #14: César confirms the "preview no existe" and "preview dormido" copy.
 
 ## Next
 
+- Before moving a real project (César asked 2026-11-18): the real kd-hello run, alerts (06), and
+  the brief's "Done when" checks (load test during deploy, reboot, kit-deploy stopped, nmap,
+  certbot dry-run). Proposed 06 before 05; 05 had already started in another session.
 - fail2ban jail for `kit-deploy-auth: failed sign-in` (own small infra unit, D003).
-- César: passkey in his password manager (2 registered 2026-11-14, neither there; "luego lo arreglamos"), then passkey sign-in + cookie without Domain in the browser (phase close).
-- Cosmetic, own unit: update.sh's last line prints the previous release twice.
-- Closed code to fix in its own unit: `infra/server-ready.sh` resets /etc/kit-deploy to 0700 (update.sh heals it).
-- Bump the templates' actions off Node 20 (phase 08, when they move into the kit).
+- César: passkey in his password manager, then passkey sign-in + cookie check in the browser.
+- Own small units: update.sh's last line prints the previous release twice; `server-ready.sh`
+  resets /etc/kit-deploy to 0700 (update.sh heals it); templates' actions off Node 20 (phase 08).
 
 ## Phases
 
@@ -58,9 +48,9 @@ Log: `PHASE_LOG/04-variables.md`.
 |---|---|---|
 | 01 | Server ready | done 2026-11-11 (nmap: PR #4 merged, run pending) |
 | 02 | One site by hand | done 2026-11-13 |
-| 03 | Previews | done 2026-11-17 |
-| 04 | Variables and databases | in progress |
-| 05 | Dashboard (kit UI phases in `phases/ui/`) | pending · brief in `design/BRIEF-kit-deploy.md` |
+| 03 | Previews | done 2026-11-17 (browser cookie check pending) |
+| 04 | Variables and databases | done 2026-11-17 (real kd-hello run pending César's steps) |
+| 05 | Dashboard (kit UI phases in `phases/ui/`) | in progress (another session, wave 1) |
 | 06 | Alerts and cron | pending |
 | 07 | First real project: maranatha | pending |
 | 08 | Back into the kit | pending |

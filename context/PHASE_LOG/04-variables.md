@@ -112,3 +112,17 @@ write to the GitHub status token).
 - Guarantees: secrets never read back (holds, with the caveats above); DB backup can't decrypt
   (holds); build-env only public + key (holds); DATABASE_URL only to pinned containers (holds);
   no cross-project path (holds).
+
+## Release + close (2026-11-18)
+
+- Install test (Docker) ALL PASS 94 on main+#43. Release 01076756b752 shipped (César's OK):
+  migrations 9 applied, kit-agent restarted, web up (0 restarts), kd-hello 200, previous 92fbf71.
+- Close checks on the VPS: a random secret (generated on the VPS) → `(hidden)`, not in --json,
+  not in `pg_dump kit_deploy`; master key not in the dump; audit row `ssh:root env.set`. Removed.
+- env pull: GIT_SHA set in Development, pulled into a kd-hello clone, Next's loadEnvConfig reads
+  it, `next build` OK (page is dynamic, so the value is not in the output); TTY refused. Removed.
+- Not yet run for real (needs César's steps): build-env in a real Action, a secret inside a pinned
+  container, rebuild through workflow_dispatch.
+- César asked whether projects can move now: not yet — real kd-hello run, alerts (06), the brief's
+  "Done when" checks (load test during deploy, reboot, kit-deploy stopped, nmap, certbot dry-run).
+  maranatha: Supabase (no kit-db), no cron, payments; reads VERCEL*/ADMIN_HOST → adapt in phase 07.
