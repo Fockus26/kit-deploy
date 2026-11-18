@@ -44,6 +44,7 @@ import { isReservedProject } from "../lib/ops/rules";
 import { backupsStatus, dbStatus, ownsDatabase } from "./databases";
 import type { Deps, RunResult } from "./deps";
 import { certStatus, platformCerts } from "./domains";
+import { pruneImages } from "./images";
 import { Busy, Limiter } from "./limit";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
@@ -334,6 +335,11 @@ export class Agent {
         return backupsStatus(this.deps);
       case "cron.call":
         return this.cronCall(req.params);
+      case "images.prune":
+        // Serial: never beside a deploy's pull or run.
+        return this.serial(() =>
+          pruneImages(this.deps, req.params.keep, req.params.dryRun ?? false),
+        );
     }
   }
 
