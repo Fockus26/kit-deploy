@@ -33,7 +33,7 @@
 | 30 | Copy of the Logs page (descriptions, "Sin líneas para esta búsqueda", "Se perdió el seguimiento…") | `components/logs/` | phase 05 W10 | 05 | Pending |
 | 31 | Copy of the Bases page; **fact to confirm:** "kit-db hace un backup cada noche" (backup OK threshold 36 h), "Sin copia fuera del servidor…" | `components/databases/` | phase 05 W10 | 05 | Pending |
 | 32 | Copy of /new (form help, token card, pin command text) | `app/(panel)/new/` | phase 05 W11 | 05 | Pending |
-| 33 | Copy of the Alertas card ("Llega en la fase 06") | `app/(panel)/settings/` | phase 05 W11 | 05 | Pending |
+| 33 | Copy of the Alertas card ("Llega en la fase 06") | `app/(panel)/settings/` | phase 05 W11 | 05 | Resolved (replaced by #39, phase 06) |
 | 34 | Copy of Ajustes and of the restyled /login and /enrol | `app/(panel)/settings/`, `app/login/`, `app/enrol/` | phase 05 W11 | 05 | Pending |
 | 24 | Copy of Inicio: subtitle "N proyectos · último despliegue …", "El servidor aún no ha enviado lecturas", "Sin alertas abiertas", the empty-projects state | `app/(panel)/page.tsx`, `components/panel/projects-table.tsx` | phase 05 W8 | 05 | Pending |
 | 25 | Copy of the project header and Resumen: "Sin nada en vivo en producción…", result notices of Redeploy / Reiniciar / Parar / Rollback, the rollback and stop dialogs, "Aún no hay métricas", "Sin previews", "Producción aún no ha escrito líneas de log" | `components/panel/project-actions.tsx`, `lib/kit/outcome.ts`, `rollback-button.tsx`, `app/(panel)/p/[project]/page.tsx` | phase 05 W8 | 05 | Pending |
@@ -43,5 +43,7 @@
 | 37 | The agent-down notice (one text for every page: "Los sitios siguen sirviendo: no dependen del panel." + "Diagnóstico en el servidor: systemctl status kit-agent") | `components/kit/agent-down-notice.tsx` | phase 05 W12 | 05 | Pending |
 
 | 38 | Copy of the alert emails and alert titles ("<p> no responde", "El certificado de <host> vence en N días", "Disco del VPS al N %", "Memoria del VPS al N %", "Falló el backup de <db>", "Falló el despliegue de <p>", ABIERTA/RESUELTA, the footer line) — thresholds to confirm: disk 80 %, memory 90 % for 5 min, site 3 min down / 5 min up | `lib/alerts/checks.ts`, `lib/alerts/email.ts`, `lib/alerts/rules.ts` | phase 06 U1 | 06 | Pending |
+
+| 39 | Copy of the Cron tab (intro, empty state, "Las últimas 50…"), Inicio's alert line and Ajustes › Alertas (intro, "Último correo enviado", "Ninguna todavía"); row 33 ("Llega en la fase 06") is replaced | `app/(panel)/p/[project]/cron/`, `components/cron/`, `app/(panel)/page.tsx`, `app/(panel)/settings/page.tsx` | phase 06 U4 | 06 | Pending |
 
 <!-- Mark "Resolved" (do not delete the row) when it is done and the code is updated. -->

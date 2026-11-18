@@ -10,7 +10,7 @@
 Close checks passed on the VPS; phase security-review done (F1 fixed in #42). A real kd-hello run of
 build-env / secret in container / rebuild waits for César's steps (Blocked).
 
-**Phase 05 — Dashboard: code done 2026-11-18** (#44–#57, #61) · all 4 waves merged ·
+**Phase 05 — Dashboard: shipped 2026-11-18** (release 5c36b947709b, install test ALL PASS 102; log `PHASE_LOG/05-dashboard.md`) ·
 plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brief (D021).
 
 | Unit | PR | Status |
@@ -33,7 +33,7 @@ plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brie
 
 ## Blocked (actions for César or external)
 
-- **Phase 05 close:** César's OK for the phase ship (release of main + Docker install test + `ship.sh`), then on the VPS: migrations 0009–0011 applied, timers `kit-deploy-metrics` and `kit-deploy-domain-check` active, a secret set from the panel is never readable, a domain added from the panel serves HTTPS with only the DNS record. Phase 07: `ssh kit-vps kit-deploy db adopt maranatha --yes` (D051).
+- **Phase 05 close (César):** sign in at deploy.fockus.dev with the passkey, set a secret variable on kd_hello from Variables, check it shows only `••••`/Reemplazar and is never readable, then delete it. Shipped and domain HTTPS check done 2026-11-18. Phase 07: maranatha uses Supabase today; only if its database moves to kit-db, `ssh kit-vps kit-deploy db adopt maranatha --yes` (D051).
 
 - Phase 04 (César): master.key into the password manager (CONTENT_CHECKLIST #4);
   `ssh kit-vps kit-deploy project pin kd_hello Fockus26/kd-hello`; Actions: Read and write on the
