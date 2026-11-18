@@ -39,6 +39,8 @@ import {
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
+import { type LogDeps, searchLogs, tailLogs } from "./logs";
+import { systemLogDeps } from "./logs-system";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
 
 export const CADDYFILE = "/etc/caddy/Caddyfile";
@@ -222,6 +224,8 @@ export class Agent {
   constructor(
     private readonly deps: Deps,
     private readonly now: () => number = Date.now,
+    /** The log files (D014): only these two ops read them. */
+    private readonly logs: LogDeps = systemLogDeps,
   ) {}
 
   execute(req: Request): Promise<unknown> {
@@ -274,6 +278,10 @@ export class Agent {
         return this.serial(() => this.createDatabases(req.params.project));
       case "env.build":
         return this.buildEnv(req.params);
+      case "logs.tail":
+        return tailLogs(this.logs, req.params, this.now());
+      case "logs.search":
+        return searchLogs(this.logs, req.params, this.now());
     }
   }
 

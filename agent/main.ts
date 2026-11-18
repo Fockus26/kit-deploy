@@ -5,7 +5,9 @@
  *   KIT_AGENT_SOCKET  default /run/kit-deploy/agent.sock
  *   KIT_AGENT_GROUP   default kit-deploy — the group allowed to connect
  */
-import { Agent } from "./ops";
+import { LogFollower } from "./logs";
+import { systemLogDeps } from "./logs-system";
+import { Agent, type ManagedContainer } from "./ops";
 import { serve } from "./server";
 import { systemDeps } from "./system";
 
@@ -30,12 +32,28 @@ if (process.getuid?.() !== 0) {
 // The socket is created 0700 and only then opened to the group: never a moment world-writable.
 process.umask(0o077);
 
-const server = await serve(new Agent(systemDeps), systemDeps, {
+const agent = new Agent(systemDeps);
+const server = await serve(agent, systemDeps, {
   path: socketPath,
   gid: await groupId(group),
 });
 systemDeps.log({ event: "listening", socket: socketPath, group });
 
+// The second long-running task: every managed container's output into its daily file (D014).
+const follower = new LogFollower(
+  systemLogDeps,
+  async () =>
+    (await agent.execute({
+      id: "logs",
+      op: "container.list",
+      params: {},
+    })) as ManagedContainer[],
+  systemDeps.log,
+);
+follower.start();
+
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
-  process.on(sig, () => server.close(() => process.exit(0)));
+  process.on(sig, () =>
+    server.close(() => void follower.stop().finally(() => process.exit(0))),
+  );
 }
