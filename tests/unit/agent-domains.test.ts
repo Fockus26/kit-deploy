@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { dispatch } from "../../agent/dispatch";
+import { CERT_MAX_BYTES } from "../../agent/domains";
 import { Agent } from "../../agent/ops";
 import { CADDY_CERTS_DIR } from "../../lib/core/constants";
 import { fakeDeps } from "./agent-fakes";
@@ -75,6 +76,34 @@ describe("cert.status", () => {
         ok: true,
         result: null,
       });
+  });
+
+  test("L1: a symlink is never followed, and a file over the cap is no certificate", async () => {
+    const { send, files, symlinks } = setup();
+    // Caddy's directory pointing a host's .crt at a file the agent should never read.
+    files.set("/etc/kit-deploy/master.key", SHOP_PEM);
+    symlinks.set(
+      `${LE}/shop.example.com/shop.example.com.crt`,
+      "/etc/kit-deploy/master.key",
+    );
+    expect(await send(certStatus("shop.example.com"))).toMatchObject({
+      ok: true,
+      result: null,
+    });
+    files.set(
+      `${ZERO}/shop.example.com/shop.example.com.crt`,
+      SHOP_PEM + "x".repeat(CERT_MAX_BYTES),
+    );
+    expect(await send(certStatus("shop.example.com"))).toMatchObject({
+      ok: true,
+      result: null,
+    });
+    // Within the cap: read.
+    files.set(`${ZERO}/shop.example.com/shop.example.com.crt`, SHOP_PEM);
+    expect(await send(certStatus("shop.example.com"))).toMatchObject({
+      ok: true,
+      result: { source: "acme.zerossl.com-v2-dv90" },
+    });
   });
 
   test.each([

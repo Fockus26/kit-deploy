@@ -7,6 +7,7 @@ import type { Response } from "../../agent/protocol";
 import type { AgentClient } from "../../cli/client";
 import { runCli } from "../../cli/commands";
 import { deriveEnvKey, seal } from "../../lib/core/crypto";
+import { DB_MARKER_MAX_BYTES, dbMarkerPath } from "../../lib/core/db-marker";
 import { fakeDeps } from "./agent-fakes";
 
 const SHA = "3f2a9c1e7b4d5a6f8e9c0b1a2d3e4f5a6b7c8d9e";
@@ -22,10 +23,13 @@ function setup(
   opts: {
     pinned?: boolean;
     databases?: string[];
+    /** Those with kit-deploy's marker (D051); by default every database there. */
+    marked?: string[];
     handlers?: Record<string, Handler>;
   } = {},
 ) {
   const databases = new Set(opts.databases ?? ["kd_hello", "kd_hello_preview"]);
+  const marked = opts.marked ?? [...databases];
   const f = fakeDeps({
     "docker run": () => ({ stdout: "abc\n" }),
     "kit-db url": (argv) =>
@@ -39,6 +43,7 @@ function setup(
     ...opts.handlers,
   });
   f.files.set(MASTER_KEY, MASTER);
+  for (const db of marked) f.files.set(dbMarkerPath(db), "created");
   if (opts.pinned !== false) f.files.set(PIN, "ghcr.io/cesar/kd-hello\n");
   const atRun: (string | null)[] = [];
   const realRun = f.deps.run;
@@ -126,7 +131,8 @@ describe("DATABASE_URL, managed by the agent", () => {
   });
 
   test("no database for the project: runs without DATABASE_URL, and says so in the log", async () => {
-    const s = setup({ databases: [] });
+    // Marked once, gone from kit-db since.
+    const s = setup({ databases: [], marked: ["kd_hello"] });
     expect(await s.run()).toMatchObject({ ok: true });
     expect(s.atRun).toEqual([null]);
     expect(s.logs).toContainEqual({
@@ -134,6 +140,68 @@ describe("DATABASE_URL, managed by the agent", () => {
       database: "kd_hello",
       databaseUrl: false,
     });
+  });
+
+  test("D051: a database kit-deploy does not own gives no DATABASE_URL; kit-db is not asked", async () => {
+    // `kd_hello` exists on kit-db (another client's, or made by hand) but has no marker.
+    const s = setup({ marked: [] });
+    expect(await s.run()).toMatchObject({ ok: true });
+    expect(s.kitDb()).toEqual([]);
+    expect(s.atRun).toEqual([null]);
+    expect(s.logs).toContainEqual({
+      event: "env.managed",
+      database: "kd_hello",
+      databaseUrl: false,
+      reason: "not_managed",
+    });
+  });
+
+  test("D051: only a regular file is a marker (a symlink or an oversized file is not)", async () => {
+    const link = setup({ marked: [] });
+    link.symlinks.set(dbMarkerPath("kd_hello"), MASTER_KEY);
+    expect(await link.run()).toMatchObject({ ok: true });
+    expect(link.kitDb()).toEqual([]);
+    expect(link.atRun).toEqual([null]);
+
+    const big = setup({ marked: [] });
+    big.files.set(
+      dbMarkerPath("kd_hello"),
+      "x".repeat(DB_MARKER_MAX_BYTES + 1),
+    );
+    expect(await big.run()).toMatchObject({ ok: true });
+    expect(big.atRun).toEqual([null]);
+  });
+
+  test("D051: a preview uses its own marker, not production's", async () => {
+    const s = setup({ marked: ["kd_hello"] });
+    expect(
+      await s.run({ target: { project: "kd_hello", env: "preview", pr: 7 } }),
+    ).toMatchObject({ ok: true });
+    expect(s.kitDb()).toEqual([]);
+    expect(s.atRun).toEqual([null]);
+  });
+
+  test("D051: reserved names are refused by the protocol", async () => {
+    const s = setup({ databases: ["kit_deploy", "postgres"] });
+    for (const project of [
+      "kit_deploy",
+      "postgres",
+      "template1",
+      "pgbouncer",
+    ]) {
+      expect(
+        await s.run({ target: { project, env: "production" } }),
+      ).toMatchObject({ ok: false, error: { code: "bad_request" } });
+      expect(await s.send("db.create", { project })).toMatchObject({
+        ok: false,
+        error: { code: "bad_request" },
+      });
+      expect(await s.send("db.status", { project })).toMatchObject({
+        ok: false,
+        error: { code: "bad_request" },
+      });
+    }
+    expect(s.kitDb()).toEqual([]);
   });
 
   test("kit-db output that is not one URL is not used", async () => {
@@ -178,6 +246,35 @@ describe("db.create", () => {
     expect(s.kitDb().filter((c) => c[1] === "create")).toEqual([
       ["kit-db", "create", "kd_hello_preview"],
     ]);
+  });
+
+  test("D051: marks each one it creates, privately, with no secret inside", async () => {
+    const s = setup({ databases: [] });
+    expect(await s.send("db.create", { project: "kd_hello" })).toMatchObject({
+      ok: true,
+    });
+    expect(s.privateFiles.map((p) => p.path)).toEqual([
+      dbMarkerPath("kd_hello"),
+      dbMarkerPath("kd_hello_preview"),
+    ]);
+    for (const p of s.privateFiles) {
+      expect(p.content).toMatch(/^created by kit-deploy \S+\n$/);
+      expect(p.content).not.toContain(PASSWORD);
+    }
+  });
+
+  test("D051: one that exists without the marker is not taken, and nothing is created", async () => {
+    // `shop_preview` is new, but `shop` is another client's: neither is touched.
+    const s = setup({ databases: ["shop"], marked: [] });
+    const res = (await s.send("db.create", { project: "shop" })) as {
+      ok: false;
+      error: { code: string; message: string };
+    };
+    expect(res.ok).toBe(false);
+    expect(res.error.code).toBe("not_managed");
+    expect(res.error.message).toContain("kit-deploy db adopt shop");
+    expect(s.kitDb().filter((c) => c[1] === "create")).toEqual([]);
+    expect(s.privateFiles).toEqual([]);
   });
 
   test("a failure says why, without any URL", async () => {

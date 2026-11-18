@@ -19,7 +19,7 @@ import { drizzleTokenStore } from "@/lib/db/tokens";
 import { drizzleSwitchRepo } from "@/lib/deploy/drizzle-repo";
 import { githubRequest, githubTokenFromEnv } from "@/lib/deploy/github";
 import { switchDeps } from "@/lib/deploy/runtime";
-import { regenerate } from "@/lib/deploy/switch";
+import { rewriteSiteFile } from "@/lib/deploy/switch";
 import { systemResolver } from "@/lib/domains/resolve";
 import { drizzleDomainStore } from "@/lib/domains/store";
 import { drizzleMetricsReader } from "@/lib/metrics/read";
@@ -66,8 +66,8 @@ export function actionDeps(): ActionDeps {
       agent: sw.agent,
       liveProjects: async () =>
         new Set((await repo.liveSites()).map((s) => s.project)),
-      regenerate: async (project) =>
-        (await regenerate(sw, { project }))[0] ?? { ok: true },
+      // The Caddy file only: a stopped production stays stopped (D050).
+      regenerate: (project) => rewriteSiteFile(sw, project),
     },
     openDeployment: (project, pr) => store.openDeployment(project, pr),
     github: () => {

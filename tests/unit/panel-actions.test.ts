@@ -845,6 +845,41 @@ describe("panel actions: projects, tokens, databases", () => {
     });
   });
 
+  test("D051: project form refuses the platform's and Postgres' database names, in Spanish", async () => {
+    const w = actionWorld();
+    for (const name of ["kit_deploy", "postgres", "template0", "pgbouncer"]) {
+      const r = await createProject(
+        w.deps,
+        raw({ name, repo: "fockus26/maranatha" }),
+      );
+      expect(r).toMatchObject({
+        ok: false,
+        code: "invalid",
+        fields: { name: expect.stringContaining("reservado") },
+      });
+    }
+    expect(w.admin.added).toEqual([]);
+  });
+
+  test("D051: Crear base over a database kit-deploy does not own says how to adopt it", async () => {
+    const w = actionWorld({
+      agent: {
+        call: async () => ({
+          id: "x",
+          ok: false,
+          error: { code: "not_managed", message: "kd_hello already exists" },
+        }),
+      },
+    });
+    expect(
+      await createProjectDatabases(w.deps, raw({ project: "kd_hello" })),
+    ).toMatchObject({
+      ok: false,
+      code: "conflict",
+      message: expect.stringContaining("kit-deploy db adopt kd_hello"),
+    });
+  });
+
   test("token create → once; revoke needs its project's name and is idempotent", async () => {
     const w = actionWorld();
     const t = await createToken(

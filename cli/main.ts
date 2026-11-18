@@ -27,13 +27,14 @@ import {
 import { githubRequest, githubTokenFromEnv } from "../lib/deploy/github";
 import { commenterFromEnv } from "../lib/deploy/pr-comment";
 import { pullStateFromEnv } from "../lib/deploy/pr-state";
-import { regenerate } from "../lib/deploy/switch";
+import { rewriteSiteFile } from "../lib/deploy/switch";
 import { systemResolver } from "../lib/domains/resolve";
 import { drizzleDomainStore } from "../lib/domains/store";
 import { drizzleMetricsReader } from "../lib/metrics/read";
 import { drizzleMetricsStore } from "../lib/metrics/store";
 import { socketClient } from "./client";
 import { runCli } from "./commands";
+import { writeDbMarker } from "./db-marks";
 import {
   loadAlertsEnv,
   loadCliEnv,
@@ -49,6 +50,7 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
   stdoutIsTTY: process.stdout.isTTY === true,
   actor: sshActor(),
   pins: { isRoot: process.getuid?.() === 0, write: writePinFile },
+  dbMarks: { isRoot: process.getuid?.() === 0, write: writeDbMarker },
   github: () => {
     loadGithubEnv();
     const token = githubTokenFromEnv();
@@ -111,8 +113,8 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
       agent,
       liveProjects: async () =>
         new Set((await sw.repo.liveSites()).map((s) => s.project)),
-      regenerate: async (project) =>
-        (await regenerate(sw, { project }))[0] ?? { ok: true },
+      // The Caddy file only: a stopped production stays stopped (D050).
+      regenerate: (project) => rewriteSiteFile(sw, project),
     };
   },
   alerts: () => {
