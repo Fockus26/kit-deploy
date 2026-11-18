@@ -2,6 +2,7 @@ import { Bell } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { CommandLine } from "@/components/kit/command-line";
+import { RelativeTime } from "@/components/kit/relative-time";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
 import { StatusBadge } from "@/components/kit/status-badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -43,7 +44,9 @@ export default function SettingsPage({ searchParams }: PageProps<"/settings">) {
       <Suspense fallback={<SkeletonCard title="Acceso" />}>
         <Access searchParams={searchParams} />
       </Suspense>
-      <Alerts />
+      <Suspense fallback={<SkeletonCard title="Alertas" />}>
+        <Alerts searchParams={searchParams} />
+      </Suspense>
       <Suspense fallback={<SkeletonCard title="Tokens de despliegue" />}>
         <Tokens searchParams={searchParams} />
       </Suspense>
@@ -118,28 +121,76 @@ async function Access({ searchParams }: { searchParams: Search }) {
   );
 }
 
-function Alerts() {
+/** Ajustes › Alertas (phase 06, D047): where they go, how to set them up, the last ten. The
+ * Brevo key lives in /etc/kit-deploy/alerts.env (root): the panel never reads or shows it. */
+async function Alerts({ searchParams }: { searchParams: Search }) {
+  const data = await cursor(searchParams).then(settingsData);
   return (
     <section aria-labelledby="alertas" className="flex flex-col gap-3">
       <h2 id="alertas" className={H2}>
         Alertas
       </h2>
-      {/* PLACEHOLDER (CONTENT_CHECKLIST row 33): disabled until phase 06 brings the alerts. */}
-      <div
-        aria-disabled="true"
-        className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border border-border bg-card p-5 text-muted-foreground"
-      >
-        <Bell aria-hidden="true" className="mt-0.5 size-[18px] shrink-0" />
-        <div className="min-w-48 flex-1">
-          <p className="font-medium">Llega en la fase 06</p>
-          <p className="mt-1">
-            Aquí se configurarán los avisos por email cuando algo falle en un
-            despliegue o en el servidor.
-          </p>
+      <div className={CARD}>
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+          <Bell
+            aria-hidden="true"
+            className="mt-0.5 size-[18px] shrink-0 text-muted-foreground"
+          />
+          <div className="min-w-48 flex-1">
+            <p className="font-medium text-foreground">
+              Por email desde alertas@fockus.dev
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              Sitio caído, certificado a menos de 14 días, disco por encima del
+              80 %, memoria justa, backup fallido y despliegue fallido. Un
+              correo al abrirse y otro al resolverse; las de un mismo minuto van
+              juntas.
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              {data.lastEmailAt ? (
+                <>
+                  Último correo enviado <RelativeTime date={data.lastEmailAt} />
+                  .
+                </>
+              ) : (
+                "Aún no se ha enviado ningún correo."
+              )}
+            </p>
+          </div>
         </div>
-        <span className="rounded-sm border border-border px-1.5 py-0.5 font-medium text-eyebrow uppercase tracking-[0.08em]">
-          Fase 06
-        </span>
+        <p className="text-muted-foreground">
+          La clave de Brevo y el destinatario se guardan en el servidor, nunca
+          en el panel:
+        </p>
+        <CommandLine command="ssh -t kit-vps kit-deploy alerts setup --to <tu email>" />
+        <CommandLine command="ssh kit-vps kit-deploy alerts test" />
+      </div>
+      <div className="flex flex-col gap-3">
+        <h3 className={H3}>Últimas alertas</h3>
+        {data.alerts.length === 0 ? (
+          <p className="text-muted-foreground">Ninguna todavía.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+            {data.alerts.map((a) => (
+              <li
+                key={a.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3"
+              >
+                {a.resolvedAt ? (
+                  <StatusBadge status="ready" label="Resuelta" size="table" />
+                ) : (
+                  <StatusBadge status="warning" label="Abierta" size="table" />
+                )}
+                <span className="min-w-48 flex-1 text-foreground [overflow-wrap:anywhere]">
+                  {a.title}
+                </span>
+                <span className="text-caption text-muted-foreground">
+                  {a.kindLabel} · <RelativeTime date={a.openedAt} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );

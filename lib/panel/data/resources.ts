@@ -5,6 +5,8 @@
  */
 import type { DbStatus } from "@/agent/databases";
 import type { LogEntry } from "@/agent/logs";
+import type { AlertRow } from "@/lib/alerts/engine";
+import { KIND_LABEL } from "@/lib/alerts/rules";
 import {
   ENVIRONMENTS,
   type Environment,
@@ -12,6 +14,8 @@ import {
   MANAGED_NAMES,
 } from "@/lib/core/env";
 import { defaultHost } from "@/lib/core/target";
+import type { CronJob, CronRun } from "@/lib/cron/run";
+import { nextRun, parseSchedule } from "@/lib/cron/schedule";
 import type { DomainRedirect, DomainStatus } from "@/lib/db/schema";
 import type { TokenRow } from "@/lib/db/tokens";
 import { type DnsInstructions, dnsInstructions } from "@/lib/domains/dns";
@@ -248,7 +252,19 @@ export async function readDatabases(
 
 // ── Ajustes ──
 
+export type RecentAlert = {
+  id: string;
+  kindLabel: string;
+  project: string | null;
+  title: string;
+  openedAt: Date;
+  resolvedAt: Date | null;
+};
+
 export type SettingsData = {
+  /** Ajustes › Alertas: the last ones, newest first, and when the last email went out. */
+  alerts: RecentAlert[];
+  lastEmailAt: Date | null;
   passkeys: PasskeyRow[];
   totp: boolean;
   tokens: TokenRow[];
@@ -262,17 +278,77 @@ export async function readSettings(
   userId: string,
   auditBefore?: Date,
 ): Promise<SettingsData> {
-  const [passkeys, totp, tokens, audit] = await Promise.all([
+  const [recent, passkeys, totp, tokens, audit] = await Promise.all([
+    deps.alerts.recent(RECENT_ALERTS),
     deps.store.passkeys(userId),
     deps.store.twoFactorEnabled(userId),
     deps.tokens.list(),
     deps.store.audit(auditBefore ? { before: auditBefore } : {}),
   ]);
   return {
+    alerts: recent.map((a) => ({
+      id: a.id,
+      kindLabel: KIND_LABEL[a.kind],
+      project: a.project,
+      title: a.title,
+      openedAt: a.openedAt,
+      resolvedAt: a.resolvedAt,
+    })),
+    lastEmailAt: lastEmail(recent),
     passkeys,
     totp,
     tokens,
     audit,
     auditNext: audit.length === AUDIT_PAGE ? (audit.at(-1)?.at ?? null) : null,
+  };
+}
+
+/** Ajustes › Alertas shows this many. */
+export const RECENT_ALERTS = 10;
+
+function lastEmail(rows: AlertRow[]): Date | null {
+  const times = rows
+    .flatMap((a) => [a.notifiedAt, a.resolvedNotifiedAt])
+    .filter((d): d is Date => d !== null)
+    .map((d) => d.getTime());
+  return times.length ? new Date(Math.max(...times)) : null;
+}
+
+// ── Cron (phase 06, D048, D052) ──
+
+export type CronJobRow = CronJob & {
+  /** The next UTC minute it runs; null when paused or the schedule never fires. */
+  next: Date | null;
+};
+
+export type CronData = { jobs: CronJobRow[]; runs: CronRun[] };
+
+/** The Cron tab shows this many runs (all jobs together, newest first). */
+export const CRON_RUNS = 50;
+
+export async function readCron(
+  deps: PanelDeps,
+  project: string,
+): Promise<CronData | null> {
+  const p = await deps.store.project(project);
+  if (!p) return null;
+  const [jobs, runs] = await Promise.all([
+    deps.cron.jobs(project),
+    deps.cron.runs(project, CRON_RUNS),
+  ]);
+  const now = new Date(deps.now());
+  return {
+    jobs: jobs.map((j) => {
+      let next: Date | null = null;
+      if (j.enabled) {
+        try {
+          next = nextRun(parseSchedule(j.schedule), now);
+        } catch {
+          next = null;
+        }
+      }
+      return { ...j, next };
+    }),
+    runs,
   };
 }
