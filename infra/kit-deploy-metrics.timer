@@ -1,0 +1,13 @@
+# kit-deploy · runs kit-deploy-metrics.service every 30 s (D015). Installed and enabled by
+# infra/update.sh. Not Persistent: a sample missed while the VPS was down cannot be taken later.
+[Unit]
+Description=kit-deploy metrics collector (every 30 s)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30s
+AccuracySec=1s
+Unit=kit-deploy-metrics.service
+
+[Install]
+WantedBy=timers.target

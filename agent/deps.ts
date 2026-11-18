@@ -27,4 +27,12 @@ export interface Deps {
   httpGet(url: string, timeoutMs: number): Promise<{ status: number }>;
   /** One structured line per operation. Never params' values that could hold a secret. */
   log(event: Record<string, unknown>): void;
+  /** Up to `maxBytes` of a regular file from `offset`, with its inode and size (from the open
+   * file, so they belong to the bytes read); null when it does not exist. Never follows a
+   * symlink. For Caddy's access log and /proc (metrics, D015). */
+  readFileFrom(
+    path: string,
+    offset: number,
+    maxBytes: number,
+  ): Promise<{ ino: number; size: number; data: Uint8Array } | null>;
 }
