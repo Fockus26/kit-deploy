@@ -87,9 +87,11 @@ async function listFiles(dir: string): Promise<string[]> {
 async function httpGet(
   url: string,
   timeoutMs: number,
+  headers?: Record<string, string>,
 ): Promise<{ status: number }> {
   const res = await fetch(url, {
     redirect: "manual",
+    ...(headers ? { headers } : {}),
     signal: AbortSignal.timeout(timeoutMs),
   });
   await res.body?.cancel();

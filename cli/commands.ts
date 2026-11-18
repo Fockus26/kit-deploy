@@ -46,6 +46,7 @@ import {
 import pkg from "../package.json";
 import { type AlertsContext, alertsCommand } from "./alerts-commands";
 import { type AgentClient, AgentUnreachable } from "./client";
+import { type CronContext, cronCommand } from "./cron-commands";
 import { DB_USAGE, dbStatusCommand } from "./db-commands";
 import { type DomainContext, domainCommand } from "./domain-commands";
 import { type EnvContext, envCommand } from "./env-commands";
@@ -56,7 +57,8 @@ import { type MetricsContext, metricsCommand } from "./metrics-commands";
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
 export type CliContext = EnvContext &
   DomainContext &
-  Pick<AlertsContext, "alerts" | "writeAlertsEnv"> & {
+  Pick<AlertsContext, "alerts" | "writeAlertsEnv"> &
+  Pick<CronContext, "cron"> & {
     deploy?: () => DeployContext;
     admin?: () => AdminStore;
     users?: () => UserStore;
@@ -166,6 +168,10 @@ Commands:
                      (root) the Brevo API key from stdin, never argv:
                      ssh -t kit-vps kit-deploy alerts setup --to <email>
   alerts test        (root) one sample alert email
+  cron ls|add|rm|pause|resume|run|runs <project> ...
+                     scheduled GETs of a production route with its CRON_SECRET (UTC
+                     schedules), and the log of each run; 'kit-deploy cron' for details
+  cron tick          (root) this minute's jobs. Every minute by kit-deploy-cron.timer
   help               this text
 `;
 
@@ -771,6 +777,8 @@ export async function runCli(
         return await metricsCommand(client, ctx, args, json);
       case "alerts":
         return await alertsCommand(client, ctx, args, json);
+      case "cron":
+        return await cronCommand(client, ctx, args, json);
       case undefined:
       case "help":
       case "--help":

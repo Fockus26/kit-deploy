@@ -92,6 +92,9 @@ export function databaseName(target: Target): string {
 
 const PULL_TIMEOUT_MS = 600_000;
 const HEALTH_TIMEOUT_MS = 3_000;
+/** A cron route has this long to answer; the minute's tick must end before the next (D048). */
+export const CRON_TIMEOUT_MS = 50_000;
+const CRON_SECRET = "CRON_SECRET";
 /** A port handed out by `ports.allocate` stays reserved this long, so two deploys that allocate
  * before either has started its container do not get the same one. */
 export const RESERVATION_MS = 10 * 60_000;
@@ -301,6 +304,8 @@ export class Agent {
         return platformCerts(this.deps);
       case "backups.status":
         return backupsStatus(this.deps);
+      case "cron.call":
+        return this.cronCall(req.params);
     }
   }
 
@@ -426,6 +431,77 @@ export class Agent {
         throw e;
       }
     });
+  }
+
+  /**
+   * cron.call: the secret is opened only for the request's header and never returned or logged.
+   * The port must be the project's running production container — otherwise a caller could send
+   * one project's CRON_SECRET to another project's container.
+   */
+  private async cronCall(p: {
+    project: string;
+    port: number;
+    path: string;
+    secret: { name: string; secret: boolean; sealed: Sealed };
+  }): Promise<{ status: number | null; durationMs: number; error?: string }> {
+    if (p.secret.name !== CRON_SECRET) {
+      throw new AgentError(
+        "bad_request",
+        `cron.call takes ${CRON_SECRET} only`,
+      );
+    }
+    const live = (await this.list(p.project)).find(
+      (c) =>
+        c.project === p.project &&
+        c.env === "production" &&
+        c.state === "running" &&
+        c.port === p.port,
+    );
+    if (!live) {
+      throw new AgentError(
+        "bad_request",
+        `port ${p.port} is not ${p.project}'s running production container`,
+      );
+    }
+    let value: string;
+    try {
+      value = open(
+        await this.key(),
+        {
+          project: p.project,
+          environment: "production",
+          name: p.secret.name,
+          secret: p.secret.secret,
+        },
+        p.secret.sealed,
+      );
+    } catch (e) {
+      if (e instanceof EnvCryptoError)
+        throw new AgentError(
+          "bad_request",
+          `${CRON_SECRET} cannot be decrypted`,
+        );
+      throw e;
+    }
+    const started = this.now();
+    try {
+      const { status } = await this.deps.httpGet(
+        `http://127.0.0.1:${p.port}${p.path}`,
+        CRON_TIMEOUT_MS,
+        { authorization: `Bearer ${value}`, "user-agent": "kit-deploy-cron/1" },
+      );
+      return { status, durationMs: this.now() - started };
+    } catch (e) {
+      const name = (e as Error).name;
+      return {
+        status: null,
+        durationMs: this.now() - started,
+        error:
+          name === "TimeoutError" || name === "AbortError"
+            ? `no answer in ${CRON_TIMEOUT_MS / 1000} s`
+            : "connection failed",
+      };
+    }
   }
 
   private serial<T>(fn: () => Promise<T>): Promise<T> {

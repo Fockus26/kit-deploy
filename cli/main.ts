@@ -14,6 +14,7 @@ import {
   drizzleAlertsReader,
   drizzleCheckRepo,
 } from "../lib/alerts/store";
+import { drizzleCronStore } from "../lib/cron/store";
 import { drizzleAdminStore } from "../lib/db/admin";
 import { drizzleEnvStore, sshActor } from "../lib/db/env-store";
 import { db, drizzleStore } from "../lib/db/store";
@@ -126,6 +127,10 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
     };
   },
   writeAlertsEnv: (key, to) => writeAlertsEnv(key, to),
+  cron: () => {
+    loadCliEnv();
+    return drizzleCronStore(db());
+  },
   sweep: () => {
     loadCliEnv();
     loadGithubEnv();

@@ -230,6 +230,10 @@ say "Alerts check every minute (kit-deploy-alerts.timer)"
 install_timer kit-deploy-alerts
 [ -f "$STATE/alerts.env" ] || echo "No $STATE/alerts.env yet: emails wait for 'kit-deploy alerts setup --to <email>'."
 
+say "Cron tick every minute (kit-deploy-cron.timer)"
+# `kit-deploy cron tick` as root at :00 of every minute (phase 06, D048).
+install_timer kit-deploy-cron
+
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"
 UID_WEB="$(id -u kitdeploy)"
 # github.env (install.sh --github-token) is optional: without it, commit statuses are skipped.
