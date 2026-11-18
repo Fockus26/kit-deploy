@@ -25,7 +25,7 @@ export type PanelDeps = {
   tokens: TokenStore;
   /** Inicio's open alerts and Ajustes' recent ones (phase 06, D047). */
   alerts: AlertsReader;
-  /** The Cron tab: jobs and their runs, read only (D050). */
+  /** The Cron tab: jobs and their runs, read only (D052). */
   cron: Pick<CronStore, "jobs" | "runs">;
   now(): number;
 };

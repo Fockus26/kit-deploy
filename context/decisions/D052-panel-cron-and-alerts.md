@@ -1,4 +1,4 @@
-# D050 · Panel · Cron tab and alerts are read-only in the panel; managed from the CLI · Confirmed (2026-11-18)
+# D052 · Panel · Cron tab and alerts are read-only in the panel; managed from the CLI · Confirmed (2026-11-18)
 
 **Decision:** the project's Cron tab (now enabled) lists the jobs (route, UTC schedule, Activo /
 En pausa, next run, short id) and the last 50 runs (when, route, Correcto / Falló / En curso, HTTP

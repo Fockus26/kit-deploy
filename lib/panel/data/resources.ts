@@ -314,7 +314,7 @@ function lastEmail(rows: AlertRow[]): Date | null {
   return times.length ? new Date(Math.max(...times)) : null;
 }
 
-// ── Cron (phase 06, D048, D050) ──
+// ── Cron (phase 06, D048, D052) ──
 
 export type CronJobRow = CronJob & {
   /** The next UTC minute it runs; null when paused or the schedule never fires. */

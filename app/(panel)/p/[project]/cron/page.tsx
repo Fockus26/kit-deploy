@@ -15,7 +15,7 @@ export default function CronPage({ params }: PageProps<"/p/[project]/cron">) {
 }
 
 /**
- * Brief F12 (phase 06, D048, D050): the project's scheduled routes and the log of each call.
+ * Brief F12 (phase 06, D048, D052): the project's scheduled routes and the log of each call.
  * Read only: jobs are added, paused and removed with `kit-deploy cron` over SSH.
  */
 async function Cron({ params }: { params: Promise<{ project: string }> }) {
