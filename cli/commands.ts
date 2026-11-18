@@ -36,6 +36,7 @@ import { generateDeployToken } from "../lib/tokens";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
 import { type EnvContext, envCommand } from "./env-commands";
+import { type LogsContext, logsCommand } from "./logs-commands";
 
 /** What the database-backed commands need; built lazily so `version` works without a database. */
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
@@ -55,6 +56,8 @@ export type CliContext = EnvContext & {
   /** Whether stdout is a terminal: a token is never printed to one without --show. */
   stdoutIsTTY?: boolean;
   now?: () => number;
+  /** `logs -f`. */
+  follow?: LogsContext["follow"];
 };
 
 export const CLI_VERSION: string = pkg.version;
@@ -114,6 +117,11 @@ Commands:
   env rm <project> <environment> <NAME>
   env pull <project> the Development set as a .env.local, into a pipe or file only:
                      ssh kit-vps kit-deploy env pull <project> > .env.local
+  logs <project> [--pr <n>] [--level error|warn|info] [-n <lines>] [-f]
+                     the last lines of production (or a PR's preview); -f keeps printing
+                     new ones. Kept 14 days by kit-agent
+  logs <project> --day <YYYY-MM-DD> [--grep <text>] [--before <cursor>]
+                     one day searched, literal text, case-insensitive
   help               this text
 `;
 
@@ -731,6 +739,8 @@ export async function runCli(
         return await user(ctx, args[0], args.slice(1));
       case "env":
         return await envCommand(client, ctx, args, json);
+      case "logs":
+        return await logsCommand(client, ctx, args, json);
       case "db":
         if (args[0] === "create")
           return await dbCreate(client, args.slice(1), json);

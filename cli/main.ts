@@ -38,6 +38,11 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
     return token ? githubRequest(token) : null;
   },
   readValue,
+  follow: {
+    write: (text) => void process.stdout.write(text),
+    // Until Ctrl-C: SIGINT ends the process.
+    sleep: (ms) => Bun.sleep(ms).then(() => true),
+  },
   env: () => {
     loadCliEnv();
     return drizzleEnvStore(db());
