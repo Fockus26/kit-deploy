@@ -80,6 +80,28 @@ describe("dockerRunArgs", () => {
     expect(args).toContain("--env=NODE_OPTIONS=--max-old-space-size=288");
   });
 
+  test("a preview knows its own origin, after the env file and before the image", () => {
+    const args = dockerRunArgs({
+      ...base,
+      target: { project: "kd_hello", env: "preview", pr: 7 },
+      memoryMb: 384,
+      envFile: "/etc/kit-deploy/env/kd_hello-pr-7.env",
+    });
+    const url =
+      "--env=KIT_DEPLOY_PREVIEW_URL=https://kd-hello-pr-7.preview.fockus.dev";
+    expect(args).toContain(url);
+    expect(args.indexOf(url)).toBeGreaterThan(
+      args.indexOf("--env-file=/etc/kit-deploy/env/kd_hello-pr-7.env"),
+    );
+    expect(args.at(-1)).toBe(base.image);
+  });
+
+  test("production gets no preview origin", () => {
+    expect(
+      dockerRunArgs(base).some((a) => a.includes("KIT_DEPLOY_PREVIEW_URL")),
+    ).toBe(false);
+  });
+
   test("accepts an image pinned by digest", () => {
     const image = `ghcr.io/cesar/kd-hello@sha256:${"a".repeat(64)}`;
     expect(dockerRunArgs({ ...base, image }).at(-1)).toBe(image);

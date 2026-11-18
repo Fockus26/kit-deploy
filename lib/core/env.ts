@@ -15,7 +15,14 @@ export const ENV_NAME_RE = /^[A-Z_][A-Z0-9_]{0,127}$/;
 export const PUBLIC_PREFIX = "NEXT_PUBLIC_";
 
 /** Set by the platform on every container; `--env` wins over the env file anyway (docker.ts). */
-export const RESERVED_NAMES = ["PORT", "HOSTNAME", "NODE_OPTIONS"] as const;
+/** A preview's `https://<host>` (docker.ts), set by kit-agent on preview containers only. */
+export const PREVIEW_URL_ENV = "KIT_DEPLOY_PREVIEW_URL";
+export const RESERVED_NAMES = [
+  "PORT",
+  "HOSTNAME",
+  "NODE_OPTIONS",
+  PREVIEW_URL_ENV,
+] as const;
 /** Put in by kit-deploy itself (phase 04 U5): nobody sets them by hand. */
 export const MANAGED_NAMES = [
   "DATABASE_URL",
