@@ -60,7 +60,8 @@ export function isLocalQaDatabase(raw: string, port: string): boolean {
   );
 }
 
-function containerUrl(port: string): string {
+/** The qa-local container's database for this port (scripts/qa-seed.ts uses it too). */
+export function containerUrl(port: string): string {
   let mapped: string;
   try {
     mapped = execFileSync("docker", ["port", CONTAINER, "5432"], {

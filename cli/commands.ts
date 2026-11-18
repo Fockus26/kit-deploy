@@ -18,12 +18,11 @@ import {
 import { defaultHost, MEMORY_MB } from "../lib/core";
 import { DASHBOARD_HOST } from "../lib/core/constants";
 import { pinFor } from "../lib/core/image-pin";
-import { assertHost, CoreInputError } from "../lib/core/validate";
+import { CoreInputError } from "../lib/core/validate";
 import { AdminError, type AdminStore } from "../lib/db/admin";
 import type { DeployStore } from "../lib/db/store";
 import type { UserStore } from "../lib/db/users";
 import type { GitHubRequest } from "../lib/deploy/github";
-import { dispatchRebuild } from "../lib/deploy/rebuild";
 import { type SweepDeps, sweepPreviews } from "../lib/deploy/sweep";
 import {
   processProject,
@@ -32,7 +31,18 @@ import {
   type SwitchDeps,
   SwitchError,
 } from "../lib/deploy/switch";
-import { generateDeployToken } from "../lib/tokens";
+import { AgentRefused, OpsError } from "../lib/ops/agent";
+import {
+  createDatabases,
+  queueRedeploy,
+  startRebuild,
+} from "../lib/ops/deploy";
+import {
+  addProject,
+  createDeployToken,
+  DEFAULT_MEMORY_MB,
+  REPO_RE,
+} from "../lib/ops/projects";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
 import { DB_USAGE, dbStatusCommand } from "./db-commands";
@@ -368,15 +378,12 @@ async function redeploy(
   if (pr !== null && !(Number.isInteger(pr) && pr >= 1 && pr <= 999_999))
     return fail(`--pr ${prRaw}: expected a PR number\n`, 2);
   const d = needDeploy(ctx);
-  const p = await d.switch.repo.projectByName(project);
-  if (!p) return fail(`no project ${project}\n`);
-  const where = pr === null ? "production" : `pr-${pr}`;
-  const queued = await d.switch.repo.queueRedeploy(p.id, pr);
-  if (!queued)
-    return fail(
-      `nothing live in ${project} ${where} to redeploy (an asleep preview wakes on its next push)\n`,
-    );
-  const results = await processProject(d.switch, p.id);
+  const { projectId, where, queued } = await queueRedeploy(
+    d.switch.repo,
+    project,
+    pr,
+  );
+  const results = await processProject(d.switch, projectId);
   const code = results.some((r) => r.result === "failed") ? 1 : 0;
   if (json) return { code, out: `${JSON.stringify(results)}\n`, err: "" };
   const lines = [
@@ -415,27 +422,24 @@ async function rebuild(ctx: CliContext, args: string[]): Promise<Result> {
     return fail("usage: kit-deploy rebuild <project>\n", 2);
   if (!PROJECT.test(project))
     return fail(`invalid project name "${project}"\n`, 2);
-  const admin = needAdmin(ctx);
-  const repo = await admin.projectRepo(project);
-  const branch = await admin.productionBranch(project);
-  if (repo === null || branch === null) return fail(`no project ${project}\n`);
-  const request = ctx.github?.() ?? null;
-  if (!request) {
-    return fail(
-      `no GitHub token here (root's /etc/kit-deploy/github.env): run it as ssh kit-vps kit-deploy rebuild ${project}, or start "Deploy (VPS)" by hand in GitHub with "rebuild" ticked\n`,
-    );
-  }
-  try {
-    await dispatchRebuild(request, repo, branch);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const hint = /403|404/.test(msg)
+  const r = await startRebuild(
+    needAdmin(ctx),
+    () => ctx.github?.() ?? null,
+    project,
+  );
+  if (!r.ok) {
+    if (r.reason === "no_project") return fail(`no project ${project}\n`);
+    if (r.reason === "no_token")
+      return fail(
+        `no GitHub token here (root's /etc/kit-deploy/github.env): run it as ssh kit-vps kit-deploy rebuild ${project}, or start "Deploy (VPS)" by hand in GitHub with "rebuild" ticked\n`,
+      );
+    const hint = /403|404/.test(r.detail)
       ? " (the token needs Actions: Read and write on this repo, and the repo the new deploy-vps.yml)"
       : "";
-    return fail(`rebuild of ${project} not started: ${msg}${hint}\n`);
+    return fail(`rebuild of ${project} not started: ${r.detail}${hint}\n`);
   }
   return ok(
-    `rebuild of ${project} started on ${repo}@${branch}: the Action builds with the current NEXT_PUBLIC_* values and redeploys it (see the repo's Actions tab)\n`,
+    `rebuild of ${project} started on ${r.repo}@${r.branch}: the Action builds with the current NEXT_PUBLIC_* values and redeploys it (see the repo's Actions tab)\n`,
   );
 }
 
@@ -451,9 +455,13 @@ async function dbCreate(
     return fail("usage: kit-deploy db create <project>\n", 2);
   if (!PROJECT.test(project))
     return fail(`invalid project name "${project}"\n`, 2);
-  const res = await client.call("db.create", { project });
-  if (!res.ok) return fail(`${describe(res)}\n`);
-  const dbs = res.result as { database: string; created: boolean }[];
+  let dbs: { database: string; created: boolean }[];
+  try {
+    dbs = await createDatabases(client, project);
+  } catch (e) {
+    if (e instanceof AgentRefused) return fail(`${e.code}: ${e.message}\n`);
+    throw e;
+  }
   if (json) return ok(`${JSON.stringify(dbs)}\n`);
   return ok(
     `${dbs.map((d) => `${d.database}: ${d.created ? "created" : "already there"}`).join("\n")}\nDATABASE_URL goes into ${project}'s production and preview containers by itself from the next deploy (pinned image only)\n`,
@@ -471,8 +479,7 @@ async function doRegenerate(ctx: CliContext, json: boolean): Promise<Result> {
   return { code, out: `${out}\n`, err: "" };
 }
 
-const REPO =
-  /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$/;
+const REPO = REPO_RE;
 
 function needAdmin(ctx: CliContext): AdminStore {
   if (!ctx.admin) throw new SwitchError("this command needs the database");
@@ -503,15 +510,6 @@ function parseFlags(
   return { words, flags };
 }
 
-function checkHost(host: string): string {
-  const h = host.toLowerCase();
-  assertHost(h);
-  if (h === "db.fockus.dev" || h === "deploy.fockus.dev") {
-    throw new CoreInputError(`${h} is the platform's`);
-  }
-  return h;
-}
-
 async function projectAdd(
   ctx: CliContext,
   args: string[],
@@ -531,7 +529,8 @@ async function projectAdd(
     );
   if (!REPO.test(repo))
     return fail(`invalid repo "${repo}": expected owner/name\n`, 2);
-  const memoryRaw = f.flags.get("--memory")?.at(-1) ?? "512";
+  const memoryRaw =
+    f.flags.get("--memory")?.at(-1) ?? String(DEFAULT_MEMORY_MB);
   const memoryMb = Number(memoryRaw);
   if (
     !Number.isInteger(memoryMb) ||
@@ -543,24 +542,19 @@ async function projectAdd(
       2,
     );
   }
-  const hosts: string[] = [];
-  if (!f.flags.has("--no-default-domain")) {
-    const d = defaultHost(name);
-    if (!d)
-      return fail(
-        `${name} has no default domain (reserved): use --no-default-domain --domain <host>\n`,
-        2,
-      );
-    hosts.push(d);
-  }
-  for (const h of f.flags.get("--domain") ?? []) hosts.push(checkHost(h));
-  const unique = [...new Set(hosts)];
+  const defaultDomain = !f.flags.has("--no-default-domain");
+  if (defaultDomain && !defaultHost(name))
+    return fail(
+      `${name} has no default domain (reserved): use --no-default-domain --domain <host>\n`,
+      2,
+    );
   const pin = pinFor(repo);
-  const { id } = await needAdmin(ctx).addProject({
+  const { id, hosts: unique } = await addProject(needAdmin(ctx), {
     name,
     repo,
     memoryMb,
-    hosts: unique,
+    defaultDomain,
+    extraHosts: f.flags.get("--domain") ?? [],
   });
   const pinned = await writePin(ctx, name, pin);
   const note = pinned
@@ -631,9 +625,11 @@ async function tokenCreate(ctx: CliContext, args: string[]): Promise<Result> {
       2,
     );
   }
-  const label = (f.flags.get("--label")?.at(-1) ?? "").slice(0, 100);
-  const { token, hash } = generateDeployToken();
-  const { id } = await needAdmin(ctx).addToken(project, hash, label);
+  const { id, token } = await createDeployToken(
+    needAdmin(ctx),
+    project,
+    f.flags.get("--label")?.at(-1) ?? "",
+  );
   // stdout carries the token and nothing else, so a pipe gets exactly the secret.
   return {
     code: 0,
@@ -779,7 +775,8 @@ export async function runCli(
     if (
       e instanceof AgentUnreachable ||
       e instanceof SwitchError ||
-      e instanceof AdminError
+      e instanceof AdminError ||
+      e instanceof OpsError
     ) {
       return fail(`${e.message}\n`);
     }

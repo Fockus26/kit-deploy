@@ -45,6 +45,14 @@ export function sshActor(
   return /^[A-Za-z0-9_.@-]{1,64}$/.test(user) ? `ssh:${user}` : "ssh:unknown";
 }
 
+/** `web:<user id>` for the audit log, from the panel's session (Better Auth's id, never the
+ * email: the log outlives the account). */
+export function webActor(userId: string): string {
+  return /^[A-Za-z0-9_.@-]{1,64}$/.test(userId)
+    ? `web:${userId}`
+    : "web:unknown";
+}
+
 export function drizzleEnvStore(db: Db): EnvStore {
   const projectId = async (name: string) => {
     const [p] = await db

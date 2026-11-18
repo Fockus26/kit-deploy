@@ -5,11 +5,9 @@
  * (Development's secrets are `env pull`'s, phase 04 U6).
  */
 import type { Response } from "../agent/protocol";
-import type { Sealed } from "../lib/core/crypto";
 import {
   assertEnvironment,
   assertEnvName,
-  assertEnvValue,
   dotenvLine,
   type Environment,
   isPublicName,
@@ -17,6 +15,8 @@ import {
 import { assertProject } from "../lib/core/validate";
 import { AdminError } from "../lib/db/admin";
 import type { EnvStore, StoredVar } from "../lib/db/env-store";
+import { AgentRefused } from "../lib/ops/agent";
+import { removeVariable, revealPlain, setVariable } from "../lib/ops/env";
 import type { AgentClient } from "./client";
 
 export type EnvContext = {
@@ -49,6 +49,9 @@ const SHOWN_CHARS = 60;
 function agentError(res: Response): string {
   return res.ok ? "" : `kit-agent: ${res.error.code}: ${res.error.message}\n`;
 }
+
+const refused = (e: AgentRefused): Result =>
+  fail(`kit-agent: ${e.code}: ${e.message}\n`);
 
 function needStore(ctx: EnvContext): EnvStore {
   if (!ctx.env) throw new AdminError("this command needs the database");
@@ -94,16 +97,12 @@ async function ls(
   const t = target(p, e);
   if (!t || extra) return fail(ENV_USAGE, 2);
   const rows = await needStore(ctx).list(t.project, t.environment);
-  const plain = rows.filter((r) => !r.secret);
-  const values = new Map<string, string>();
-  if (plain.length > 0) {
-    const res = await client.call("env.reveal", {
-      ...t,
-      vars: plain.map(({ name, secret, sealed }) => ({ name, secret, sealed })),
-    });
-    if (!res.ok) return fail(agentError(res));
-    for (const v of res.result as { name: string; value: string }[])
-      values.set(v.name, v.value);
+  let values: Map<string, string>;
+  try {
+    values = await revealPlain(client, t.project, t.environment, rows);
+  } catch (e) {
+    if (e instanceof AgentRefused) return refused(e);
+    throw e;
   }
   const out = rows.map((r: StoredVar) => ({
     name: r.name,
@@ -142,15 +141,18 @@ async function set(
   const secret = !args.includes("--plain") && !isPublicName(name);
   const store = needStore(ctx);
   if (!ctx.readValue) throw new AdminError("no stdin to read the value from");
-  const value = assertEnvValue(trimValue(await ctx.readValue()));
-  const res = await client.call("env.seal", { ...t, name, secret, value });
-  if (!res.ok) return fail(agentError(res));
-  const { created } = await store.set(
-    t.project,
-    t.environment,
-    { name, secret, sealed: res.result as Sealed },
-    ctx.actor ?? "ssh:unknown",
-  );
+  const value = trimValue(await ctx.readValue());
+  let created: boolean;
+  try {
+    ({ created } = await setVariable(
+      { agent: client, store },
+      { ...t, name, value, secret },
+      ctx.actor ?? "ssh:unknown",
+    ));
+  } catch (e) {
+    if (e instanceof AgentRefused) return refused(e);
+    throw e;
+  }
   return ok(
     `${created ? "set" : "replaced"} ${name} in ${t.project} ${t.environment} (${secret ? "secret: it can be replaced, never read back" : "plain"}); ${effect(name, t.environment, t.project)}\n`,
   );
@@ -161,10 +163,9 @@ async function rm(ctx: EnvContext, args: string[]): Promise<Result> {
   const t = target(p, e);
   if (!t || !rawName || extra) return fail(ENV_USAGE, 2);
   const name = assertEnvName(rawName);
-  const gone = await needStore(ctx).remove(
-    t.project,
-    t.environment,
-    name,
+  const { removed: gone } = await removeVariable(
+    needStore(ctx),
+    { ...t, name },
     ctx.actor ?? "ssh:unknown",
   );
   if (!gone) return fail(`no ${name} in ${t.project} ${t.environment}\n`);

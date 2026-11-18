@@ -11,6 +11,8 @@ export type NewProject = {
   repo: string;
   memoryMb: number;
   hosts: string[];
+  /** `main` when absent (the column's default). */
+  productionBranch?: string;
 };
 
 export class AdminError extends Error {
@@ -63,7 +65,14 @@ export function drizzleAdminStore(db: Db): AdminStore {
         return await db.transaction(async (tx) => {
           const [row] = await tx
             .insert(projects)
-            .values({ name: p.name, repo: p.repo, memoryMb: p.memoryMb })
+            .values({
+              name: p.name,
+              repo: p.repo,
+              memoryMb: p.memoryMb,
+              ...(p.productionBranch
+                ? { productionBranch: p.productionBranch }
+                : {}),
+            })
             .returning({ id: projects.id });
           if (!row) throw new Error("insert returned no row");
           if (p.hosts.length) {
