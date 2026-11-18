@@ -8,17 +8,15 @@ import { defaultHost } from "../core/target";
 import { assertHost, CoreInputError } from "../core/validate";
 import type { AdminStore } from "../db/admin";
 import { generateDeployToken } from "../tokens";
+import { BRANCH_RE, PROJECT_RE, REPO_RE, TOKEN_LABEL_MAX } from "./rules";
 
-/** The `projects_name_format` check: the kit-db name, also the container and site prefix. */
-export const PROJECT_RE = /^[a-z0-9][a-z0-9_]{0,39}$/;
-/** The `projects_repo_format` check: GitHub `owner/name`, neither part starting with `.`. */
-export const REPO_RE =
-  /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$/;
-/** What `dispatchRebuild` accepts as a production branch. */
-export const BRANCH_RE = /^[A-Za-z0-9._/-]{1,100}$/;
-export const DEFAULT_MEMORY_MB = 512;
-/** `deploy_tokens.label` is free text; the CLI cuts it here too. */
-export const TOKEN_LABEL_MAX = 100;
+export {
+  BRANCH_RE,
+  DEFAULT_MEMORY_MB,
+  PROJECT_RE,
+  REPO_RE,
+  TOKEN_LABEL_MAX,
+} from "./rules";
 
 /** `_preview` is the suffix of every project's previews database. */
 export function isPreviewsSuffix(name: string): boolean {
