@@ -14,8 +14,8 @@
       "!dist",
       "!build",
       "!**/drizzle/meta",
-      "!**/.claude/worktrees",
-      "!**/.claude/kit-reference"
+      "!**/.claude/kit-reference",
+      "!.claude/worktrees"
     ]
   },
   "formatter": {
