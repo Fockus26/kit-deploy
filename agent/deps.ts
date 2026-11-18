@@ -24,7 +24,12 @@ export interface Deps {
   /** Names of the regular files directly in `dir` (no symlinks, no subdirectories); [] when the
    * directory does not exist. */
   listFiles(dir: string): Promise<string[]>;
-  httpGet(url: string, timeoutMs: number): Promise<{ status: number }>;
+  /** `headers` only for cron.call's Authorization; never logged. */
+  httpGet(
+    url: string,
+    timeoutMs: number,
+    headers?: Record<string, string>,
+  ): Promise<{ status: number }>;
   /** One structured line per operation. Never params' values that could hold a secret. */
   log(event: Record<string, unknown>): void;
   /** Up to `maxBytes` of a regular file from `offset`, with its inode and size (from the open

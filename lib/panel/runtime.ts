@@ -62,7 +62,7 @@ export function actionDeps(): ActionDeps {
       agent: sw.agent,
       liveProjects: async () =>
         new Set((await repo.liveSites()).map((s) => s.project)),
-      // The Caddy file only: a stopped production stays stopped (D047).
+      // The Caddy file only: a stopped production stays stopped (D050).
       regenerate: (project) => rewriteSiteFile(sw, project),
     },
     openDeployment: (project, pr) => store.openDeployment(project, pr),

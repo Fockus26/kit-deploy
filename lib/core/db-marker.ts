@@ -1,5 +1,5 @@
 /**
- * Which kit-db databases kit-deploy owns (D048). A project's name is its database's, and kit-db
+ * Which kit-db databases kit-deploy owns (D051). A project's name is its database's, and kit-db
  * serves every database on the central Postgres: the name alone would hand a project another
  * client's database. So the agent gives `DATABASE_URL` and `db.status` details only for a database
  * with a root marker, `/etc/kit-deploy/dbs/<database>` (dir root 0700, file root 0600). kit-agent

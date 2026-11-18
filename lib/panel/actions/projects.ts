@@ -182,7 +182,7 @@ export async function createProjectDatabases(
             "failed",
             "kit-db no pudo crear las bases. Revisa kit-db en el VPS (kit-db list).",
           );
-        // D048: a database of that name exists and kit-deploy did not create it.
+        // D051: a database of that name exists and kit-deploy did not create it.
         if (e instanceof AgentRefused && e.code === "not_managed")
           return failure(
             "conflict",

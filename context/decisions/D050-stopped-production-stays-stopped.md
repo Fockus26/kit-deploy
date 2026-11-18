@@ -1,4 +1,4 @@
-# D047 · Data · A production stopped with Parar stays stopped: site-only rewrites never start a container · Implemented
+# D050 · Data · A production stopped with Parar stays stopped: site-only rewrites never start a container · Implemented
 
 **Decision:** a domain change (`domain rm` / `domain redirect`, panel and CLI) and the domain
 check's timer (every minute, root) rewrite only the project's Caddy file

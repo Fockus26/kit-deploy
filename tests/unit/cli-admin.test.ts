@@ -254,7 +254,7 @@ describe("image pins (project add / project pin)", () => {
   });
 });
 
-describe("D048: reserved project names", () => {
+describe("D051: reserved project names", () => {
   test.each([
     ...RESERVED_PROJECTS,
   ])("%p: neither added, pinned nor given databases", async (name) => {

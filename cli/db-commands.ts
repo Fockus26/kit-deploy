@@ -3,7 +3,7 @@
  * their size and last backup, the off-VPS copy and the backup failures that name them. Read-only:
  * one `db.status` to kit-agent, which filters kit-db's output down to this project.
  *
- * `kit-deploy db adopt <project> --yes` (root, D048): marks as kit-deploy's a database of the
+ * `kit-deploy db adopt <project> --yes` (root, D051): marks as kit-deploy's a database of the
  * project's name that existed before kit-deploy (created by hand with kit-db), so its containers
  * get DATABASE_URL and the panel its size and backups.
  */

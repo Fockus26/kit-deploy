@@ -8,6 +8,13 @@
  *                     publishes the commit status with it; `preview sweep` reads PR state and
  *                     edits the PR comment with it
  */
+import { mailerFromEnv } from "../lib/alerts/brevo";
+import {
+  drizzleAlertStore,
+  drizzleAlertsReader,
+  drizzleCheckRepo,
+} from "../lib/alerts/store";
+import { drizzleCronStore } from "../lib/cron/store";
 import { drizzleAdminStore } from "../lib/db/admin";
 import { drizzleEnvStore, sshActor } from "../lib/db/env-store";
 import { db, drizzleStore } from "../lib/db/store";
@@ -28,7 +35,12 @@ import { drizzleMetricsStore } from "../lib/metrics/store";
 import { socketClient } from "./client";
 import { runCli } from "./commands";
 import { writeDbMarker } from "./db-marks";
-import { loadCliEnv, loadGithubEnv } from "./env";
+import {
+  loadAlertsEnv,
+  loadCliEnv,
+  loadGithubEnv,
+  writeAlertsEnv,
+} from "./env";
 import { writePinFile } from "./pins";
 import { readValue } from "./stdin";
 
@@ -101,9 +113,25 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
       agent,
       liveProjects: async () =>
         new Set((await sw.repo.liveSites()).map((s) => s.project)),
-      // The Caddy file only: a stopped production stays stopped (D047).
+      // The Caddy file only: a stopped production stays stopped (D050).
       regenerate: (project) => rewriteSiteFile(sw, project),
     };
+  },
+  alerts: () => {
+    loadCliEnv();
+    loadAlertsEnv();
+    const database = db();
+    return {
+      store: drizzleAlertStore(database),
+      reader: drizzleAlertsReader(database),
+      repo: drizzleCheckRepo(database),
+      mailer: mailerFromEnv(),
+    };
+  },
+  writeAlertsEnv: (key, to) => writeAlertsEnv(key, to),
+  cron: () => {
+    loadCliEnv();
+    return drizzleCronStore(db());
   },
   sweep: () => {
     loadCliEnv();

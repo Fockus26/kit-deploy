@@ -1,5 +1,5 @@
 /**
- * D047 (phase 05 security review, M1): a production stopped with Parar stays stopped. Domain
+ * D050 (phase 05 security review, M1): a production stopped with Parar stays stopped. Domain
  * changes (panel and CLI) and the domain check's timer rewrite only its Caddy file; only root's
  * explicit `kit-deploy regenerate` (after a reboot) starts it again, and says so.
  */
@@ -82,7 +82,7 @@ function world() {
   return { sw, repo, agent, calls, ops, state, check: domains.deps };
 }
 
-describe("D047: Parar sticks", () => {
+describe("D050: Parar sticks", () => {
   test("stop → domain rm, redirect and the domain check: still stopped, site rewritten", async () => {
     const w = world();
     await stopProduction({ agent: w.agent, repo: w.repo }, "kd_hello");

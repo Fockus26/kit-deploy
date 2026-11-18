@@ -19,7 +19,7 @@ export const MAX_REQUEST_BYTES = 1024 * 1024;
 const project = z
   .string()
   .regex(/^[a-z0-9][a-z0-9_]{0,39}$/)
-  // The platform's or Postgres' own databases go by these names (D048).
+  // The platform's or Postgres' own databases go by these names (D051).
   .refine((p) => !isReservedProject(p), { message: "reserved name" });
 const sha = z.string().regex(/^[0-9a-f]{7,40}$/);
 const port = z.number().int().min(20000).max(29999);
@@ -199,6 +199,18 @@ export const Request = z.discriminatedUnion("op", [
   op("metrics.sample", {}),
   /** D035: size and last backup of `<project>` and `<project>_preview` (agent/databases.ts). */
   op("db.status", { project }),
+  /** Phase 06: the database's, the dashboard's and the previews' certificates (agent/domains.ts). */
+  op("platform.certs", {}),
+  /** Phase 06: kit-db's last dump per database and its FAIL lines (agent/databases.ts). */
+  op("backups.status", {}),
+  /** Phase 06 (brief F12): GET a production route with `Authorization: Bearer <CRON_SECRET>`,
+   * opened here from its stored row; only the status and duration come back. */
+  op("cron.call", {
+    project,
+    port,
+    path: z.string().regex(/^\/(?!.*\.\.)[A-Za-z0-9._~/-]{0,200}$/),
+    secret: storedVar,
+  }),
 ]);
 
 export type Request = z.infer<typeof Request>;

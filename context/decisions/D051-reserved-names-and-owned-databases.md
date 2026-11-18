@@ -1,4 +1,4 @@
-# D048 · Data · Reserved project names; DATABASE_URL and db.status only for databases kit-deploy owns (root marker, `db adopt`) · Implemented
+# D051 · Data · Reserved project names; DATABASE_URL and db.status only for databases kit-deploy owns (root marker, `db adopt`) · Implemented
 
 **Decision:**
 1. **Reserved names.** No project may be called `kit_deploy`, `postgres`, `template0`, `template1`,

@@ -23,7 +23,7 @@ function setup(
   opts: {
     pinned?: boolean;
     databases?: string[];
-    /** Those with kit-deploy's marker (D048); by default every database there. */
+    /** Those with kit-deploy's marker (D051); by default every database there. */
     marked?: string[];
     handlers?: Record<string, Handler>;
   } = {},
@@ -142,7 +142,7 @@ describe("DATABASE_URL, managed by the agent", () => {
     });
   });
 
-  test("D048: a database kit-deploy does not own gives no DATABASE_URL; kit-db is not asked", async () => {
+  test("D051: a database kit-deploy does not own gives no DATABASE_URL; kit-db is not asked", async () => {
     // `kd_hello` exists on kit-db (another client's, or made by hand) but has no marker.
     const s = setup({ marked: [] });
     expect(await s.run()).toMatchObject({ ok: true });
@@ -156,7 +156,7 @@ describe("DATABASE_URL, managed by the agent", () => {
     });
   });
 
-  test("D048: only a regular file is a marker (a symlink or an oversized file is not)", async () => {
+  test("D051: only a regular file is a marker (a symlink or an oversized file is not)", async () => {
     const link = setup({ marked: [] });
     link.symlinks.set(dbMarkerPath("kd_hello"), MASTER_KEY);
     expect(await link.run()).toMatchObject({ ok: true });
@@ -172,7 +172,7 @@ describe("DATABASE_URL, managed by the agent", () => {
     expect(big.atRun).toEqual([null]);
   });
 
-  test("D048: a preview uses its own marker, not production's", async () => {
+  test("D051: a preview uses its own marker, not production's", async () => {
     const s = setup({ marked: ["kd_hello"] });
     expect(
       await s.run({ target: { project: "kd_hello", env: "preview", pr: 7 } }),
@@ -181,7 +181,7 @@ describe("DATABASE_URL, managed by the agent", () => {
     expect(s.atRun).toEqual([null]);
   });
 
-  test("D048: reserved names are refused by the protocol", async () => {
+  test("D051: reserved names are refused by the protocol", async () => {
     const s = setup({ databases: ["kit_deploy", "postgres"] });
     for (const project of [
       "kit_deploy",
@@ -248,7 +248,7 @@ describe("db.create", () => {
     ]);
   });
 
-  test("D048: marks each one it creates, privately, with no secret inside", async () => {
+  test("D051: marks each one it creates, privately, with no secret inside", async () => {
     const s = setup({ databases: [] });
     expect(await s.send("db.create", { project: "kd_hello" })).toMatchObject({
       ok: true,
@@ -263,7 +263,7 @@ describe("db.create", () => {
     }
   });
 
-  test("D048: one that exists without the marker is not taken, and nothing is created", async () => {
+  test("D051: one that exists without the marker is not taken, and nothing is created", async () => {
     // `shop_preview` is new, but `shop` is another client's: neither is touched.
     const s = setup({ databases: ["shop"], marked: [] });
     const res = (await s.send("db.create", { project: "shop" })) as {

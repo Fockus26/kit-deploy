@@ -82,7 +82,7 @@ export async function productionContainer(
  * Parar: production's container stops; its deployment stays live, so Caddy answers 502 until
  * Reiniciar, a new deploy or a rollback, or root's `kit-deploy regenerate` (which starts every
  * stopped live container). A domain change or the domain check rewrite only the Caddy file and
- * never start it (D047); Docker's `unless-stopped` keeps it stopped across a reboot.
+ * never start it (D050); Docker's `unless-stopped` keeps it stopped across a reboot.
  */
 export async function stopProduction(
   deps: { agent: AgentClient; repo: SwitchRepo },

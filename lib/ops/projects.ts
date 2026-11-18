@@ -60,7 +60,7 @@ export async function addProject(
 ): Promise<{ id: string; hosts: string[] }> {
   if (!PROJECT_RE.test(input.name) || isPreviewsSuffix(input.name))
     throw new CoreInputError(`invalid project name "${input.name}"`);
-  // Its database would be the platform's or Postgres' own (D048).
+  // Its database would be the platform's or Postgres' own (D051).
   if (isReservedProject(input.name))
     throw new CoreInputError(`invalid project name "${input.name}": reserved`);
   if (!REPO_RE.test(input.repo))

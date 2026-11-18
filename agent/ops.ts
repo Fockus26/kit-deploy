@@ -41,9 +41,9 @@ import {
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage, assertProject } from "../lib/core/validate";
 import { isReservedProject } from "../lib/ops/rules";
-import { dbStatus, ownsDatabase } from "./databases";
+import { backupsStatus, dbStatus, ownsDatabase } from "./databases";
 import type { Deps, RunResult } from "./deps";
-import { certStatus } from "./domains";
+import { certStatus, platformCerts } from "./domains";
 import { Busy, Limiter } from "./limit";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
@@ -95,6 +95,9 @@ export function databaseName(target: Target): string {
 
 const PULL_TIMEOUT_MS = 600_000;
 const HEALTH_TIMEOUT_MS = 3_000;
+/** A cron route has this long to answer; the minute's tick must end before the next (D048). */
+export const CRON_TIMEOUT_MS = 50_000;
+const CRON_SECRET = "CRON_SECRET";
 /** A port handed out by `ports.allocate` stays reserved this long, so two deploys that allocate
  * before either has started its container do not get the same one. */
 export const RESERVATION_MS = 10 * 60_000;
@@ -325,6 +328,12 @@ export class Agent {
         return sampleMetrics(this.deps, this.now, () => this.list());
       case "db.status":
         return dbStatus(this.deps, req.params.project);
+      case "platform.certs":
+        return platformCerts(this.deps);
+      case "backups.status":
+        return backupsStatus(this.deps);
+      case "cron.call":
+        return this.cronCall(req.params);
     }
   }
 
@@ -452,6 +461,77 @@ export class Agent {
     });
   }
 
+  /**
+   * cron.call: the secret is opened only for the request's header and never returned or logged.
+   * The port must be the project's running production container — otherwise a caller could send
+   * one project's CRON_SECRET to another project's container.
+   */
+  private async cronCall(p: {
+    project: string;
+    port: number;
+    path: string;
+    secret: { name: string; secret: boolean; sealed: Sealed };
+  }): Promise<{ status: number | null; durationMs: number; error?: string }> {
+    if (p.secret.name !== CRON_SECRET) {
+      throw new AgentError(
+        "bad_request",
+        `cron.call takes ${CRON_SECRET} only`,
+      );
+    }
+    const live = (await this.list(p.project)).find(
+      (c) =>
+        c.project === p.project &&
+        c.env === "production" &&
+        c.state === "running" &&
+        c.port === p.port,
+    );
+    if (!live) {
+      throw new AgentError(
+        "bad_request",
+        `port ${p.port} is not ${p.project}'s running production container`,
+      );
+    }
+    let value: string;
+    try {
+      value = open(
+        await this.key(),
+        {
+          project: p.project,
+          environment: "production",
+          name: p.secret.name,
+          secret: p.secret.secret,
+        },
+        p.secret.sealed,
+      );
+    } catch (e) {
+      if (e instanceof EnvCryptoError)
+        throw new AgentError(
+          "bad_request",
+          `${CRON_SECRET} cannot be decrypted`,
+        );
+      throw e;
+    }
+    const started = this.now();
+    try {
+      const { status } = await this.deps.httpGet(
+        `http://127.0.0.1:${p.port}${p.path}`,
+        CRON_TIMEOUT_MS,
+        { authorization: `Bearer ${value}`, "user-agent": "kit-deploy-cron/1" },
+      );
+      return { status, durationMs: this.now() - started };
+    } catch (e) {
+      const name = (e as Error).name;
+      return {
+        status: null,
+        durationMs: this.now() - started,
+        error:
+          name === "TimeoutError" || name === "AbortError"
+            ? `no answer in ${CRON_TIMEOUT_MS / 1000} s`
+            : "connection failed",
+      };
+    }
+  }
+
   private serial<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.queue.then(fn, fn);
     this.queue = next.catch(() => undefined);
@@ -571,7 +651,7 @@ export class Agent {
    * DATABASE_URL from `kit-db url` (production: `<project>`, preview: `<project>_preview`), read at
    * each start and never stored (César 2026-11-17: after `kit-db rotate`, a redeploy is enough).
    * A project without that database runs without it, and so does one whose database kit-deploy
-   * does not own (no root marker, D048): kit-db is not even asked. Neither the URL nor kit-db's
+   * does not own (no root marker, D051): kit-db is not even asked. Neither the URL nor kit-db's
    * output ever reaches a response or a log.
    */
   private async managedLines(target: Target): Promise<string> {
@@ -598,7 +678,7 @@ export class Agent {
   }
 
   /** `kit-db create` for production's and the previews' databases, each marked as kit-deploy's
-   * (D048). Its stdout carries the URLs with the password: it is dropped, never returned or
+   * (D051). Its stdout carries the URLs with the password: it is dropped, never returned or
    * logged. One that exists without the marker is not taken: nothing is created and root adopts
    * it (`kit-deploy db adopt`) if it really is the project's. */
   private async createDatabases(project: string) {

@@ -16,6 +16,11 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
   const logs: Record<string, unknown>[] = [];
   const privateFiles: { path: string; content: string }[] = [];
   let httpStatus: number | Error = 200;
+  const httpCalls: {
+    url: string;
+    timeoutMs: number;
+    headers?: Record<string, string>;
+  }[] = [];
 
   const deps: Deps = {
     async run(argv, opts) {
@@ -48,7 +53,8 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
         )
         .map((k) => k.slice(prefix.length));
     },
-    async httpGet() {
+    async httpGet(url, timeoutMs, headers) {
+      httpCalls.push({ url, timeoutMs, headers });
       if (httpStatus instanceof Error) throw httpStatus;
       return { status: httpStatus };
     },
@@ -78,6 +84,7 @@ export function fakeDeps(handlers: Record<string, Handler> = {}) {
     symlinks,
     privateFiles,
     logs,
+    httpCalls,
     setHttp(s: number | Error) {
       httpStatus = s;
     },

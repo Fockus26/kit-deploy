@@ -29,7 +29,7 @@ export function assertProject(name: string): string {
       `invalid project name "${name}": expected ^[a-z0-9][a-z0-9_]{0,39}$`,
     );
   }
-  // Its database would be one kit-deploy does not own (D048).
+  // Its database would be one kit-deploy does not own (D051).
   if (isReservedProject(name)) {
     throw new CoreInputError(`"${name}" is reserved: not a project name`);
   }

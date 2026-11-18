@@ -36,7 +36,7 @@ export type CheckDeps = {
   /** Projects with a live production deployment: only those have a site file to write. */
   liveProjects(): Promise<Set<string>>;
   /** Rewrites one project's site file from its rows, and only that: never starts its container,
-   * so a production stopped with Parar stays stopped (the switch's `rewriteSiteFile`, D047). */
+   * so a production stopped with Parar stays stopped (the switch's `rewriteSiteFile`, D050). */
   regenerate(project: string): Promise<{ ok: boolean; error?: string }>;
   now?: () => number;
 };

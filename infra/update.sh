@@ -11,7 +11,8 @@
 # enabled → the 30 s metrics timer and the minute domain check timer too → the web container is
 # recreated → the dashboard's
 # Caddy site is written if its host resolves → the previews' wildcard site, once the Cloudflare
-# token and *.preview DNS exist → only the last 3 releases are kept.
+# token and *.preview DNS exist → only the last 3 releases are kept. The alerts check timer
+# (phase 06) is installed before the web.
 # The sites never stop: their containers and Caddy are not touched.
 set -euo pipefail
 # Whatever the caller's umask: releases and /run/kit-deploy must be readable by the web user.
@@ -203,6 +204,35 @@ else
   [ "$METRICS_CHANGED" = 1 ] && systemctl daemon-reload
   systemctl enable -q --now kit-deploy-metrics.timer
 fi
+
+# Installs or updates <name>.service and <name>.timer from the release and enables the timer
+# (enable --now only schedules it). Same steps as the sweep's, metrics' and domain check's above.
+install_timer() {
+  local name="$1" changed=0 u
+  for u in "$name.service" "$name.timer"; do
+    cmp -s "$REL/infra/$u" "/etc/systemd/system/$u" && continue
+    install -m 0644 -o root -g root "$REL/infra/$u" "/etc/systemd/system/$u.new"
+    mv -f "/etc/systemd/system/$u.new" "/etc/systemd/system/$u"
+    changed=1
+  done
+  [ "$changed" = 1 ] && echo "Units installed or updated." || echo "Units unchanged."
+  if [ "$TEST" = 1 ]; then
+    echo "TEST: systemctl enable --now $name.timer skipped."
+  else
+    [ "$changed" = 1 ] && systemctl daemon-reload
+    systemctl enable -q --now "$name.timer"
+  fi
+}
+
+say "Alerts check every minute (kit-deploy-alerts.timer)"
+# `kit-deploy alerts check` as root every minute (phase 06, D047). Without alerts.env (the Brevo
+# key, `kit-deploy alerts setup`) it still records the incidents; their emails wait.
+install_timer kit-deploy-alerts
+[ -f "$STATE/alerts.env" ] || echo "No $STATE/alerts.env yet: emails wait for 'kit-deploy alerts setup --to <email>'."
+
+say "Cron tick every minute (kit-deploy-cron.timer)"
+# `kit-deploy cron tick` as root at :00 of every minute (phase 06, D048).
+install_timer kit-deploy-cron
 
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"
 UID_WEB="$(id -u kitdeploy)"

@@ -1,0 +1,13 @@
+# kit-deploy · runs kit-deploy-cron.service at the start of every minute (D048). Installed and
+# enabled by infra/update.sh. Not Persistent: a minute missed while the VPS was down is not run
+# later (like Vercel Cron).
+[Unit]
+Description=kit-deploy cron tick (every minute)
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Unit=kit-deploy-cron.service
+
+[Install]
+WantedBy=timers.target

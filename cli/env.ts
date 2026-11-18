@@ -10,9 +10,16 @@ export const CLI_ENV_PATH = "/etc/kit-deploy/cli.env";
  * it; as a kit-deploy group member the CLI deploys without publishing the status. */
 export const GITHUB_ENV_PATH = "/etc/kit-deploy/github.env";
 
+/** The alerts' Brevo key and recipient (`kit-deploy alerts setup`): root 0600, like github.env. */
+export const ALERTS_ENV_PATH = "/etc/kit-deploy/alerts.env";
+
 /** Only these keys are taken from each file; anything else in it is ignored. */
 const CLI_KEYS: ReadonlySet<string> = new Set(["DATABASE_URL"]);
 const GITHUB_KEYS: ReadonlySet<string> = new Set(["GITHUB_STATUS_TOKEN"]);
+const ALERTS_KEYS: ReadonlySet<string> = new Set([
+  "ALERTS_BREVO_KEY",
+  "ALERTS_TO",
+]);
 
 export function parseEnvFile(
   text: string,
@@ -57,4 +64,33 @@ export function loadGithubEnv(
   env: Record<string, string | undefined> = process.env,
 ): void {
   loadCliEnv(path, env, GITHUB_KEYS);
+}
+
+/** `alerts.env` if this user may read it (root); otherwise no email this run (they wait). */
+export function loadAlertsEnv(
+  path = ALERTS_ENV_PATH,
+  env: Record<string, string | undefined> = process.env,
+): void {
+  loadCliEnv(path, env, ALERTS_KEYS);
+}
+
+/** `alerts setup`: the two lines, 0600 root, written to a temp file and renamed over. */
+export async function writeAlertsEnv(
+  key: string,
+  to: string,
+  path = ALERTS_ENV_PATH,
+): Promise<void> {
+  const { chmod, rename, rm, writeFile } = await import("node:fs/promises");
+  const tmp = `${path}.tmp`;
+  await rm(tmp, { force: true });
+  await writeFile(
+    tmp,
+    `# Written by kit-deploy alerts setup. Root 0600; never printed.
+ALERTS_BREVO_KEY=${key}
+ALERTS_TO=${to}
+`,
+    { flag: "wx", mode: 0o600 },
+  );
+  await chmod(tmp, 0o600);
+  await rename(tmp, path);
 }

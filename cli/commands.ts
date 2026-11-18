@@ -45,7 +45,9 @@ import {
 } from "../lib/ops/projects";
 import { isReservedProject, RESERVED_PROJECTS } from "../lib/ops/rules";
 import pkg from "../package.json";
+import { type AlertsContext, alertsCommand } from "./alerts-commands";
 import { type AgentClient, AgentUnreachable } from "./client";
+import { type CronContext, cronCommand } from "./cron-commands";
 import {
   DB_USAGE,
   type DbContext,
@@ -61,7 +63,9 @@ import { type MetricsContext, metricsCommand } from "./metrics-commands";
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
 export type CliContext = EnvContext &
   DomainContext &
-  DbContext & {
+  DbContext &
+  Pick<AlertsContext, "alerts" | "writeAlertsEnv"> &
+  Pick<CronContext, "cron"> & {
     deploy?: () => DeployContext;
     admin?: () => AdminStore;
     users?: () => UserStore;
@@ -167,6 +171,19 @@ Commands:
                      5xx of the last 24 h
   metrics collect    (root) one sample of containers, the VPS and Caddy's access log into
                      the database. Every 30 s by kit-deploy-metrics.timer
+  alerts ls [--all]  open alerts (--all: the last 50, resolved too)
+  alerts check [--dry-run]
+                     (root) site health, certificates, disk, memory, backups and failed
+                     deploys; opens/resolves incidents and emails one digest by Brevo.
+                     Every minute by kit-deploy-alerts.timer
+  alerts setup --to <email>
+                     (root) the Brevo API key from stdin, never argv:
+                     ssh -t kit-vps kit-deploy alerts setup --to <email>
+  alerts test        (root) one sample alert email
+  cron ls|add|rm|pause|resume|run|runs <project> ...
+                     scheduled GETs of a production route with its CRON_SECRET (UTC
+                     schedules), and the log of each run; 'kit-deploy cron' for details
+  cron tick          (root) this minute's jobs. Every minute by kit-deploy-cron.timer
   help               this text
 `;
 
@@ -270,7 +287,7 @@ async function list(client: AgentClient, json: boolean): Promise<Result> {
 
 const PROJECT = /^[a-z0-9][a-z0-9_]{0,39}$/;
 
-/** D048: a project's name is its kit-db database's; these belong to the platform or Postgres. */
+/** D051: a project's name is its kit-db database's; these belong to the platform or Postgres. */
 function reservedName(name: string): string {
   return `invalid project name "${name}": reserved (${RESERVED_PROJECTS.join(", ")} are the platform's or Postgres' own databases)\n`;
 }
@@ -790,6 +807,10 @@ export async function runCli(
         return fail(SWEEP_USAGE, 2);
       case "metrics":
         return await metricsCommand(client, ctx, args, json);
+      case "alerts":
+        return await alertsCommand(client, ctx, args, json);
+      case "cron":
+        return await cronCommand(client, ctx, args, json);
       case undefined:
       case "help":
       case "--help":

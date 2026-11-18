@@ -845,7 +845,7 @@ describe("panel actions: projects, tokens, databases", () => {
     });
   });
 
-  test("D048: project form refuses the platform's and Postgres' database names, in Spanish", async () => {
+  test("D051: project form refuses the platform's and Postgres' database names, in Spanish", async () => {
     const w = actionWorld();
     for (const name of ["kit_deploy", "postgres", "template0", "pgbouncer"]) {
       const r = await createProject(
@@ -861,7 +861,7 @@ describe("panel actions: projects, tokens, databases", () => {
     expect(w.admin.added).toEqual([]);
   });
 
-  test("D048: Crear base over a database kit-deploy does not own says how to adopt it", async () => {
+  test("D051: Crear base over a database kit-deploy does not own says how to adopt it", async () => {
     const w = actionWorld({
       agent: {
         call: async () => ({

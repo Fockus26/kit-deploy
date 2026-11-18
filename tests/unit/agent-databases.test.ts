@@ -42,7 +42,7 @@ const STATUS = [
 
 type Handler = (argv: readonly string[]) => Partial<RunResult>;
 
-/** kd_hello's two databases carry kit-deploy's marker (D048) unless told otherwise. */
+/** kd_hello's two databases carry kit-deploy's marker (D051) unless told otherwise. */
 function setup(
   handlers: Record<string, Handler> = {},
   marked: readonly string[] = ["kd_hello", "kd_hello_preview"],
@@ -320,7 +320,7 @@ describe("kit-deploy db status", () => {
     expect(age(at, t + 3 * 86_400_000)).toBe("3 d ago");
   });
 
-  test("D048: a database without the marker is 'not managed', with how to adopt it", async () => {
+  test("D051: a database without the marker is 'not managed', with how to adopt it", async () => {
     const s = setup({}, ["kd_hello_preview"]);
     const r = await runCli(["db", "status", "kd_hello"], s.client);
     expect(r.code).toBe(0);
@@ -331,7 +331,7 @@ describe("kit-deploy db status", () => {
   });
 });
 
-describe("D048: db.status for databases kit-deploy does not own", () => {
+describe("D051: db.status for databases kit-deploy does not own", () => {
   test("listed by name only: no size, no backup, no failure lines", async () => {
     const r = result(await setup({}, []).send({ project: "kd_hello" }));
     expect(r).toEqual({
@@ -367,7 +367,7 @@ describe("D048: db.status for databases kit-deploy does not own", () => {
   });
 });
 
-describe("D048: kit-deploy db adopt", () => {
+describe("D051: kit-deploy db adopt", () => {
   function adoptSetup(opts: { root?: boolean; marked?: string[] } = {}) {
     const s = setup({}, opts.marked ?? []);
     const written: string[] = [];

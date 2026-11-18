@@ -667,7 +667,7 @@ export type RegenerateResult = {
 /**
  * Rewrites every live site's Caddy file (or only `project`'s). With `start` (the default: what
  * `kit-deploy regenerate` does after a reboot) it also starts a live container that is not
- * running. Without it, the Caddy file only: a production stopped with Parar stays stopped (D047).
+ * running. Without it, the Caddy file only: a production stopped with Parar stays stopped (D050).
  */
 export async function regenerate(
   deps: SwitchDeps,
@@ -708,7 +708,7 @@ export async function regenerate(
 
 /**
  * One project's Caddy file, rewritten after a domain changed (domain rm / redirect, the domain
- * check's timer). Never starts its container: a stopped site stays stopped (D047). `ok` when the
+ * check's timer). Never starts its container: a stopped site stays stopped (D050). `ok` when the
  * project has nothing live (its next deploy writes the file).
  */
 export async function rewriteSiteFile(
