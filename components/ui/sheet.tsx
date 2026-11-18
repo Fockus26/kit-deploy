@@ -5,8 +5,9 @@ import { Dialog as SheetPrimitive } from "radix-ui";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 
-// shadcn/ui Sheet (new-york, radix-ui), on kit-deploy's tokens. Only the left side is used
-// (the mobile navigation), 280px (HANDOFF §3). It enters from the left; it closes without one.
+// shadcn/ui Sheet (new-york, radix-ui), on kit-deploy's tokens. Left: the mobile navigation,
+// 280px; right: a deployment's detail, 480px at most (HANDOFF §3). It enters from its side; it
+// closes without animation.
 
 function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -26,9 +27,11 @@ function SheetContent({
   className,
   children,
   closeLabel = "Cerrar",
+  side = "left",
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   closeLabel?: string;
+  side?: "left" | "right";
 }) {
   return (
     <SheetPrimitive.Portal>
@@ -39,7 +42,10 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-sheet animate-sheet-in flex-col border-border border-r bg-nav shadow-lg outline-none",
+          "fixed inset-y-0 z-50 flex h-full flex-col bg-nav shadow-lg outline-none",
+          side === "left"
+            ? "left-0 w-sheet animate-sheet-in border-border border-r"
+            : "right-0 w-full max-w-sheet-detail animate-sheet-in-right border-border border-l",
           className,
         )}
         {...props}

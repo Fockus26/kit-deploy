@@ -38,11 +38,14 @@ export function MetricCard({
           </span>
         ) : null}
       </p>
-      <Sparkline
-        data={series}
-        label={seriesLabel}
-        tone={alert ? "destructive" : "primary"}
-      />
+      {/* HANDOFF §3 Métricas: below 768 the card is just label and value. */}
+      <div className="max-md:hidden">
+        <Sparkline
+          data={series}
+          label={seriesLabel}
+          tone={alert ? "destructive" : "primary"}
+        />
+      </div>
     </div>
   );
 }
