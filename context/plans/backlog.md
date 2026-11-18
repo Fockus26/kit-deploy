@@ -62,3 +62,8 @@ One block per item: what, why, version.
 - **What:** `backups.status` (phase 06) gives the whole Postgres backup state to any member of the socket group — same class as L2, fix together (SO_PEERCRED). DB ownership markers (`/etc/kit-deploy/dbs/<db>`) are never removed when a project or its database goes away.
 - **Why:** least privilege; stale markers would let a re-created project with the same name inherit "owned".
 - **Version:** v1.x (with L2)
+
+## Tailwind v4: `source(none)` in the global stylesheet (kit 3.25.0, step 4)
+- **What:** `app/globals.css` imports Tailwind without `source(none)`, so it scans `context/`, `.claude/` and other folders for classes. Change it to `@import "tailwindcss" source(none);` plus explicit `@source` for `app/`, `components/`, `lib/` (kit `STACK-NEXTJS.md`). Compare the built CSS before and after: only classes that came from `context/` or `.claude/` may disappear.
+- **Why:** smaller CSS and builds that do not depend on docs or the kit copy.
+- **Version:** v1.x — small unit
