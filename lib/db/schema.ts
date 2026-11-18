@@ -300,6 +300,10 @@ export const AUDIT_ACTIONS = [
   "project.rollback",
   "project.stop",
   "project.restart",
+  "cron.add",
+  "cron.remove",
+  "cron.enable",
+  "cron.disable",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -671,3 +675,62 @@ export const alertChecks = pgTable("alert_checks", {
     .notNull()
     .defaultNow(),
 });
+
+// ── Cron (phase 06, brief F12, D048) ───────────────────────────────────────────────────────
+
+/** A production route called on a schedule (UTC, five fields) with the project's CRON_SECRET. */
+export const cronJobs = pgTable(
+  "cron_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    schedule: text("schedule").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("cron_jobs_route").on(t.projectId, t.path, t.schedule),
+    check(
+      "cron_jobs_path_format",
+      sql`${t.path} ~ '^/[A-Za-z0-9._~/-]{0,200}$' and strpos(${t.path}, '..') = 0`,
+    ),
+    check(
+      "cron_jobs_schedule_length",
+      sql`length(${t.schedule}) between 9 and 100`,
+    ),
+  ],
+);
+
+export const CRON_RUN_STATUSES = ["running", "ok", "failed"] as const;
+export type CronRunStatus = (typeof CRON_RUN_STATUSES)[number];
+
+/** One call of a job; one row per job and scheduled minute (a second tick cannot run it twice).
+ * Kept 30 days. `error` is the CLI's English line, never a secret. */
+export const cronRuns = pgTable(
+  "cron_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => cronJobs.id, { onDelete: "cascade" }),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    status: text("status", { enum: CRON_RUN_STATUSES })
+      .notNull()
+      .default("running"),
+    httpStatus: integer("http_status"),
+    durationMs: integer("duration_ms"),
+    error: text("error"),
+  },
+  (t) => [
+    uniqueIndex("cron_runs_slot").on(t.jobId, t.scheduledFor),
+    index("cron_runs_job_started").on(t.jobId, t.startedAt.desc()),
+    check("cron_runs_status", inList("status", CRON_RUN_STATUSES)),
+  ],
+);

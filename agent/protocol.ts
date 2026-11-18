@@ -198,6 +198,14 @@ export const Request = z.discriminatedUnion("op", [
   op("platform.certs", {}),
   /** Phase 06: kit-db's last dump per database and its FAIL lines (agent/databases.ts). */
   op("backups.status", {}),
+  /** Phase 06 (brief F12): GET a production route with `Authorization: Bearer <CRON_SECRET>`,
+   * opened here from its stored row; only the status and duration come back. */
+  op("cron.call", {
+    project,
+    port,
+    path: z.string().regex(/^\/(?!.*\.\.)[A-Za-z0-9._~/-]{0,200}$/),
+    secret: storedVar,
+  }),
 ]);
 
 export type Request = z.infer<typeof Request>;

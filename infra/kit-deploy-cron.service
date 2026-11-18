@@ -1,0 +1,23 @@
+# kit-deploy · cron tick (phase 06, brief F12, D048): each enabled job whose schedule (UTC) matches
+# this minute — a GET of its project's production route with Authorization: Bearer <CRON_SECRET>,
+# sent by kit-agent (cron.call) so the secret is opened only there. One row per run in cron_runs
+# (`kit-deploy cron runs <project>`). Replaces the hand-made systemd timers of tech/vps-postgres.md.
+# Started every minute by kit-deploy-cron.timer; installed by infra/update.sh. Root: it reads
+# /etc/kit-deploy/cli.env. One line per run in the journal:
+#   journalctl -u kit-deploy-cron
+[Unit]
+Description=kit-deploy cron tick
+After=network-online.target kit-agent.service
+Wants=network-online.target
+Requires=kit-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kit-deploy cron tick
+# A route has 50 s (CRON_TIMEOUT_MS); the tick ends before the next minute's starts.
+TimeoutStartSec=58s
+Nice=5
+MemoryMax=128M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only

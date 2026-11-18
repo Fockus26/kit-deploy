@@ -90,7 +90,7 @@ async function sites(deps: CheckDeps): Promise<Observation[]> {
       detail = h.ok
         ? ""
         : h.status === null
-          ? "/api/health no respondió en 5 s."
+          ? "/api/health no respondió a tiempo."
           : `/api/health respondió ${h.status}.`;
     }
     out.push({
