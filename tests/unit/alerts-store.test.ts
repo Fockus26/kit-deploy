@@ -56,13 +56,19 @@ describe.skipIf(!url)("alerts store (Postgres)", () => {
 
     const sent: Digest[] = [];
     const mailer = { send: async (d: Digest) => void sent.push(d) };
-    expect(await notify(store, mailer, renderDigest, t(4))).toEqual({ sent: 1 });
-    expect(await notify(store, mailer, renderDigest, t(5))).toEqual({ sent: 0 });
+    expect(await notify(store, mailer, renderDigest, t(4))).toEqual({
+      sent: 1,
+    });
+    expect(await notify(store, mailer, renderDigest, t(5))).toEqual({
+      sent: 0,
+    });
 
     for (const m of [6, 7, 8, 9, 10])
       await evaluate(store, [{ ...o, failing: false, detail: "" }], ALL, t(m));
     expect(await store.openAlerts()).toHaveLength(0);
-    expect(await notify(store, mailer, renderDigest, t(11))).toEqual({ sent: 1 });
+    expect(await notify(store, mailer, renderDigest, t(11))).toEqual({
+      sent: 1,
+    });
     expect(sent.map((d) => d.subject)).toEqual([
       "[kit-deploy] Abierta: shop no responde",
       "[kit-deploy] Resuelta: shop no responde",
@@ -94,14 +100,55 @@ describe.skipIf(!url)("alerts store (Postgres)", () => {
     if (!p || !q) throw new Error("no project");
     const sha = (c: string) => c.repeat(40);
     await db.insert(deployments).values([
-      { projectId: p.id, environment: "production", sha: sha("a"), image: "i", status: "live", container: "kd-shop-a", port: 20001, createdAt: new Date("2026-11-18T10:00:00Z") },
-      { projectId: p.id, environment: "production", sha: sha("b"), image: "i", status: "failed", error: "boom", createdAt: new Date("2026-11-18T11:00:00Z") },
-      { projectId: q.id, environment: "production", sha: sha("c"), image: "i", status: "live", container: "kd-blog-c", port: 20002, createdAt: new Date("2026-11-18T09:00:00Z") },
+      {
+        projectId: p.id,
+        environment: "production",
+        sha: sha("a"),
+        image: "i",
+        status: "live",
+        container: "kd-shop-a",
+        port: 20001,
+        createdAt: new Date("2026-11-18T10:00:00Z"),
+      },
+      {
+        projectId: p.id,
+        environment: "production",
+        sha: sha("b"),
+        image: "i",
+        status: "failed",
+        error: "boom",
+        createdAt: new Date("2026-11-18T11:00:00Z"),
+      },
+      {
+        projectId: q.id,
+        environment: "production",
+        sha: sha("c"),
+        image: "i",
+        status: "live",
+        container: "kd-blog-c",
+        port: 20002,
+        createdAt: new Date("2026-11-18T09:00:00Z"),
+      },
     ]);
     await db.insert(auditLog).values([
-      { actor: "web:u1", action: "project.stop", project: "blog", at: new Date("2026-11-18T09:30:00Z") },
-      { actor: "web:u1", action: "project.restart", project: "shop", at: new Date("2026-11-18T09:00:00Z") },
-      { actor: "web:u1", action: "project.stop", project: "shop", at: new Date("2026-11-18T08:00:00Z") },
+      {
+        actor: "web:u1",
+        action: "project.stop",
+        project: "blog",
+        at: new Date("2026-11-18T09:30:00Z"),
+      },
+      {
+        actor: "web:u1",
+        action: "project.restart",
+        project: "shop",
+        at: new Date("2026-11-18T09:00:00Z"),
+      },
+      {
+        actor: "web:u1",
+        action: "project.stop",
+        project: "shop",
+        at: new Date("2026-11-18T08:00:00Z"),
+      },
     ]);
     await db.insert(domains).values({
       projectId: p.id,
@@ -111,8 +158,18 @@ describe.skipIf(!url)("alerts store (Postgres)", () => {
     });
     const repo = drizzleCheckRepo(db);
     expect(await repo.liveSites()).toEqual([
-      { project: "blog", container: "kd-blog-c", port: 20002, stoppedOnPurpose: true },
-      { project: "shop", container: "kd-shop-a", port: 20001, stoppedOnPurpose: false },
+      {
+        project: "blog",
+        container: "kd-blog-c",
+        port: 20002,
+        stoppedOnPurpose: true,
+      },
+      {
+        project: "shop",
+        container: "kd-shop-a",
+        port: 20001,
+        stoppedOnPurpose: false,
+      },
     ]);
     const last = await repo.lastProductionDeploys();
     expect(last.map((d) => [d.project, d.status]).sort()).toEqual([
@@ -120,7 +177,12 @@ describe.skipIf(!url)("alerts store (Postgres)", () => {
       ["shop", "failed"],
     ]);
     expect(await repo.domainCerts()).toEqual([
-      { project: "shop", host: "shop.com", certNotAfter: new Date("2027-01-01T00:00:00Z"), status: "ready" },
+      {
+        project: "shop",
+        host: "shop.com",
+        certNotAfter: new Date("2027-01-01T00:00:00Z"),
+        status: "ready",
+      },
     ]);
     expect(await repo.vps()).toBeNull();
   });
