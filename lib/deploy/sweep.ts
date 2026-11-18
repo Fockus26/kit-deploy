@@ -60,8 +60,9 @@ type Listed = {
 };
 
 const PROJECT = /^[a-z0-9][a-z0-9_]{0,39}$/;
+/** `lib/core` containerName for a preview, with a redeploy's `-g<n>` (U8a) as agent/protocol.ts. */
 const PREVIEW_CONTAINER =
-  /^([a-z0-9][a-z0-9_]{0,39})-pr-([1-9][0-9]{0,5})-[0-9a-f]{7,12}$/;
+  /^([a-z0-9][a-z0-9_]{0,39})-pr-([1-9][0-9]{0,5})-[0-9a-f]{7,12}(?:-g[2-9]|-g[1-9][0-9]{1,3})?$/;
 
 async function call<O extends OpName>(
   deps: SweepDeps,
