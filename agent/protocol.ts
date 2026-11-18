@@ -182,6 +182,8 @@ export const Request = z.discriminatedUnion("op", [
     limit: z.number().int().min(1).max(1000).optional(),
     before: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   }),
+  /** D015: one reading of containers, the VPS and Caddy's access log (agent/metrics.ts). */
+  op("metrics.sample", {}),
 ]);
 
 export type Request = z.infer<typeof Request>;

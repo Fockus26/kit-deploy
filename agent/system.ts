@@ -1,5 +1,14 @@
 /** The real side effects behind `Deps`. Kept tiny: the logic is in `ops.ts`, tested with fakes. */
-import { chmod, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import {
+  chmod,
+  mkdir,
+  open,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Deps, RunResult } from "./deps";
 
@@ -91,6 +100,44 @@ function log(event: Record<string, unknown>): void {
   console.log(JSON.stringify({ t: new Date().toISOString(), ...event }));
 }
 
+/** O_NOFOLLOW: a symlink planted at the path is refused. O_NONBLOCK: a FIFO there cannot hang
+ * the open; it is then refused as not a regular file. /proc files say size 0 and are read to EOF. */
+async function readFileFrom(
+  path: string,
+  offset: number,
+  maxBytes: number,
+): Promise<{ ino: number; size: number; data: Uint8Array } | null> {
+  let fh: Awaited<ReturnType<typeof open>>;
+  try {
+    fh = await open(
+      path,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw e;
+  }
+  try {
+    const st = await fh.stat();
+    if (!st.isFile()) throw new Error(`${path} is not a regular file`);
+    const buf = Buffer.alloc(maxBytes);
+    let got = 0;
+    while (got < maxBytes) {
+      const { bytesRead } = await fh.read(
+        buf,
+        got,
+        maxBytes - got,
+        offset + got,
+      );
+      if (bytesRead === 0) break;
+      got += bytesRead;
+    }
+    return { ino: st.ino, size: st.size, data: buf.subarray(0, got) };
+  } finally {
+    await fh.close();
+  }
+}
+
 export const systemDeps: Deps = {
   run,
   readFile,
@@ -100,4 +147,5 @@ export const systemDeps: Deps = {
   listFiles,
   httpGet,
   log,
+  readFileFrom,
 };

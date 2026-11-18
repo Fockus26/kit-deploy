@@ -41,6 +41,7 @@ import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
+import { sampleMetrics } from "./metrics";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
 
 export const CADDYFILE = "/etc/caddy/Caddyfile";
@@ -282,6 +283,8 @@ export class Agent {
         return tailLogs(this.logs, req.params, this.now());
       case "logs.search":
         return searchLogs(this.logs, req.params, this.now());
+      case "metrics.sample":
+        return sampleMetrics(this.deps, this.now, () => this.list());
     }
   }
 
