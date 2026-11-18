@@ -1,10 +1,19 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { StatusBadge } from "@/components/kit/status-badge";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { AgentDown } from "@/components/panel/agent-down";
+import { ProjectActions } from "@/components/panel/project-actions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { findProject } from "@/lib/panel/projects";
+import { productionBadge } from "@/lib/kit/panel-format";
+import { rollbackTarget } from "@/lib/kit/rollback";
+import { deployments, isUnavailable, projectOverview } from "@/lib/panel/data";
 
-/** A project's frame: its header (placeholder until wave 3) and its sections' tabs. */
+/**
+ * A project's frame (HANDOFF §3 Proyecto · cabecera): its name and production status, domain,
+ * branch@sha and repo, the four actions, and the tabs of its sections. `/p/<unknown>` answers its
+ * 404 in proxy.ts (a `notFound()` here comes after the stream started); this one is the fallback.
+ */
 export default function ProjectLayout({
   params,
   children,
@@ -32,23 +41,70 @@ async function ProjectFrame({
   children: React.ReactNode;
 }) {
   const { project: name } = await params;
-  const project = await findProject(name);
-  if (!project) notFound();
+  const [overview, production] = await Promise.all([
+    projectOverview(name),
+    deployments(name, "production"),
+  ]);
+  if (!overview) notFound();
+
+  const { project, live, container } = overview;
+  const state = isUnavailable(container)
+    ? "unknown"
+    : !container || container.state === "running"
+      ? "running"
+      : "stopped";
+  const badge = productionBadge(overview.production, state === "stopped");
+  const target = rollbackTarget(production?.deployments ?? []);
+
   return (
     <>
-      <header className="mb-6">
-        <p className="mb-1 font-medium text-eyebrow text-muted-foreground uppercase">
-          Proyecto
-        </p>
-        <h1 className="wrap-anywhere font-mono font-semibold text-foreground text-h1">
-          {project.name}
-        </h1>
-        {/* PLACEHOLDER (CONTENT_CHECKLIST row 16): status, domain, branch@SHA and the
-            Reiniciar / Parar / Rollback / Redeploy actions arrive with the Resumen page. */}
-        <p className="mt-1 text-muted-foreground">
-          Estado de producción, dominio y último despliegue: aparecerán aquí.
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0 flex-1 basis-80">
+          <p className="mb-1 font-medium text-eyebrow text-muted-foreground uppercase">
+            Proyecto
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 className="wrap-anywhere font-mono font-semibold text-foreground text-h1">
+              {project.name}
+            </h1>
+            <StatusBadge {...badge} />
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-mono text-muted-foreground">
+            <li className="wrap-anywhere">
+              {overview.domain ? (
+                <a
+                  href={`https://${overview.domain}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-primary-text underline-offset-4 hover:underline"
+                >
+                  {overview.domain}
+                  <span className="sr-only"> (abre en otra pestaña)</span>
+                </a>
+              ) : (
+                "Sin dominio"
+              )}
+            </li>
+            <li className="wrap-anywhere font-mono">
+              {project.productionBranch}
+              {live ? `@${live.shortSha}` : ""}
+            </li>
+            <li className="wrap-anywhere font-mono">{project.repo}</li>
+          </ul>
+        </div>
+        <ProjectActions
+          project={project.name}
+          hasLive={live !== null}
+          liveSha={live?.shortSha ?? null}
+          rollback={{
+            available: target !== null,
+            id: target?.id ?? null,
+            sha: target?.sha ?? null,
+          }}
+          container={state}
+        />
       </header>
+      {isUnavailable(container) ? <AgentDown className="mb-6" /> : null}
       <ProjectTabs project={project.name} />
       <div className="pt-6">{children}</div>
     </>

@@ -117,6 +117,7 @@
   /* DESIGN_TOKENS.md › sizes. Controls are 44px below 768 (touch), 40px above. */
   --spacing-control: 44px;
   --spacing-sheet: 280px;
+  --container-sheet-detail: 480px;
   --spacing-sidebar: 240px;
   --spacing-header: 56px;
   --container-form: 400px;
@@ -152,6 +153,8 @@
   --animate-skeleton: kd-pulse 1.5s ease-in-out infinite;
   --animate-menu-in: kd-menu-in var(--duration-fast) var(--ease-default);
   --animate-sheet-in: kd-sheet-in var(--duration-normal) var(--ease-default);
+  --animate-sheet-in-right: kd-sheet-in-right var(--duration-normal)
+    var(--ease-default);
   --animate-fade-in: kd-fade-in var(--duration-normal) var(--ease-default);
   --animate-dialog-in: kd-dialog-in var(--duration-normal) var(--ease-default);
 
@@ -169,6 +172,11 @@
   @keyframes kd-sheet-in {
     from {
       transform: translateX(-100%);
+    }
+  }
+  @keyframes kd-sheet-in-right {
+    from {
+      transform: translateX(100%);
     }
   }
   @keyframes kd-fade-in {

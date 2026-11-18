@@ -6,7 +6,7 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 // shadcn/ui DropdownMenu (new-york, radix-ui), on kit-deploy's tokens: only the pieces the
-// panel uses (the theme switch's radio group). Add the rest from shadcn when a screen needs them.
+// panel uses (the theme switch's radio group, the project's "Más acciones"). Add the rest from shadcn when a screen needs them.
 
 function DropdownMenu(
   props: React.ComponentProps<typeof DropdownMenuPrimitive.Root>,
@@ -61,6 +61,22 @@ function DropdownMenuLabel({
   );
 }
 
+function DropdownMenuItem({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Item>) {
+  return (
+    <DropdownMenuPrimitive.Item
+      data-slot="dropdown-menu-item"
+      className={cn(
+        "flex min-h-control cursor-default select-none items-center gap-2 rounded-sm px-2 py-2 text-body outline-none data-[disabled]:text-disabled data-[highlighted]:bg-raised [&_svg]:size-4 [&_svg]:shrink-0",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 function DropdownMenuRadioGroup(
   props: React.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>,
 ) {
@@ -99,6 +115,7 @@ function DropdownMenuRadioItem({
 export {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
