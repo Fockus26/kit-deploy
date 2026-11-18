@@ -5,33 +5,19 @@
 
 ## Now
 
-**Phase 04 — Variables and databases: done 2026-11-17** (#33–#43, plan `plans/04-variables.md`, log
-`PHASE_LOG/04-variables.md`). On the VPS: release 01076756b752 (2026-11-18), migrations 0006–0008.
-Close checks passed on the VPS; phase security-review done (F1 fixed in #42). A real kd-hello run of
-build-env / secret in container / rebuild waits for César's steps (Blocked).
+**Phase 04** done 2026-11-17 (log `PHASE_LOG/04-variables.md`). **Phase 05** shipped 2026-11-18
+(release 5c36b947709b; units W1–W14 #44–#61 in `PHASE_LOG/05-dashboard.md`).
 
-**Phase 05 — Dashboard: shipped 2026-11-18** (release 5c36b947709b, install test ALL PASS 102; log `PHASE_LOG/05-dashboard.md`) ·
-plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brief (D021).
-
-| Unit | PR | Status |
-|---|---|---|
-| W1 shell + design/HANDOFF.md (D021–D023, qa-session) | #49 | merged (ab876fe) |
-| W2 agent logs (D014; D024 Docker API, D025 50 MiB/day cap) | #44 | merged (7554d09) |
-| W3 metrics (D015; D026–D027, migration 0009) | #46 (replaces #45) | merged (87a3746)
-| W4 domains backend (F6; D028–D029, migration 0010) | #47 | merged (4f3a83c) |
-| W7 db status (F11; D035 no connections in v1) | #48 | merged |
-| W5 UI components (D030–D031) | #50 | merged |
-| W6 panel data + Server Actions (D032–D034) | #51 | merged · a project created from the panel needs `ssh kit-vps kit-deploy project pin` (D034) |
-| W8 Inicio + Proyecto + Despliegues (D036 proxy 404 after a real session, D037) | #55 | merged |
-| W12 states + responsive polish (D043–D044, reflow guard scripts/qa/panel-reflow.mjs) | #57 | merged (53771f4) |
-| W13 server polish + audit (D045, migration 0011) + D046 closing | #56 | merged |
-| Phase security review (0107675..189125c): 0 C · 0 H · 2 M · 4 L | — | done 2026-11-18 |
-| W14 security fixes M1 stop sticks (D050) + M2 DB ownership marker + reserved names (D051) + L1 + L3 | #61 | merged (5c36b94) |
-| W9 Variables + Dominios + Previews (D038–D039) | #53 | merged (6c08db2) |
-| W10 Logs + Bases (D040, logs/tail + logs/search routes) | #52 | merged (df3eb20) |
-| W11 Nuevo proyecto + Ajustes + login (D041–D042) | #54 | merged |
+**Phase 06 — Alerts and cron: merged 2026-11-18** (#58 alerts D047, #59 cron D048, #60 image prune
+D049, #62 panel Cron tab + alerts D052; log `PHASE_LOG/06-alerts-cron.md`). Security review: no
+findings. On the VPS: release b5c1c45302c6 (2026-11-18), install test ALL PASS 102, migrations 0012–0013; 6 timers active, first alerts check: 23 checked, 0 failing.
 
 ## Blocked (actions for César or external)
+
+- **Phase 06 close (César):** verify fockus.dev in Brevo (SPF/DKIM/DMARC in Cloudflare), then
+  `ssh -t kit-vps kit-deploy alerts setup --to <gmail>` (key on stdin) and `kit-deploy alerts test`
+  → inbox, not spam. Then each alert on purpose and a real cron job (CRON_SECRET in production).
+  Copy and thresholds: CONTENT_CHECKLIST #38–#39.
 
 - **Phase 05 close (César):** sign in at deploy.fockus.dev with the passkey, set a secret variable on kd_hello from Variables, check it shows only `••••`/Reemplazar and is never readable, then delete it. Shipped and domain HTTPS check done 2026-11-18. Phase 07: maranatha uses Supabase today; only if its database moves to kit-db, `ssh kit-vps kit-deploy db adopt maranatha --yes` (D051).
 
@@ -47,9 +33,9 @@ plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brie
 
 ## Next
 
-- Before moving a real project (César asked 2026-11-18): the real kd-hello run, alerts (06), and
-  the brief's "Done when" checks (load test during deploy, reboot, kit-deploy stopped, nmap,
-  certbot dry-run). Proposed 06 before 05; 05 had already started in another session.
+- Before moving a real project (César asked 2026-11-18): the real kd-hello run, alerts' delivery
+  check (06), and the brief's "Done when" checks (load test during deploy, reboot, kit-deploy
+  stopped, nmap, certbot dry-run). Then phase 07 (maranatha).
 - fail2ban jail for `kit-deploy-auth: failed sign-in` (own small infra unit, D003).
 - César: passkey in his password manager, then passkey sign-in + cookie check in the browser.
 - Own small units: update.sh's last line prints the previous release twice; `server-ready.sh`
@@ -63,8 +49,8 @@ plan `plans/phase-05-dashboard.md` · no Claude Design handoff: UI from the brie
 | 02 | One site by hand | done 2026-11-13 |
 | 03 | Previews | done 2026-11-17 (browser cookie check pending) |
 | 04 | Variables and databases | done 2026-11-17 (real kd-hello run pending César's steps) |
-| 05 | Dashboard (kit UI phases in `phases/ui/`) | in progress (another session, wave 1) |
-| 06 | Alerts and cron | pending |
+| 05 | Dashboard (kit UI phases in `phases/ui/`) | shipped 2026-11-18 (passkey + secret check pending César) |
+| 06 | Alerts and cron | shipped 2026-11-18 (Brevo delivery + real cron check pending César) |
 | 07 | First real project: maranatha | pending |
 | 08 | Back into the kit | pending |
 | 09 | Final QA ("Done when") | pending |
