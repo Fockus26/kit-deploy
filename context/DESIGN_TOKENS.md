@@ -47,6 +47,8 @@ Surfaces separate by 1px borders, not shadows (D007). Shadows only for what floa
 | size.sheet | 280px | mobile navigation sheet below 1024 |
 | size.header | 56px | header (also the anchors' `scroll-margin-top`) |
 | size.content-max | 1440px | main content max width, aligned left |
+| size.form | 400px | the /login and /enrol card (`--container-form`) |
+| size.form-wide | 560px | the Nuevo proyecto form card (`--container-form-wide`) |
 
 ## Layout (HANDOFF §4)
 
