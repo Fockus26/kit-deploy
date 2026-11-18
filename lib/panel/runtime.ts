@@ -9,6 +9,8 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { socketClient } from "@/cli/client";
+import { drizzleAlertsReader } from "@/lib/alerts/store";
+import { drizzleCronStore } from "@/lib/cron/store";
 import { drizzleAdminStore } from "@/lib/db/admin";
 import { drizzleAuditStore } from "@/lib/db/audit";
 import { drizzleEnvStore } from "@/lib/db/env-store";
@@ -40,6 +42,8 @@ export function panelDeps(): PanelDeps {
     domains: drizzleDomainStore(database),
     metrics: drizzleMetricsReader(database),
     tokens: drizzleTokenStore(database),
+    alerts: drizzleAlertsReader(database),
+    cron: drizzleCronStore(database),
     now: Date.now,
   };
 }

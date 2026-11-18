@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type AgentClient, AgentUnreachable } from "../../cli/client";
+import type { CronJob } from "../../lib/cron/run";
 import type { MetricsReader } from "../../lib/metrics/read";
 import { setVariable } from "../../lib/ops/env";
 import type { PanelDeps } from "../../lib/panel/data/deps";
@@ -10,6 +11,7 @@ import {
   readProjectOverview,
 } from "../../lib/panel/data/projects";
 import {
+  readCron,
   readDatabases,
   readDomains,
   readEnvList,
@@ -22,6 +24,7 @@ import type {
   PanelStore,
   ProjectRow,
 } from "../../lib/panel/data/store";
+import { memoryAlertStore } from "./alerts-fakes";
 import { domainRow, domainWorld, T0 } from "./domain-fakes";
 import { memoryEnv, memoryTokens, realAgent, USER } from "./panel-fakes";
 
@@ -158,6 +161,8 @@ const down: AgentClient = {
 };
 
 function world(opts: { agent?: AgentClient; rows?: DeploymentRow[] } = {}) {
+  const alerts = memoryAlertStore();
+  const cronJobs: CronJob[] = [];
   const env = memoryEnv();
   const domains = domainWorld([], { projects: ["kd_hello"] });
   const deps: PanelDeps = {
@@ -167,9 +172,14 @@ function world(opts: { agent?: AgentClient; rows?: DeploymentRow[] } = {}) {
     domains: domains.deps.store,
     metrics,
     tokens: memoryTokens().store,
+    alerts: alerts.reader,
+    cron: {
+      jobs: async (p) => cronJobs.filter((j) => !p || j.project === p),
+      runs: async () => [],
+    },
     now: () => T0,
   };
-  return { deps, env, domains };
+  return { deps, env, domains, alerts, cronJobs };
 }
 
 describe("panel data: variables", () => {
@@ -465,5 +475,87 @@ describe("panel data: domains, logs, databases, settings", () => {
       audit: [],
       auditNext: null,
     });
+  });
+});
+
+describe("panel data: alerts and cron (phase 06)", () => {
+  const obs = {
+    key: "site_down:kd_hello",
+    kind: "site_down" as const,
+    project: "kd_hello",
+    failing: true,
+    title: "kd_hello no responde",
+    detail: "/api/health respondió 502.",
+  };
+
+  test("Inicio lists the open alerts; Ajustes the recent ones and the last email", async () => {
+    const w = world();
+    await w.alerts.store.open(obs, new Date(T0));
+    await w.alerts.store.open(
+      {
+        ...obs,
+        key: "disk",
+        kind: "disk",
+        project: null,
+        title: "Disco del VPS al 85 %",
+      },
+      new Date(T0),
+    );
+    const disk = (await w.alerts.store.openAlerts()).find(
+      (a) => a.key === "disk",
+    );
+    await w.alerts.store.resolve(disk?.id ?? "", new Date(T0 + 60_000));
+    await w.alerts.store.markNotified(
+      await w.alerts.store.pending(10),
+      new Date(T0 + 120_000),
+    );
+
+    const h = await readHome(w.deps);
+    expect(h.alerts).toEqual([
+      {
+        id: expect.any(String),
+        kind: "site_down",
+        kindLabel: "Sitio caído",
+        project: "kd_hello",
+        title: "kd_hello no responde",
+        detail: "/api/health respondió 502.",
+        openedAt: new Date(T0),
+      },
+    ]);
+    const s = await readSettings(w.deps, USER.userId);
+    expect(s.alerts.map((a) => [a.title, a.resolvedAt !== null])).toEqual([
+      ["Disco del VPS al 85 %", true],
+      ["kd_hello no responde", false],
+    ]);
+    expect(s.lastEmailAt).toEqual(new Date(T0 + 120_000));
+  });
+
+  test("Cron: jobs with their next UTC run (none when paused); unknown project is null", async () => {
+    const w = world();
+    w.cronJobs.push(
+      {
+        id: "j1",
+        project: "kd_hello",
+        path: "/api/cron/diario",
+        schedule: "0 3 * * *",
+        enabled: true,
+        createdAt: new Date(T0),
+      },
+      {
+        id: "j2",
+        project: "kd_hello",
+        path: "/api/cron/x",
+        schedule: "* * * * *",
+        enabled: false,
+        createdAt: new Date(T0),
+      },
+    );
+    const c = await readCron(w.deps, "kd_hello");
+    expect(c?.jobs.map((j) => [j.id, j.next !== null])).toEqual([
+      ["j1", true],
+      ["j2", false],
+    ]);
+    expect(c?.jobs[0]?.next?.getUTCHours()).toBe(3);
+    expect(await readCron(w.deps, "nope")).toBeNull();
   });
 });

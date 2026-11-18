@@ -6,6 +6,8 @@
 
 import type { ErrorCode } from "@/agent/protocol";
 import { type AgentClient, AgentUnreachable } from "@/cli/client";
+import type { AlertsReader } from "@/lib/alerts/store";
+import type { CronStore } from "@/lib/cron/run";
 import type { EnvStore } from "@/lib/db/env-store";
 import type { TokenStore } from "@/lib/db/tokens";
 import type { DomainStore } from "@/lib/domains/store";
@@ -21,6 +23,10 @@ export type PanelDeps = {
   domains: DomainStore;
   metrics: MetricsReader;
   tokens: TokenStore;
+  /** Inicio's open alerts and Ajustes' recent ones (phase 06, D047). */
+  alerts: AlertsReader;
+  /** The Cron tab: jobs and their runs, read only (D050). */
+  cron: Pick<CronStore, "jobs" | "runs">;
   now(): number;
 };
 

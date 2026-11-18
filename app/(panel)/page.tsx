@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Meter } from "@/components/kit/meter";
+import { Notice } from "@/components/kit/notice";
 import { RelativeTime } from "@/components/kit/relative-time";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
 import { NEW_PROJECT_PATH } from "@/components/layout/sidebar-nav";
@@ -103,8 +104,38 @@ async function HomeContent() {
         title="Alertas abiertas"
         aside={<span className="font-mono">{alerts.length}</span>}
       >
-        {/* Phase 06 fills the alerts (D034): a Notice warning each, until then none. */}
-        <p className="text-muted-foreground">Sin alertas abiertas</p>
+        {alerts.length === 0 ? (
+          <p className="text-muted-foreground">Sin alertas abiertas</p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {alerts.map((a) => (
+              <li key={a.id}>
+                <Notice
+                  tone="warning"
+                  title={a.title}
+                  actions={
+                    a.project ? (
+                      <Link
+                        href={`/p/${a.project}`}
+                        className={buttonVariants({
+                          variant: "outline",
+                          size: "sm",
+                        })}
+                      >
+                        Ver proyecto
+                      </Link>
+                    ) : null
+                  }
+                >
+                  <p className="text-muted-foreground">
+                    {a.kindLabel} · abierta <RelativeTime date={a.openedAt} />
+                    {a.detail ? ` · ${a.detail}` : ""}
+                  </p>
+                </Notice>
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
       <Section title="Proyectos">

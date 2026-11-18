@@ -19,6 +19,7 @@ import {
 } from "./projects";
 import {
   type LogLevel,
+  readCron,
   readDatabases,
   readDomains,
   readEnvList,
@@ -126,4 +127,10 @@ export const settingsData = cache(async (auditBefore?: string) => {
     user.userId,
     before && !Number.isNaN(+before) ? before : undefined,
   );
+});
+
+/** null: no such project (the page calls `notFound()`). */
+export const cronData = cache(async (project: string) => {
+  await panelUser();
+  return readCron(panelDeps(), project);
 });

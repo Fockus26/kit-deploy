@@ -3,7 +3,9 @@
  * kit_deploy, the metrics tables and kit-agent. Pure over PanelDeps (lib/panel/data/index.ts adds
  * the session check and React's per-request cache).
  */
+
 import type { ManagedContainer } from "@/agent/ops";
+import { KIND_LABEL } from "@/lib/alerts/rules";
 import { PREVIEW_LIMIT } from "@/lib/core/constants";
 import { defaultHost, previewHost } from "@/lib/core/target";
 import type { DeploymentStatus } from "@/lib/db/schema";
@@ -112,22 +114,34 @@ export type HomeProject = {
   memory: { usedBytes: number; limitBytes: number } | null;
 };
 
+export type OpenAlert = {
+  id: string;
+  kind: string;
+  /** KIND_LABEL: "Sitio caído", "Certificado por vencer"… */
+  kindLabel: string;
+  project: string | null;
+  title: string;
+  detail: string;
+  openedAt: Date;
+};
+
 export type HomeData = {
   projects: HomeProject[];
   lastDeployAt: Date | null;
   /** Inicio "Estado del servidor": null until the first metrics reading. */
   vps: VpsNow | null;
-  /** Inicio "Alertas abiertas": phase 06 fills it (D034); none until then. */
-  alerts: never[];
+  /** Inicio "Alertas abiertas" (phase 06, D047), oldest first. */
+  alerts: OpenAlert[];
 };
 
 export async function readHome(deps: PanelDeps): Promise<HomeData> {
-  const [projects, heads, domains, containers, vps] = await Promise.all([
+  const [projects, heads, domains, containers, vps, open] = await Promise.all([
     deps.store.projects(),
     deps.store.productionHeads(),
     deps.domains.list(),
     deps.metrics.containers(),
     deps.metrics.vps(),
+    deps.alerts.open(),
   ]);
   const out = projects.map((p): HomeProject => {
     const head = heads.get(p.id);
@@ -165,7 +179,18 @@ export async function readHome(deps: PanelDeps): Promise<HomeData> {
       .map((p) => p.lastDeploy?.at ?? null)
       .filter((d): d is Date => d !== null)
       .sort((a, b) => +b - +a)[0] ?? null;
-  return { projects: out, lastDeployAt, vps, alerts: [] };
+  const alerts = open.map(
+    (a): OpenAlert => ({
+      id: a.id,
+      kind: a.kind,
+      kindLabel: KIND_LABEL[a.kind],
+      project: a.project,
+      title: a.title,
+      detail: a.detail,
+      openedAt: a.openedAt,
+    }),
+  );
+  return { projects: out, lastDeployAt, vps, alerts };
 }
 
 // ── Proyecto ──
