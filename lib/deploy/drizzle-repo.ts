@@ -18,6 +18,7 @@ import {
   projects,
 } from "@/lib/db/schema";
 import { type Db, scopeIs } from "@/lib/db/store";
+import { siteHosts } from "@/lib/domains/site";
 import type { RunningPreview, SwitchRepo } from "./repo";
 import type { SweepRepo } from "./sweep";
 
@@ -27,14 +28,20 @@ const preview = eq(deployments.environment, "preview");
 const CURRENT = ["live", "asleep"] as const;
 
 export function drizzleSwitchRepo(db: Db): SwitchRepo {
-  const hostsOf = async (projectId: string) =>
-    (
+  /** The hosts its Caddy site serves and redirects (D028: only those whose DNS points here). */
+  const siteOf = async (projectId: string, project: string) =>
+    siteHosts(
+      project,
       await db
-        .select({ host: domains.host })
+        .select({
+          host: domains.host,
+          redirect: domains.redirect,
+          dnsOkAt: domains.dnsOkAt,
+        })
         .from(domains)
         .where(eq(domains.projectId, projectId))
-        .orderBy(asc(domains.host))
-    ).map((r) => r.host);
+        .orderBy(asc(domains.host)),
+    );
 
   return {
     async withProjectLock(projectId, fn) {
@@ -103,7 +110,7 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
           .from(projects)
           .where(eq(projects.id, projectId));
         if (!p) return null;
-        return { ...next, project: p, hosts: await hostsOf(projectId) };
+        return { ...next, project: p, ...(await siteOf(projectId, p.name)) };
       });
     },
 
@@ -264,7 +271,7 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
         })
         .from(projects)
         .where(eq(projects.name, name));
-      return p ? { ...p, hosts: await hostsOf(p.id) } : null;
+      return p ? { ...p, ...(await siteOf(p.id, p.name)) } : null;
     },
 
     async liveSites() {
@@ -286,7 +293,7 @@ export function drizzleSwitchRepo(db: Db): SwitchRepo {
         out.push({
           deploymentId: r.deploymentId,
           project: r.project,
-          hosts: await hostsOf(r.projectId),
+          ...(await siteOf(r.projectId, r.project)),
           container: r.container,
           port: r.port,
         });

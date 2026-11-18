@@ -3,7 +3,7 @@
  * dashboard). Behind an interface so the commands are tested without Postgres.
  */
 import { eq } from "drizzle-orm";
-import { deployTokens, domains, projects } from "./schema";
+import { type DomainRedirect, deployTokens, domains, projects } from "./schema";
 import type { Db } from "./store";
 
 export type NewProject = {
@@ -23,7 +23,12 @@ export class AdminError extends Error {
 export interface AdminStore {
   /** The project and its domains, in one transaction. */
   addProject(p: NewProject): Promise<{ id: string }>;
-  addDomain(project: string, host: string): Promise<void>;
+  /** A new host waits in `pending_dns` until `domain check` sees it point to the VPS (D028). */
+  addDomain(
+    project: string,
+    host: string,
+    redirect?: DomainRedirect,
+  ): Promise<void>;
   /** The project's `owner/name`, or null when there is no such project. */
   projectRepo(project: string): Promise<string | null>;
   /** The branch production deploys from (`main` unless set), or null for no such project. */
@@ -78,10 +83,10 @@ export function drizzleAdminStore(db: Db): AdminStore {
       }
     },
 
-    async addDomain(project, host) {
+    async addDomain(project, host, redirect = "none") {
       const id = await projectId(project);
       try {
-        await db.insert(domains).values({ projectId: id, host });
+        await db.insert(domains).values({ projectId: id, host, redirect });
       } catch (e) {
         if (isUnique(e))
           throw new AdminError(`${host} already belongs to a project`);

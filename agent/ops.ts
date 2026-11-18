@@ -15,6 +15,7 @@ import {
   MANAGED_LABEL,
   PREVIEW_DOMAIN,
   type PreviewSiteInput,
+  type Redirect,
   renderPreviewSite,
   renderSite,
   type SiteFile,
@@ -41,6 +42,7 @@ import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
+import { certStatus } from "./domains";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
 
 export const CADDYFILE = "/etc/caddy/Caddyfile";
@@ -258,7 +260,12 @@ export class Agent {
         return this.serial(() => this.start(req.params.name));
       case "site.write":
         return this.serial(() =>
-          this.writeSite(req.params.target, req.params.hosts, req.params.port),
+          this.writeSite(
+            req.params.target,
+            req.params.hosts,
+            req.params.port,
+            req.params.redirects,
+          ),
         );
       case "site.remove":
         return this.serial(() => this.removeSite(req.params.target));
@@ -282,6 +289,8 @@ export class Agent {
         return tailLogs(this.logs, req.params, this.now());
       case "logs.search":
         return searchLogs(this.logs, req.params, this.now());
+      case "cert.status":
+        return certStatus(this.deps, req.params.host);
     }
   }
 
@@ -694,8 +703,9 @@ export class Agent {
     target: Target,
     hosts: readonly string[],
     port: number,
+    redirects?: readonly Redirect[],
   ) {
-    const site = renderSite({ target, hosts, port });
+    const site = renderSite({ target, hosts, port, redirects });
     const previous = await this.deps.readFile(site.path);
     if (previous === site.content) return { path: site.path, changed: false };
     await this.applySiteChange(site.path, previous, () =>

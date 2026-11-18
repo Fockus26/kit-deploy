@@ -54,3 +54,21 @@ export const RESERVED_SUBDOMAINS = ["db", "deploy", "preview", "www"] as const;
 
 /** The dashboard's own host (D001); its session cookie never leaves it (D013). */
 export const DASHBOARD_HOST = "deploy.fockus.dev";
+
+/** The VPS' public address (D001, D020): what a project's domain must resolve to before its host
+ * goes into Caddy. The wildcard `*.fockus.dev` already points here. */
+export const VPS_IPV4 = "178.238.238.7";
+
+/** The VPS publishes no IPv6 address. An AAAA record elsewhere makes Let's Encrypt validate over
+ * IPv6 at the wrong machine, so a host with any AAAA does not count as pointed (D028). */
+export const VPS_IPV6: string | null = null;
+
+/** Where Caddy (user `caddy`, home /var/lib/caddy, no XDG override) keeps the certificates it
+ * obtains: `<dir>/<issuer>/<host>/<host>.crt` (D029). */
+export const CADDY_CERTS_DIR = "/var/lib/caddy/.local/share/caddy/certificates";
+
+/** The ACME issuers Caddy uses by default, in its order: Let's Encrypt, then ZeroSSL. */
+export const CADDY_CERT_ISSUERS = [
+  "acme-v02.api.letsencrypt.org-directory",
+  "acme.zerossl.com-v2-dv90",
+] as const;

@@ -22,6 +22,7 @@ import {
   PREVIEW_LIMIT,
   type ProductionTarget,
   previewHost,
+  type Redirect,
   type Target,
 } from "@/lib/core";
 import {
@@ -150,6 +151,20 @@ async function prune(ctx: Ctx, projectId: string) {
   }
 }
 
+/** `site.write`'s params; `redirects` only when there are some, so a site without keeps its call. */
+function siteParams(
+  target: ProductionTarget,
+  s: { hosts: string[]; redirects?: Redirect[] },
+  port: number,
+): Params<"site.write"> {
+  return {
+    target,
+    hosts: s.hosts,
+    port,
+    ...(s.redirects?.length ? { redirects: s.redirects } : {}),
+  };
+}
+
 /** Points the site at `port`, marks `id` live, drains and stops the previous container. */
 async function cutOver(
   ctx: Ctx,
@@ -158,11 +173,12 @@ async function cutOver(
     id: string;
     projectId: string;
     hosts: string[];
+    redirects?: Redirect[];
     container: string;
     port: number;
   },
 ) {
-  await call(ctx, "site.write", { target, hosts: d.hosts, port: d.port });
+  await call(ctx, "site.write", siteParams(target, d, d.port));
   const previous = await ctx.repo.markLive(d.id, d.container, d.port);
   ctx.log({
     event: "switch.live",
@@ -230,7 +246,9 @@ async function deployProduction(
   };
   const name = containerName(target, c.sha, c.generation);
   if (c.hosts.length === 0)
-    throw new SwitchError(`${c.project.name} has no domains`);
+    throw new SwitchError(
+      `${c.project.name} has no domain to serve yet (none resolves to the VPS): kit-deploy domain ls ${c.project.name}`,
+    );
 
   // The same commit may still have its container from an earlier deployment: start that one.
   const kept = await ctx.repo.listKept(c.project.id);
@@ -255,6 +273,7 @@ async function deployProduction(
     id: c.id,
     projectId: c.project.id,
     hosts: c.hosts,
+    redirects: c.redirects,
     container: name,
     port,
   });
@@ -617,6 +636,7 @@ export async function rollback(
       id: to.id,
       projectId: project.id,
       hosts: project.hosts,
+      redirects: project.redirects,
       container: to.container,
       port: to.port,
     });
@@ -624,9 +644,11 @@ export async function rollback(
   });
 }
 
-/** Rewrites every live site's Caddy file and starts its container if it is not running. */
+/** Rewrites every live site's Caddy file (or only `project`'s) and starts its container if it is
+ * not running. */
 export async function regenerate(
   deps: SwitchDeps,
+  only?: { project: string },
 ): Promise<Array<{ project: string; ok: boolean; error?: string }>> {
   const ctx = withDefaults(deps);
   const containers = (await call(ctx, "container.list", {})) as Array<{
@@ -638,14 +660,15 @@ export async function regenerate(
   );
   const out: Array<{ project: string; ok: boolean; error?: string }> = [];
   for (const s of await ctx.repo.liveSites()) {
+    if (only && s.project !== only.project) continue;
     try {
       if (!running.has(s.container))
         await call(ctx, "container.start", { name: s.container });
-      await call(ctx, "site.write", {
-        target: { project: s.project, env: "production" },
-        hosts: s.hosts,
-        port: s.port,
-      });
+      await call(
+        ctx,
+        "site.write",
+        siteParams({ project: s.project, env: "production" }, s, s.port),
+      );
       out.push({ project: s.project, ok: true });
     } catch (e) {
       out.push({ project: s.project, ok: false, error: (e as Error).message });

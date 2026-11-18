@@ -17,7 +17,12 @@ export type SiteInput = {
   hosts: readonly string[];
   /** The loopback port of the container serving it now. */
   port: number;
+  /** Hosts that only answer with a 308 to one of `hosts` (`www` ↔ apex, D028). */
+  redirects?: readonly Redirect[];
 };
+
+/** `from` gets a site block of its own that sends every request to `https://<to>` + its URI. */
+export type Redirect = { from: string; to: string };
 
 export type SiteFile = {
   /** Absolute path on the VPS: `/etc/caddy/sites/<siteName>.caddy` or
@@ -33,6 +38,41 @@ function assertPort(port: number): number {
 /** A host under the preview wildcard (or the wildcard's own name). */
 function isUnderPreviewDomain(host: string): boolean {
   return host === PREVIEW_DOMAIN || host.endsWith(`.${PREVIEW_DOMAIN}`);
+}
+
+/**
+ * Each redirect's source is a host of its own (not one of `hosts`, not a preview, once) and its
+ * target one of the hosts this same site serves: a site file never sends traffic to a host it
+ * does not answer for. Sorted, so the same set renders the same bytes.
+ */
+function assertRedirects(
+  name: string,
+  hosts: readonly string[],
+  redirects: readonly Redirect[],
+): Redirect[] {
+  const seen = new Set<string>();
+  const out = redirects.map((r) => {
+    const from = assertHost(r.from.toLowerCase());
+    const to = assertHost(r.to.toLowerCase());
+    if (isUnderPreviewDomain(from)) {
+      throw new CoreInputError(
+        `host "${from}" is under ${PREVIEW_DOMAIN}: previews are served only behind the login`,
+      );
+    }
+    if (hosts.includes(from) || seen.has(from)) {
+      throw new CoreInputError(
+        `site "${name}": "${from}" is listed twice (a host either serves or redirects)`,
+      );
+    }
+    if (!hosts.includes(to)) {
+      throw new CoreInputError(
+        `site "${name}": "${from}" redirects to "${to}", which this site does not serve`,
+      );
+    }
+    seen.add(from);
+    return { from, to };
+  });
+  return out.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
 }
 
 /**
@@ -63,6 +103,7 @@ export function renderSite(input: SiteInput): SiteFile {
       `host "${preview}" is under ${PREVIEW_DOMAIN}: previews are served only behind the login`,
     );
   }
+  const redirects = assertRedirects(name, hosts, input.redirects ?? []);
 
   const content = [
     `# Written by kit-deploy for ${name} — do not edit by hand: \`kit-deploy regenerate\` rewrites it.`,
@@ -70,6 +111,12 @@ export function renderSite(input: SiteInput): SiteFile {
     `\timport ${CADDY_ACCESS_LOG_SNIPPET}`,
     `\treverse_proxy 127.0.0.1:${port}`,
     "}",
+    ...redirects.flatMap((r) => [
+      "",
+      `${r.from} {`,
+      `\tredir https://${r.to}{uri} 308`,
+      "}",
+    ]),
     "",
   ].join("\n");
 

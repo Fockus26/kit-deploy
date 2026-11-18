@@ -153,6 +153,22 @@ export const deployTokens = pgTable(
   ],
 );
 
+/** D028: whether a host serves the site or only redirects to its `www` / apex sibling. */
+export const DOMAIN_REDIRECTS = ["none", "to_apex", "to_www"] as const;
+export type DomainRedirect = (typeof DOMAIN_REDIRECTS)[number];
+export const DOMAIN_STATUSES = [
+  "pending_dns",
+  "issuing",
+  "ready",
+  "error",
+] as const;
+export type DomainStatus = (typeof DOMAIN_STATUSES)[number];
+/** `domains.last_error` is a sentence for César, cut to this. */
+export const DOMAIN_ERROR_MAX = 300;
+
+const oneOf = (col: string, values: readonly string[]) =>
+  sql.raw(`${col} in (${values.map((v) => `'${v}'`).join(", ")})`);
+
 /** The hosts a project's production answers on. A preview's host is derived (D001), not stored. */
 export const domains = pgTable(
   "domains",
@@ -163,9 +179,33 @@ export const domains = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     /** Lowercase DNS name; one project per host. */
     host: text("host").notNull().unique(),
+    /** `to_apex` on `www.<apex>` / `to_www` on `<apex>`: this host only answers with a 308 to the
+     * other one, which must be a domain of the same project (D028). */
+    redirect: text("redirect", { enum: DOMAIN_REDIRECTS })
+      .notNull()
+      .default("none"),
+    /** pending_dns → (DNS resolves to the VPS) issuing → (Caddy has its certificate) ready;
+     * error when that stalls or the certificate nears expiry. `kit-deploy domain check`. */
+    status: text("status", { enum: DOMAIN_STATUSES })
+      .notNull()
+      .default("pending_dns"),
+    /** The last time `domain check` looked at it. */
+    dnsCheckedAt: timestamp("dns_checked_at", { withTimezone: true }),
+    /** When its DNS first resolved to the VPS. Set = the host is in its Caddy site (D028). */
+    dnsOkAt: timestamp("dns_ok_at", { withTimezone: true }),
+    /** The certificate Caddy holds for it (D029). */
+    certNotAfter: timestamp("cert_not_after", { withTimezone: true }),
+    /** Why it is not ready, short and for César; never a secret. */
+    lastError: text("last_error"),
     createdAt: createdAt(),
   },
   (t) => [
+    check("domains_redirect", oneOf("redirect", DOMAIN_REDIRECTS)),
+    check("domains_status", oneOf("status", DOMAIN_STATUSES)),
+    check(
+      "domains_last_error_length",
+      sql`char_length(${t.lastError}) <= ${sql.raw(String(DOMAIN_ERROR_MAX))}`,
+    ),
     check(
       "domains_host_format",
       sql`${t.host} ~ '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'`,
