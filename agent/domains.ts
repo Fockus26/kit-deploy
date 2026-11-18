@@ -34,6 +34,23 @@ function issuerName(issuer: string): string {
   return (fields.get("O") ?? fields.get("CN") ?? "unknown").slice(0, 100);
 }
 
+/** Far above a leaf plus its chain (a few KiB); a bigger file is not one of Caddy's. */
+export const CERT_MAX_BYTES = 64 * 1024;
+
+/** The PEM, as a regular file only (a symlink is never followed) and within the cap; null when
+ * there is none or it is not something Caddy wrote — skipped like a file that does not parse. */
+async function readCert(deps: Deps, path: string): Promise<string | null> {
+  let r: Awaited<ReturnType<Deps["readFileFrom"]>>;
+  try {
+    r = await deps.readFileFrom(path, 0, CERT_MAX_BYTES);
+  } catch {
+    // ELOOP (a symlink), a directory, a FIFO: not a certificate.
+    return null;
+  }
+  if (r === null || r.size > CERT_MAX_BYTES) return null;
+  return Buffer.from(r.data).toString("utf8");
+}
+
 /**
  * The newest valid-for-this-host certificate among the issuers' directories, or null when Caddy
  * has none yet. A file that does not parse or does not cover the host is skipped, not an error:
@@ -57,7 +74,8 @@ async function caddyCert(
   let best: { cert: X509Certificate; source: CertStatus["source"] } | null =
     null;
   for (const source of CADDY_CERT_ISSUERS) {
-    const pem = await deps.readFile(
+    const pem = await readCert(
+      deps,
       `${CADDY_CERTS_DIR}/${source}/${dir}/${dir}.crt`,
     );
     if (pem === null) continue;

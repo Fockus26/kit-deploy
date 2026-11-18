@@ -404,7 +404,9 @@ describe("regenerate", () => {
       "container.list": () => ok([{ name: name("a"), state: "exited" }]),
     });
     const { d } = deps(agent, memoryRepo(rows));
-    expect(await regenerate(d)).toEqual([{ project: "kd_hello", ok: true }]);
+    expect(await regenerate(d)).toEqual([
+      { project: "kd_hello", ok: true, started: true },
+    ]);
     expect(calls.map((c) => c.op)).toEqual([
       "container.list",
       "container.start",

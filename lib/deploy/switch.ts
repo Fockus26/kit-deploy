@@ -656,35 +656,67 @@ export async function rollback(
   });
 }
 
-/** Rewrites every live site's Caddy file (or only `project`'s) and starts its container if it is
- * not running. */
+export type RegenerateResult = {
+  project: string;
+  ok: boolean;
+  error?: string;
+  /** Its container was stopped and this call started it (only with `start`). */
+  started?: true;
+};
+
+/**
+ * Rewrites every live site's Caddy file (or only `project`'s). With `start` (the default: what
+ * `kit-deploy regenerate` does after a reboot) it also starts a live container that is not
+ * running. Without it, the Caddy file only: a production stopped with Parar stays stopped (D050).
+ */
 export async function regenerate(
   deps: SwitchDeps,
-  only?: { project: string },
-): Promise<Array<{ project: string; ok: boolean; error?: string }>> {
+  opts: { project?: string; start?: boolean } = {},
+): Promise<RegenerateResult[]> {
   const ctx = withDefaults(deps);
-  const containers = (await call(ctx, "container.list", {})) as Array<{
-    name: string;
-    state: string;
-  }>;
-  const running = new Set(
-    containers.filter((c) => c.state === "running").map((c) => c.name),
-  );
-  const out: Array<{ project: string; ok: boolean; error?: string }> = [];
+  const start = opts.start ?? true;
+  const running = new Set<string>();
+  if (start) {
+    const containers = (await call(ctx, "container.list", {})) as Array<{
+      name: string;
+      state: string;
+    }>;
+    for (const c of containers) if (c.state === "running") running.add(c.name);
+  }
+  const out: RegenerateResult[] = [];
   for (const s of await ctx.repo.liveSites()) {
-    if (only && s.project !== only.project) continue;
+    if (opts.project !== undefined && s.project !== opts.project) continue;
     try {
-      if (!running.has(s.container))
-        await call(ctx, "container.start", { name: s.container });
+      const starting = start && !running.has(s.container);
+      if (starting) await call(ctx, "container.start", { name: s.container });
       await call(
         ctx,
         "site.write",
         siteParams({ project: s.project, env: "production" }, s, s.port),
       );
-      out.push({ project: s.project, ok: true });
+      out.push(
+        starting
+          ? { project: s.project, ok: true, started: true }
+          : { project: s.project, ok: true },
+      );
     } catch (e) {
       out.push({ project: s.project, ok: false, error: (e as Error).message });
     }
   }
   return out;
+}
+
+/**
+ * One project's Caddy file, rewritten after a domain changed (domain rm / redirect, the domain
+ * check's timer). Never starts its container: a stopped site stays stopped (D050). `ok` when the
+ * project has nothing live (its next deploy writes the file).
+ */
+export async function rewriteSiteFile(
+  deps: SwitchDeps,
+  project: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const [r] = await regenerate(deps, { project, start: false });
+  return r
+    ? { ok: r.ok, ...(r.error === undefined ? {} : { error: r.error }) }
+    : { ok: true };
 }

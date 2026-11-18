@@ -182,6 +182,12 @@ export async function createProjectDatabases(
             "failed",
             "kit-db no pudo crear las bases. Revisa kit-db en el VPS (kit-db list).",
           );
+        // D051: a database of that name exists and kit-deploy did not create it.
+        if (e instanceof AgentRefused && e.code === "not_managed")
+          return failure(
+            "conflict",
+            `Ya existe una base con ese nombre que no creó kit-deploy. Si es de ${project}, adóptala como root: kit-deploy db adopt ${project}.`,
+          );
         throw e;
       }
     },

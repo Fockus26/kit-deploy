@@ -8,13 +8,21 @@ import { defaultHost } from "../core/target";
 import { assertHost, CoreInputError } from "../core/validate";
 import type { AdminStore } from "../db/admin";
 import { generateDeployToken } from "../tokens";
-import { BRANCH_RE, PROJECT_RE, REPO_RE, TOKEN_LABEL_MAX } from "./rules";
+import {
+  BRANCH_RE,
+  isReservedProject,
+  PROJECT_RE,
+  REPO_RE,
+  TOKEN_LABEL_MAX,
+} from "./rules";
 
 export {
   BRANCH_RE,
   DEFAULT_MEMORY_MB,
+  isReservedProject,
   PROJECT_RE,
   REPO_RE,
+  RESERVED_PROJECTS,
   TOKEN_LABEL_MAX,
 } from "./rules";
 
@@ -52,6 +60,9 @@ export async function addProject(
 ): Promise<{ id: string; hosts: string[] }> {
   if (!PROJECT_RE.test(input.name) || isPreviewsSuffix(input.name))
     throw new CoreInputError(`invalid project name "${input.name}"`);
+  // Its database would be the platform's or Postgres' own (D051).
+  if (isReservedProject(input.name))
+    throw new CoreInputError(`invalid project name "${input.name}": reserved`);
   if (!REPO_RE.test(input.repo))
     throw new CoreInputError(
       `invalid repo "${input.repo}": expected owner/name`,
