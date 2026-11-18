@@ -96,6 +96,7 @@ export function ProjectsTable({
       getRowId={(p) => p.name}
       empty={
         <EmptyState
+          level={3}
           icon={FolderPlus}
           title="Aún no hay proyectos"
           action={

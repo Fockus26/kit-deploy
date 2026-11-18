@@ -14,7 +14,7 @@ export const metadata = { title: "Variables" };
 export default function EnvPage({ params }: PageProps<"/p/[project]/env">) {
   return (
     <>
-      <h1 className="mb-1 font-semibold text-foreground text-h1">Variables</h1>
+      <h2 className="mb-1 font-semibold text-foreground text-h2">Variables</h2>
       <p className="mb-8 max-w-3xl text-muted-foreground">
         Cifradas en el servidor. Las secretas nunca se vuelven a mostrar: solo
         se pueden reemplazar.

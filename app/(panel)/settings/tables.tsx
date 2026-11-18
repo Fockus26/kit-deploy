@@ -56,7 +56,7 @@ export function PasskeysTable({ rows }: { rows: PasskeyRow[] }) {
       minWidth={560}
       getRowId={(r) => r.id}
       empty={
-        <EmptyState icon={KeyRound} title="Aún no hay passkeys">
+        <EmptyState level={4} icon={KeyRound} title="Aún no hay passkeys">
           Registra una con un enlace de alta (abajo).
         </EmptyState>
       }
@@ -125,7 +125,7 @@ export function TokensTable({ rows }: { rows: TokenRow[] }) {
       minWidth={760}
       getRowId={(r) => r.id}
       empty={
-        <EmptyState icon={Ticket} title="Aún no hay tokens">
+        <EmptyState level={3} icon={Ticket} title="Aún no hay tokens">
           Cada proyecto nuevo trae el suyo; crea otro con el formulario de
           abajo.
         </EmptyState>
@@ -178,7 +178,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
       minWidth={760}
       getRowId={(r) => r.id}
       empty={
-        <EmptyState icon={History} title="Aún no hay registros">
+        <EmptyState level={3} icon={History} title="Aún no hay registros">
           Cada cambio hecho desde el panel o la CLI queda anotado aquí.
         </EmptyState>
       }

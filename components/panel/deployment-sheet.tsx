@@ -3,6 +3,7 @@
 import { Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { redeployAction } from "@/app/(panel)/actions/deployments";
+import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { RelativeTime } from "@/components/kit/relative-time";
 import { StatusBadge } from "@/components/kit/status-badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import {
 } from "@/components/ui/sheet";
 import { deploymentBadge, formatDuration } from "@/lib/kit/panel-format";
 import type { DeploymentDetail } from "@/lib/panel/data";
-import { AgentDown } from "./agent-down";
 import { RollbackButton } from "./rollback-button";
 import { useServerAction } from "./use-server-action";
 
@@ -39,7 +39,7 @@ function Row({
 
 function Health({ health }: { health: DeploymentDetail["health"] }) {
   if (health === null) return <>Sin contenedor en marcha</>;
-  if ("unavailable" in health) return <AgentDown />;
+  if ("unavailable" in health) return <AgentDownNotice />;
   return (
     <>
       {health.ok ? "Responde" : "No responde"}

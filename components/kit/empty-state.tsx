@@ -8,14 +8,18 @@ export function EmptyState({
   title,
   children,
   action,
+  level = 2,
   className,
 }: {
   icon: LucideIcon;
   title: string;
   children?: React.ReactNode;
   action?: React.ReactNode;
+  /** Heading level of the title: one below the heading of the section it sits in. */
+  level?: 2 | 3 | 4;
   className?: string;
 }) {
+  const Heading = `h${level}` as const;
   return (
     <div
       className={cn(
@@ -28,7 +32,7 @@ export function EmptyState({
         strokeWidth={1.5}
         className="size-8 text-muted-foreground"
       />
-      <h2 className="font-semibold text-h2">{title}</h2>
+      <Heading className="font-semibold text-h2">{title}</Heading>
       {children ? (
         <p className="max-w-xs text-body text-muted-foreground">{children}</p>
       ) : null}

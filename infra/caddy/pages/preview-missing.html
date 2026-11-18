@@ -24,8 +24,8 @@
     --spacing-3xl: 48px;
     --radius-lg: 8px;
     --radius-sm: 4px;
-    --font-sans: Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-mono: "Geist Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
+    --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Mono", Menlo, monospace;
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -59,10 +59,8 @@
   .eyebrow {
     margin: 0 0 var(--spacing-sm);
     color: var(--text-secondary);
-    font-size: 11px;
-    line-height: 1.4;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font: 500 12px/1.4 var(--font-mono);
+    overflow-wrap: anywhere;
   }
   h1 {
     margin: 0 0 var(--spacing-md);
@@ -74,6 +72,7 @@
   p { margin: 0 0 var(--spacing-lg); color: var(--text-secondary); }
   a { color: var(--primary-text); text-underline-offset: 2px; }
   a:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; border-radius: var(--radius-sm); }
+  @media (max-width: 767px) { main { padding: var(--spacing-lg); } }
   @media (min-width: 768px) { h1 { font-size: 24px; } }
 </style>
 </head>

@@ -255,7 +255,7 @@ export function DomainsManager({
             minWidth={720}
             getRowId={(r) => r.host}
             empty={
-              <EmptyState icon={Globe} title="Sin dominios">
+              <EmptyState level={3} icon={Globe} title="Sin dominios">
                 Añade el primero con el formulario de abajo.
               </EmptyState>
             }

@@ -17,7 +17,7 @@ export default function PreviewsPage({
 }: PageProps<"/p/[project]/previews">) {
   return (
     <>
-      <h1 className="mb-1 font-semibold text-foreground text-h1">Previews</h1>
+      <h2 className="mb-1 font-semibold text-foreground text-h2">Previews</h2>
       <p className="mb-8 text-muted-foreground">
         Cada PR abierto tiene su preview, que se actualiza con cada push. Al
         cerrar el PR se apaga.
@@ -48,7 +48,11 @@ async function PreviewList({
       </h2>
       {data.previews.length === 0 ? (
         <div className="rounded-lg border border-border bg-card">
-          <EmptyState icon={GitPullRequest} title="Aún no hay previews">
+          <EmptyState
+            level={3}
+            icon={GitPullRequest}
+            title="Aún no hay previews"
+          >
             Abre un PR en el repo del proyecto: su primer push despliega el
             preview en su propia dirección.
           </EmptyState>

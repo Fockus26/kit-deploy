@@ -6,8 +6,8 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 // shadcn/ui Sheet (new-york, radix-ui), on kit-deploy's tokens. Left: the mobile navigation,
-// 280px; right: a deployment's detail, 480px at most (HANDOFF §3). It enters from its side; it
-// closes without animation.
+// 280px; right: a deployment's detail, 480px at most (HANDOFF §3). It enters from its side and leaves
+// the same way (HANDOFF §6).
 
 function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -37,15 +37,15 @@ function SheetContent({
     <SheetPrimitive.Portal>
       <SheetPrimitive.Overlay
         data-slot="sheet-overlay"
-        className="fixed inset-0 z-50 animate-fade-in bg-overlay"
+        className="fixed inset-0 z-50 animate-fade-in bg-overlay data-[state=closed]:animate-fade-out"
       />
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
           "fixed inset-y-0 z-50 flex h-full flex-col bg-nav shadow-lg outline-none",
           side === "left"
-            ? "left-0 w-sheet animate-sheet-in border-border border-r"
-            : "right-0 w-full max-w-sheet-detail animate-sheet-in-right border-border border-l",
+            ? "left-0 w-sheet animate-sheet-in border-border border-r data-[state=closed]:animate-sheet-out"
+            : "right-0 w-full max-w-sheet-detail animate-sheet-in-right border-border border-l data-[state=closed]:animate-sheet-out-right",
           className,
         )}
         {...props}

@@ -30,12 +30,12 @@ function AlertDialogContent({
     <AlertDialogPrimitive.Portal>
       <AlertDialogPrimitive.Overlay
         data-slot="alert-dialog-overlay"
-        className="fixed inset-0 z-50 animate-fade-in bg-overlay"
+        className="fixed inset-0 z-50 animate-fade-in bg-overlay data-[state=closed]:animate-fade-out"
       />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-105 -translate-x-1/2 -translate-y-1/2 animate-dialog-in flex-col gap-3 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-lg outline-none",
+          "fixed top-1/2 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-105 -translate-x-1/2 -translate-y-1/2 animate-dialog-in flex-col data-[state=closed]:animate-dialog-out gap-3 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-lg outline-none",
           className,
         )}
         {...props}

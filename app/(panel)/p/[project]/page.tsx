@@ -2,11 +2,11 @@ import { BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { EmptyState } from "@/components/kit/empty-state";
 import type { LogLine } from "@/components/kit/log-viewer";
 import { MetricCard } from "@/components/kit/metric-card";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
-import { AgentDown } from "@/components/panel/agent-down";
 import { AutoRefresh } from "@/components/panel/auto-refresh";
 import { DeploymentsTable } from "@/components/panel/deployments-table";
 import { LiveLogs } from "@/components/panel/live-logs";
@@ -81,7 +81,7 @@ async function Summary({
       >
         {series.length === 0 && now.length === 0 ? (
           <div className="rounded-lg border border-border bg-card">
-            <EmptyState icon={BarChart3} title="Aún no hay métricas">
+            <EmptyState level={3} icon={BarChart3} title="Aún no hay métricas">
               Se toman cada minuto mientras haya algo en vivo en producción.
             </EmptyState>
           </div>
@@ -183,7 +183,7 @@ async function Summary({
 /** Its own boundary: kit-agent may take up to its timeout, and the rest of the page does not wait. */
 async function LogsBox({ project }: { project: string }) {
   const tail = await logsTail(project, "production", undefined, LOG_LINES);
-  if (isUnavailable(tail)) return <AgentDown />;
+  if (isUnavailable(tail)) return <AgentDownNotice />;
   const initial: LogLine[] = tail.entries.map((e) => ({
     time: logTime(e.ts),
     level: e.level,
