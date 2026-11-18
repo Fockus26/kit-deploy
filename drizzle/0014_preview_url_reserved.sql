@@ -1,0 +1,2 @@
+ALTER TABLE "env_vars" DROP CONSTRAINT "env_vars_name_settable";--> statement-breakpoint
+ALTER TABLE "env_vars" ADD CONSTRAINT "env_vars_name_settable" CHECK (not name in ('PORT', 'HOSTNAME', 'NODE_OPTIONS', 'KIT_DEPLOY_PREVIEW_URL', 'DATABASE_URL', 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY'));

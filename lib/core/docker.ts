@@ -7,7 +7,8 @@ import {
   MEMORY_MB,
   PORT_RANGE,
 } from "./constants";
-import { containerName, siteName, type Target } from "./target";
+import { PREVIEW_URL_ENV } from "./env";
+import { containerName, previewHost, siteName, type Target } from "./target";
 import { assertAbsolutePath, assertImage, assertIntInRange } from "./validate";
 
 export type RunInput = {
@@ -88,7 +89,14 @@ export function dockerRunArgs(input: RunInput): string[] {
     `--env=NODE_OPTIONS=--max-old-space-size=${maxOldSpaceMb(mem)}`,
     `--env=PORT=${CONTAINER_PORT}`,
     "--env=HOSTNAME=0.0.0.0",
-    image,
   );
+  // A preview's own origin, like Vercel's VERCEL_BRANCH_URL: an app with auth needs it among its
+  // trusted origins (each PR has its host). Derived from the target, never from a caller's value.
+  if (input.target.env === "preview" && input.target.pr !== undefined) {
+    args.push(
+      `--env=${PREVIEW_URL_ENV}=https://${previewHost(input.target.project, input.target.pr)}`,
+    );
+  }
+  args.push(image);
   return args;
 }
