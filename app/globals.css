@@ -151,6 +151,7 @@
   --animate-menu-in: kd-menu-in var(--duration-fast) var(--ease-default);
   --animate-sheet-in: kd-sheet-in var(--duration-normal) var(--ease-default);
   --animate-fade-in: kd-fade-in var(--duration-normal) var(--ease-default);
+  --animate-dialog-in: kd-dialog-in var(--duration-normal) var(--ease-default);
 
   @keyframes kd-pulse {
     50% {
@@ -171,6 +172,13 @@
   @keyframes kd-fade-in {
     from {
       opacity: 0;
+    }
+  }
+  /* HANDOFF §6: dialog panel opacity + scale .98 → 1. `scale` (not transform) keeps the centering. */
+  @keyframes kd-dialog-in {
+    from {
+      opacity: 0;
+      scale: 0.98;
     }
   }
 }
