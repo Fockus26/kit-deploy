@@ -17,11 +17,9 @@ locally like kit-agent (OK). Waiting on César.
 
 ## Blocked (actions for César or external)
 
-- **Phase 07 (César), in order:** ship main (#63: migration 0014 + agent, needed for preview login)
-  → maranatha `deploy/README.md` › "Pasar el sitio a kit-deploy": `project add maranatha
-  Fockus26/maranatha --memory 512`, `db adopt maranatha --yes` (its DB already moved to kit-db,
-  D082 there), token → `gh secret set`, repo into the status token, variables from Vercel,
-  `gh variable set KIT_DEPLOY_ENABLED --body true`. Then one week without an incident; Vercel off.
+- **Phase 07 (César, from maranatha's project):** platform side done 2026-11-18 (release f640b62435a4
+  shipped, maranatha registered + pinned, DBs adopted, KIT_DEPLOY_TOKEN set, variables copied from
+  Vercel). Left: repo into the status token; turning it on (`KIT_DEPLOY_ENABLED`) is César's. Then a week.
 - **Phase 06 close (César):** Brevo done 2026-11-18 (fockus.dev authenticated, sender alertas@fockus.dev,
   restricted key, IP allowlist on with the VPS v4+v6 — projects still on Vercel can't send by Brevo until
   migrated; alerts.env written, `alerts test` arrived). site_down on purpose 2026-11-18 (docker stop kd_hello: opened at the 3rd failing minute, resolved

@@ -21,3 +21,16 @@ Found on the way:
 
 Closes when (pending César): the steps in maranatha `deploy/README.md` › "Pasar el sitio a
 kit-deploy", then a week of production + a PR preview without an incident; then Vercel off.
+
+## Platform side (2026-11-18, César's OK)
+
+- Release f640b62435a4 (main with #63–#64): install test ALL PASS 103; ship.sh exit 0, migrations 15;
+  kit-deploy-web up, alerts 23 checked / 0 failing, kd-hello 200.
+- `project add maranatha Fockus26/maranatha --memory 512` + pin; `db adopt maranatha --yes`
+  (8 MB each, backed up); `token create | gh secret set KIT_DEPLOY_TOKEN`.
+- Variables from Vercel: public ones by the agent (14 prod / 13 preview), the rest by César's
+  `copy-env.sh` (26 prod / 24 preview). Not in Vercel either: BINANCE_PAY_* (KYB pending),
+  BEHOLD_FEED_EVANGELIO.
+- César: he turns maranatha on himself from its project (no KIT_DEPLOY_ENABLED from here).
+- Local Docker died mid-build (bbolt SIGBUS in dockerd); volumes backed up to
+  `Work/docker-backup/` (52 .tgz) and Docker Desktop reset.
