@@ -35,33 +35,35 @@ import {
 import { generateDeployToken } from "../lib/tokens";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
+import { type DomainContext, domainCommand } from "./domain-commands";
 import { type EnvContext, envCommand } from "./env-commands";
 import { type LogsContext, logsCommand } from "./logs-commands";
 import { type MetricsContext, metricsCommand } from "./metrics-commands";
 
 /** What the database-backed commands need; built lazily so `version` works without a database. */
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
-export type CliContext = EnvContext & {
-  deploy?: () => DeployContext;
-  admin?: () => AdminStore;
-  users?: () => UserStore;
-  /** `preview sweep`: the database, the agent and GitHub (read for PR state, write for comments). */
-  sweep?: () => Omit<SweepDeps, "dryRun">;
-  /** GitHub's API with the platform's token (root only), or null without it. */
-  github?: () => GitHubRequest | null;
-  /** The root-owned image pins (lib/core/image-pin): written only when the CLI runs as root. */
-  pins?: {
-    isRoot: boolean;
-    write(project: string, pin: string): Promise<void>;
+export type CliContext = EnvContext &
+  DomainContext & {
+    deploy?: () => DeployContext;
+    admin?: () => AdminStore;
+    users?: () => UserStore;
+    /** `preview sweep`: the database, the agent and GitHub (read for PR state, write for comments). */
+    sweep?: () => Omit<SweepDeps, "dryRun">;
+    /** GitHub's API with the platform's token (root only), or null without it. */
+    github?: () => GitHubRequest | null;
+    /** The root-owned image pins (lib/core/image-pin): written only when the CLI runs as root. */
+    pins?: {
+      isRoot: boolean;
+      write(project: string, pin: string): Promise<void>;
+    };
+    /** Whether stdout is a terminal: a token is never printed to one without --show. */
+    stdoutIsTTY?: boolean;
+    now?: () => number;
+    /** `logs -f`. */
+    follow?: LogsContext["follow"];
+    /** `metrics collect|<project>`: the metrics tables (cli/metrics-commands.ts). */
+    metrics?: MetricsContext["metrics"];
   };
-  /** Whether stdout is a terminal: a token is never printed to one without --show. */
-  stdoutIsTTY?: boolean;
-  now?: () => number;
-  /** `logs -f`. */
-  follow?: LogsContext["follow"];
-  /** `metrics collect|<project>`: the metrics tables (cli/metrics-commands.ts). */
-  metrics?: MetricsContext["metrics"];
-};
 
 export const CLI_VERSION: string = pkg.version;
 
@@ -92,8 +94,18 @@ Commands:
   project pin <project> <owner/repo>
                      (root) the only repository whose images get the project's variables;
                      'project add' as root does it too
-  domain add <project> <host>
-                     one more host for a project's production
+  domain add <project> <host> [--redirect none|to-apex|to-www]
+                     one more host for a project's production; it goes into Caddy once its
+                     DNS resolves to the VPS (prints the records to create)
+  domain ls <project> host, status (pending_dns, issuing, ready, error), redirect, certificate
+                     expiry and the DNS records to create
+  domain rm <project> <host> [--force]
+                     never the site's last host; the default <project>.fockus.dev needs --force
+  domain redirect <project> <host> none|to-apex|to-www
+                     www.<domain> -> <domain> (to-apex) or <domain> -> www.<domain> (to-www), 308
+  domain check [--project <p>]
+                     DNS and certificate state of each domain; every minute by
+                     kit-deploy-domain-check.timer (root). --project: all of its hosts now
   token create <project> [--label <text>] [--show]
                      a deploy token, printed once on stdout to pipe into
                      'gh secret set KIT_DEPLOY_TOKEN -R <owner/repo>'; never to a terminal
@@ -600,19 +612,6 @@ async function projectPin(ctx: CliContext, args: string[]): Promise<Result> {
   );
 }
 
-async function domainAdd(ctx: CliContext, args: string[]): Promise<Result> {
-  const [project, host, extra] = args;
-  if (!project || !host || extra)
-    return fail("usage: kit-deploy domain add <project> <host>\n", 2);
-  if (!PROJECT.test(project))
-    return fail(`invalid project name "${project}"\n`, 2);
-  const h = checkHost(host);
-  await needAdmin(ctx).addDomain(project, h);
-  return ok(
-    `added ${h} to ${project}; \`kit-deploy regenerate\` puts it in Caddy\n`,
-  );
-}
-
 async function tokenCreate(ctx: CliContext, args: string[]): Promise<Result> {
   const usage =
     "usage: kit-deploy token create <project> [--label <text>] [--show]\n";
@@ -734,8 +733,7 @@ export async function runCli(
           2,
         );
       case "domain":
-        if (args[0] === "add") return await domainAdd(ctx, args.slice(1));
-        return fail("usage: kit-deploy domain add <project> <host>\n", 2);
+        return await domainCommand(ctx, args, json);
       case "token":
         if (args[0] === "create") return await tokenCreate(ctx, args.slice(1));
         return fail(

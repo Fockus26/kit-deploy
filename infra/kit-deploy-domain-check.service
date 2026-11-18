@@ -1,0 +1,23 @@
+# kit-deploy · domain check (phase 05, brief F6): each domain's DNS and certificate state. A host
+# whose DNS now resolves to the VPS goes into its project's Caddy site; then its certificate is
+# followed until ready (D028, D029). Ready hosts are looked at hourly.
+# Started every minute by kit-deploy-domain-check.timer; installed by infra/update.sh. Root, like
+# `ssh kit-vps kit-deploy regenerate`: it reads /etc/kit-deploy/cli.env. Everything it changes on
+# the machine goes through kit-agent (D011). One line per change in the journal:
+#   journalctl -u kit-deploy-domain-check
+[Unit]
+Description=kit-deploy domain check (DNS and certificates)
+After=network-online.target kit-agent.service
+Wants=network-online.target
+Requires=kit-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kit-deploy domain check
+# Each DNS lookup is bounded (5 s); a run stuck past this is killed before it piles up.
+TimeoutStartSec=10min
+Nice=10
+MemoryMax=256M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only

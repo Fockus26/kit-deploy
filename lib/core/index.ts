@@ -1,5 +1,6 @@
 export {
   type PreviewSiteInput,
+  type Redirect,
   renderPreviewSite,
   renderSite,
   type SiteFile,

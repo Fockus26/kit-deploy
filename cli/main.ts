@@ -20,6 +20,9 @@ import {
 import { githubRequest, githubTokenFromEnv } from "../lib/deploy/github";
 import { commenterFromEnv } from "../lib/deploy/pr-comment";
 import { pullStateFromEnv } from "../lib/deploy/pr-state";
+import { regenerate } from "../lib/deploy/switch";
+import { systemResolver } from "../lib/domains/resolve";
+import { drizzleDomainStore } from "../lib/domains/store";
 import { drizzleMetricsReader } from "../lib/metrics/read";
 import { drizzleMetricsStore } from "../lib/metrics/store";
 import { socketClient } from "./client";
@@ -78,6 +81,26 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
         // Progress on stderr: stdout stays the result agents parse.
         log: (e) => process.stderr.write(`${JSON.stringify(e)}\n`),
       },
+    };
+  },
+  domains: () => {
+    loadCliEnv();
+    const database = db();
+    const sw = {
+      agent,
+      repo: drizzleSwitchRepo(database),
+      // Progress on stderr (the journal): stdout is one line per change and the summary.
+      log: (e: Record<string, unknown>) =>
+        process.stderr.write(`${JSON.stringify(e)}\n`),
+    };
+    return {
+      store: drizzleDomainStore(database),
+      resolve: systemResolver(),
+      agent,
+      liveProjects: async () =>
+        new Set((await sw.repo.liveSites()).map((s) => s.project)),
+      regenerate: async (project) =>
+        (await regenerate(sw, { project }))[0] ?? { ok: true },
     };
   },
   sweep: () => {

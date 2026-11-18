@@ -15,6 +15,7 @@ import {
   MANAGED_LABEL,
   PREVIEW_DOMAIN,
   type PreviewSiteInput,
+  type Redirect,
   renderPreviewSite,
   renderSite,
   type SiteFile,
@@ -39,6 +40,7 @@ import {
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
+import { certStatus } from "./domains";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
 import { sampleMetrics } from "./metrics";
@@ -259,7 +261,12 @@ export class Agent {
         return this.serial(() => this.start(req.params.name));
       case "site.write":
         return this.serial(() =>
-          this.writeSite(req.params.target, req.params.hosts, req.params.port),
+          this.writeSite(
+            req.params.target,
+            req.params.hosts,
+            req.params.port,
+            req.params.redirects,
+          ),
         );
       case "site.remove":
         return this.serial(() => this.removeSite(req.params.target));
@@ -283,6 +290,8 @@ export class Agent {
         return tailLogs(this.logs, req.params, this.now());
       case "logs.search":
         return searchLogs(this.logs, req.params, this.now());
+      case "cert.status":
+        return certStatus(this.deps, req.params.host);
       case "metrics.sample":
         return sampleMetrics(this.deps, this.now, () => this.list());
     }
@@ -697,8 +706,9 @@ export class Agent {
     target: Target,
     hosts: readonly string[],
     port: number,
+    redirects?: readonly Redirect[],
   ) {
-    const site = renderSite({ target, hosts, port });
+    const site = renderSite({ target, hosts, port, redirects });
     const previous = await this.deps.readFile(site.path);
     if (previous === site.content) return { path: site.path, changed: false };
     await this.applySiteChange(site.path, previous, () =>
