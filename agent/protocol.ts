@@ -206,6 +206,11 @@ export const Request = z.discriminatedUnion("op", [
     path: z.string().regex(/^\/(?!.*\.\.)[A-Za-z0-9._~/-]{0,200}$/),
     secret: storedVar,
   }),
+  /** Phase 06 (D049): the pinned repositories' old images, `keep` newest per repository. */
+  op("images.prune", {
+    keep: z.number().int().min(1).max(50),
+    dryRun: z.boolean().optional(),
+  }),
 ]);
 
 export type Request = z.infer<typeof Request>;

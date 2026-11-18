@@ -234,6 +234,10 @@ say "Cron tick every minute (kit-deploy-cron.timer)"
 # `kit-deploy cron tick` as root at :00 of every minute (phase 06, D048).
 install_timer kit-deploy-cron
 
+say "Nightly image prune (kit-deploy-images-prune.timer)"
+# `kit-deploy images prune` as root at 04:45 (phase 06, D049): 5 images kept per project.
+install_timer kit-deploy-images-prune
+
 say "Web (container kit-deploy-web on 127.0.0.1:$WEB_PORT)"
 UID_WEB="$(id -u kitdeploy)"
 # github.env (install.sh --github-token) is optional: without it, commit statuses are skipped.
