@@ -5,6 +5,7 @@
  * its variables in containers once César pins it over SSH (D034).
  */
 import { AdminError } from "@/lib/db/admin";
+import { webActor } from "@/lib/db/env-store";
 import { AgentRefused } from "@/lib/ops/agent";
 import { createDatabases } from "@/lib/ops/deploy";
 import { addProject, createDeployToken } from "@/lib/ops/projects";
@@ -46,15 +47,20 @@ export async function createProject(
     projectCreateSchema,
     raw,
     { action: "project.add" },
-    async (input) => {
+    async (input, user) => {
+      const actor = webActor(user.userId);
       let hosts: string[];
       try {
-        ({ hosts } = await addProject(deps.admin, {
-          name: input.name,
-          repo: input.repo,
-          memoryMb: input.memoryMb,
-          productionBranch: input.branch,
-        }));
+        ({ hosts } = await addProject(
+          deps.admin,
+          {
+            name: input.name,
+            repo: input.repo,
+            memoryMb: input.memoryMb,
+            productionBranch: input.branch,
+          },
+          actor,
+        ));
       } catch (e) {
         if (e instanceof AdminError && /already exists/.test(e.message))
           return failure(
@@ -68,6 +74,7 @@ export async function createProject(
         deps.admin,
         input.name,
         NEW_PROJECT_TOKEN_LABEL,
+        actor,
       );
       deps.revalidate("/", "layout");
       return {
@@ -98,8 +105,13 @@ export async function createToken(
     tokenCreateSchema,
     raw,
     { action: "token.create" },
-    async ({ project, label }) => {
-      const { id, token } = await createDeployToken(deps.admin, project, label);
+    async ({ project, label }, user) => {
+      const { id, token } = await createDeployToken(
+        deps.admin,
+        project,
+        label,
+        webActor(user.userId),
+      );
       deps.revalidate("/settings");
       return { ok: true, id, project, token };
     },
@@ -123,12 +135,17 @@ export async function revokeToken(
     tokenRevokeSchema,
     raw,
     { action: "token.revoke" },
-    async ({ id, confirm }) => {
+    async ({ id, confirm }, user) => {
       const token = await deps.tokens.find(id);
       if (!token) return failure("not_found", "Ese token no existe.");
       if (!confirms(confirm, token.project))
         return confirmationFailure(token.project);
-      const revoked = await deps.tokens.revoke(id, now());
+      const revoked = await deps.tokens.revoke(id, now(), {
+        actor: webActor(user.userId),
+        action: "token.revoke",
+        project: token.project,
+        name: token.label,
+      });
       deps.revalidate("/settings");
       return { ok: true, id, revoked };
     },

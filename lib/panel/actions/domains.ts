@@ -5,6 +5,7 @@
  */
 import { CoreInputError } from "@/lib/core/validate";
 import { AdminError } from "@/lib/db/admin";
+import { webActor } from "@/lib/db/env-store";
 import type { DomainRedirect } from "@/lib/db/schema";
 import type { CheckLine } from "@/lib/domains/check";
 import { type DnsInstructions, dnsInstructions } from "@/lib/domains/dns";
@@ -46,14 +47,35 @@ function hostRefusal(e: CoreInputError) {
         host: "Los dominios de preview.fockus.dev son solo de previews.",
       },
     );
-  if (/would redirect to (\S+), which is not a domain/.test(m)) {
-    const to = /would redirect to (\S+),/.exec(m)?.[1] ?? "";
+  const missing = /^(\S+) would redirect to (\S+), which is not a domain/.exec(
+    m,
+  );
+  if (missing) {
+    const [, host, to] = missing;
     return failure(
       "invalid",
-      `Para redirigir, ${to} tiene que ser un dominio de este proyecto: añádelo antes.`,
+      `${to} no es un dominio de este proyecto. Añade primero ${to} (sin redirección) y después ${host} con la redirección.`,
       { redirect: `Añade ${to} antes.` },
     );
   }
+  // lib/domains/dns.ts redirectTarget: each redirect fits one kind of host only.
+  const apexOnly = /^(\S+): to-apex is only for www\./.exec(m);
+  if (apexOnly) {
+    const host = apexOnly[1] ?? "";
+    const why = host.startsWith("www.")
+      ? `${host} está bajo un subdominio: solo www.<dominio> redirige a la versión sin www (www.tienda.com → tienda.com).`
+      : `${host} no empieza por www.: no tiene versión sin www a la que redirigir.`;
+    return failure("invalid", `${why} Añádelo sin redirección.`, {
+      redirect: "Elige «Sirve el sitio (sin redirección)».",
+    });
+  }
+  const wwwOnly = /^(\S+): to-www is only for a domain's apex/.exec(m);
+  if (wwwOnly)
+    return failure(
+      "invalid",
+      `${wwwOnly[1] ?? ""} no es un dominio raíz: solo un dominio como tienda.com redirige a su versión con www. Añádelo sin redirección.`,
+      { redirect: "Elige «Sirve el sitio (sin redirección)»." },
+    );
   return failure("invalid", "Ese dominio no es válido.", {
     host: "Ese dominio no es válido.",
   });
@@ -77,7 +99,7 @@ export async function addProjectDomain(
     domainAddSchema,
     raw,
     { action: "domain.add" },
-    async (input) => {
+    async (input, user) => {
       try {
         const r = await addDomain(
           {
@@ -85,7 +107,7 @@ export async function addProjectDomain(
             listDomains: (p) => deps.domains.store.list(p),
           },
           input,
-          { idempotent: true },
+          { idempotent: true, actor: webActor(user.userId) },
         );
         deps.revalidate(page(input.project));
         return {
@@ -121,12 +143,15 @@ export async function removeProjectDomain(
     domainRemoveSchema,
     raw,
     { action: "domain.remove" },
-    async (input) => {
+    async (input, user) => {
       if (!confirms(input.confirm, input.host))
         return confirmationFailure(input.host);
       let r: Awaited<ReturnType<typeof removeDomain>>;
       try {
-        r = await removeDomain(deps.domains, input, { force: input.force });
+        r = await removeDomain(deps.domains, input, {
+          force: input.force,
+          actor: webActor(user.userId),
+        });
       } catch (e) {
         if (e instanceof CoreInputError) return hostRefusal(e);
         if (

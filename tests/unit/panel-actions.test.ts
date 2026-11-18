@@ -926,3 +926,187 @@ describe("panel actions: projects, tokens, databases", () => {
     });
   });
 });
+
+describe("panel actions: W13 fixes", () => {
+  const ACTOR = `web:${USER.userId}`;
+
+  test("Parar and Reiniciar of an unknown project → 404, nothing sent to kit-agent", async () => {
+    const w = actionWorld({ rows: [LIVE()] });
+    expect(
+      await stopProject(w.deps, raw({ project: "otro", confirm: "otro" })),
+    ).toMatchObject({ ok: false, code: "not_found", status: 404 });
+    expect(
+      await restartProject(w.deps, raw({ project: "otro" })),
+    ).toMatchObject({ ok: false, code: "not_found", status: 404 });
+    expect(w.fa.calls).toEqual([]);
+    expect(w.audit).toEqual([]);
+  });
+
+  test("www.<domain> → sin www without the apex says what to add first", async () => {
+    const w = actionWorld();
+    const r = await addProjectDomain(
+      w.deps,
+      raw({ project: "kd_hello", host: "www.tienda.com", redirect: "to_apex" }),
+    );
+    expect(r).toMatchObject({
+      ok: false,
+      code: "invalid",
+      message: expect.stringContaining("Añade primero tienda.com"),
+      fields: { redirect: "Añade tienda.com antes." },
+    });
+  });
+
+  test("a redirect that does not fit the host is worded, never “no es válido”", async () => {
+    const w = actionWorld();
+    for (const [host, redirect] of [
+      ["www.tienda.example.com", "to_apex"],
+      ["shop.example.com", "to_apex"],
+      ["shop.example.com", "to_www"],
+    ] as const) {
+      const r = await addProjectDomain(
+        w.deps,
+        raw({ project: "kd_hello", host, redirect }),
+      );
+      if (r.ok) throw new Error(`${host} ${redirect} was accepted`);
+      expect(r.message).toContain(host);
+      expect(r.message).not.toContain("no es válido");
+      expect(r.fields?.redirect).toContain("sin redirección");
+    }
+    expect(w.audit).toEqual([]);
+  });
+
+  test("every panel action writes its audit row: who, what, which project — names only", async () => {
+    const w = actionWorld({
+      rows: [
+        LIVE(),
+        {
+          id: "d-old",
+          sha: sha("b"),
+          status: "superseded" as const,
+          container: name("b"),
+          port: 20002,
+          createdAt: at(5),
+        },
+      ],
+    });
+    const created = await createProject(
+      w.deps,
+      raw({
+        name: "maranatha",
+        repo: "fockus26/maranatha",
+        branch: "",
+        memoryMb: "256",
+      }),
+    );
+    if (!created.ok) throw new Error(created.message);
+    const token = await createToken(
+      w.deps,
+      raw({ project: "kd_hello", label: "ci" }),
+    );
+    if (!token.ok) throw new Error(token.message);
+    const id = "11111111-1111-4111-8111-111111111111";
+    w.tokens.rows.push({
+      id,
+      project: "kd_hello",
+      label: "ci",
+      createdAt: new Date(),
+      lastUsedAt: null,
+      revokedAt: null,
+    });
+    await revokeToken(w.deps, raw({ id, confirm: "kd_hello" }));
+    // A second revoke changes nothing and writes nothing.
+    await revokeToken(w.deps, raw({ id, confirm: "kd_hello" }));
+    await addProjectDomain(
+      w.deps,
+      raw({ project: "kd_hello", host: "tienda.example.com" }),
+    );
+    w.domains.rows.push(
+      domainRow("kd-hello.fockus.dev", { project: "kd_hello" }),
+      domainRow("tienda.example.com", { project: "kd_hello" }),
+    );
+    await removeProjectDomain(
+      w.deps,
+      raw({
+        project: "kd_hello",
+        host: "tienda.example.com",
+        confirm: "tienda.example.com",
+      }),
+    );
+    await redeployProject(w.deps, raw({ project: "kd_hello" }));
+    await stopProject(
+      w.deps,
+      raw({ project: "kd_hello", confirm: "kd_hello" }),
+    );
+    await restartProject(w.deps, raw({ project: "kd_hello" }));
+    await rollbackProject(
+      w.deps,
+      raw({ project: "kd_hello", confirm: "kd_hello" }),
+    );
+    expect(w.audit).toEqual([
+      { actor: ACTOR, action: "project.add", project: "maranatha" },
+      {
+        actor: ACTOR,
+        action: "token.create",
+        project: "maranatha",
+        name: "panel: nuevo proyecto",
+      },
+      { actor: ACTOR, action: "token.create", project: "kd_hello", name: "ci" },
+      { actor: ACTOR, action: "token.revoke", project: "kd_hello", name: "ci" },
+      {
+        actor: ACTOR,
+        action: "domain.add",
+        project: "kd_hello",
+        name: "tienda.example.com",
+      },
+      {
+        actor: ACTOR,
+        action: "domain.remove",
+        project: "kd_hello",
+        name: "tienda.example.com",
+      },
+      {
+        actor: ACTOR,
+        action: "project.redeploy",
+        project: "kd_hello",
+        environment: "production",
+        name: null,
+      },
+      {
+        actor: ACTOR,
+        action: "project.stop",
+        project: "kd_hello",
+        environment: "production",
+      },
+      {
+        actor: ACTOR,
+        action: "project.restart",
+        project: "kd_hello",
+        environment: "production",
+      },
+      {
+        actor: ACTOR,
+        action: "project.rollback",
+        project: "kd_hello",
+        environment: "production",
+        name: "d-old",
+      },
+    ]);
+    // Never a token or anything secret in a row.
+    expect(JSON.stringify(w.audit)).not.toContain("kdt_");
+  });
+
+  test("a failed audit write after kit-agent acted is logged, not a failure", async () => {
+    const w = actionWorld({ rows: [LIVE()] });
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+    w.deps.audit = {
+      record: async () => {
+        throw new Error("db down");
+      },
+    };
+    expect(await restartProject(w.deps, raw({ project: "kd_hello" }))).toEqual({
+      ok: true,
+      container: name("a"),
+    });
+    expect(logged).toHaveBeenCalled();
+  });
+});

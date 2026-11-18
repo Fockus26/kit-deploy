@@ -4,6 +4,7 @@
  */
 import { and, asc, eq } from "drizzle-orm";
 import { AdminError } from "../db/admin";
+import { type AuditEntry, writeAudit } from "../db/audit";
 import {
   DOMAIN_ERROR_MAX,
   type DomainRedirect,
@@ -43,8 +44,9 @@ export interface DomainStore {
     host: string,
     redirect: DomainRedirect,
   ): Promise<boolean>;
-  /** False when the project has no such host. */
-  remove(project: string, host: string): Promise<boolean>;
+  /** False when the project has no such host. `audit` is written, in the same transaction, only
+   * when a row went (D045). */
+  remove(project: string, host: string, audit?: AuditEntry): Promise<boolean>;
   update(id: string, patch: DomainPatch): Promise<void>;
 }
 
@@ -105,17 +107,17 @@ export function drizzleDomainStore(db: Db): DomainStore {
       return rows.length > 0;
     },
 
-    async remove(project, host) {
-      const rows = await db
-        .delete(domains)
-        .where(
-          and(
-            eq(domains.projectId, await projectId(project)),
-            eq(domains.host, host),
-          ),
-        )
-        .returning({ id: domains.id });
-      return rows.length > 0;
+    async remove(project, host, audit) {
+      const id = await projectId(project);
+      return db.transaction(async (tx) => {
+        const rows = await tx
+          .delete(domains)
+          .where(and(eq(domains.projectId, id), eq(domains.host, host)))
+          .returning({ id: domains.id });
+        if (rows.length === 0) return false;
+        if (audit) await writeAudit(tx, audit);
+        return true;
+      });
     },
 
     async update(id, patch) {

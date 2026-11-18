@@ -47,6 +47,8 @@ export async function addProject(
     defaultDomain?: boolean;
     extraHosts?: readonly string[];
   },
+  /** Who, for the audit row written with the project (D045); none = no row. */
+  actor?: string,
 ): Promise<{ id: string; hosts: string[] }> {
   if (!PROJECT_RE.test(input.name) || isPreviewsSuffix(input.name))
     throw new CoreInputError(`invalid project name "${input.name}"`);
@@ -79,13 +81,16 @@ export async function addProject(
   }
   for (const h of input.extraHosts ?? []) hosts.push(extraHost(h));
   const unique = [...new Set(hosts)];
-  const { id } = await admin.addProject({
-    name: input.name,
-    repo: input.repo,
-    memoryMb: input.memoryMb,
-    hosts: unique,
-    ...(branch === undefined ? {} : { productionBranch: branch }),
-  });
+  const { id } = await admin.addProject(
+    {
+      name: input.name,
+      repo: input.repo,
+      memoryMb: input.memoryMb,
+      hosts: unique,
+      ...(branch === undefined ? {} : { productionBranch: branch }),
+    },
+    actor ? { actor, action: "project.add", project: input.name } : undefined,
+  );
   return { id, hosts: unique };
 }
 
@@ -95,12 +100,16 @@ export async function createDeployToken(
   admin: AdminStore,
   project: string,
   label: string,
+  /** Who, for the audit row (the label as its name, never the token); none = no row. */
+  actor?: string,
 ): Promise<{ id: string; token: string }> {
   const { token, hash } = generateDeployToken();
+  const name = label.slice(0, TOKEN_LABEL_MAX);
   const { id } = await admin.addToken(
     project,
     hash,
-    label.slice(0, TOKEN_LABEL_MAX),
+    name,
+    actor ? { actor, action: "token.create", project, name } : undefined,
   );
   return { id, token };
 }

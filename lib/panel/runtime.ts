@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { socketClient } from "@/cli/client";
 import { drizzleAdminStore } from "@/lib/db/admin";
+import { drizzleAuditStore } from "@/lib/db/audit";
 import { drizzleEnvStore } from "@/lib/db/env-store";
 import { db } from "@/lib/db/store";
 import { drizzleTokenStore } from "@/lib/db/tokens";
@@ -71,5 +72,6 @@ export function actionDeps(): ActionDeps {
     },
     later: (task) => after(task),
     revalidate: (path, type) => revalidatePath(path, type),
+    audit: drizzleAuditStore(database),
   };
 }
