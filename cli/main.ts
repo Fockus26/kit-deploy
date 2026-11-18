@@ -3,7 +3,7 @@
  * `infra/install.sh` and used over SSH (`ssh kit-vps kit-deploy list`).
  *
  *   KIT_AGENT_SOCKET  default /run/kit-deploy/agent.sock
- *   DATABASE_URL      else read from /etc/kit-deploy/cli.env (deploy, rollback, regenerate)
+ *   DATABASE_URL      else read from /etc/kit-deploy/cli.env (deploy, rollback, regenerate, metrics)
  *   GITHUB_STATUS_TOKEN  else read from /etc/kit-deploy/github.env if readable (root): `deploy`
  *                     publishes the commit status with it; `preview sweep` reads PR state and
  *                     edits the PR comment with it
@@ -20,6 +20,8 @@ import {
 import { githubRequest, githubTokenFromEnv } from "../lib/deploy/github";
 import { commenterFromEnv } from "../lib/deploy/pr-comment";
 import { pullStateFromEnv } from "../lib/deploy/pr-state";
+import { drizzleMetricsReader } from "../lib/metrics/read";
+import { drizzleMetricsStore } from "../lib/metrics/store";
 import { socketClient } from "./client";
 import { runCli } from "./commands";
 import { loadCliEnv, loadGithubEnv } from "./env";
@@ -49,6 +51,14 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
   users: () => {
     loadCliEnv();
     return drizzleUserStore(db());
+  },
+  metrics: () => {
+    loadCliEnv();
+    const database = db();
+    return {
+      store: drizzleMetricsStore(database),
+      reader: drizzleMetricsReader(database),
+    };
   },
   deploy: () => {
     loadCliEnv();

@@ -36,6 +36,7 @@ import { generateDeployToken } from "../lib/tokens";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
 import { type EnvContext, envCommand } from "./env-commands";
+import { type MetricsContext, metricsCommand } from "./metrics-commands";
 
 /** What the database-backed commands need; built lazily so `version` works without a database. */
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
@@ -55,6 +56,8 @@ export type CliContext = EnvContext & {
   /** Whether stdout is a terminal: a token is never printed to one without --show. */
   stdoutIsTTY?: boolean;
   now?: () => number;
+  /** `metrics collect|<project>`: the metrics tables (cli/metrics-commands.ts). */
+  metrics?: MetricsContext["metrics"];
 };
 
 export const CLI_VERSION: string = pkg.version;
@@ -114,6 +117,10 @@ Commands:
   env rm <project> <environment> <NAME>
   env pull <project> the Development set as a .env.local, into a pipe or file only:
                      ssh kit-vps kit-deploy env pull <project> > .env.local
+  metrics <project>  last CPU and memory per container (against its limit), requests and
+                     5xx of the last 24 h
+  metrics collect    (root) one sample of containers, the VPS and Caddy's access log into
+                     the database. Every 30 s by kit-deploy-metrics.timer
   help               this text
 `;
 
@@ -739,6 +746,8 @@ export async function runCli(
         if (args[0] === "sweep")
           return await previewSweep(ctx, args.slice(1), json);
         return fail(SWEEP_USAGE, 2);
+      case "metrics":
+        return await metricsCommand(client, ctx, args, json);
       case undefined:
       case "help":
       case "--help":
