@@ -77,7 +77,7 @@ export async function createProject(
         hosts,
         token,
         ghCommand: `gh secret set KIT_DEPLOY_TOKEN -R ${input.repo}`,
-        pinCommand: `ssh kit-vps sudo kit-deploy project pin ${input.name} ${input.repo}`,
+        pinCommand: `ssh kit-vps kit-deploy project pin ${input.name} ${input.repo}`,
       };
     },
   );
