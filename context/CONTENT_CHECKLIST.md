@@ -7,7 +7,7 @@
 | # | What is missing | Where (file/component) | Flagged by | Phase | Status |
 |---|---|---|---|---|---|
 | 1 | Cloudflare API token limited to **DNS edit on the zone fockus.dev** (Caddy DNS-01); César writes it into `/etc/caddy/cloudflare.env` on the VPS | `infra/` Caddy unit | kickoff (D001) | 01 | Resolved (2026-11-13: DNS Write + Zone Read on fockus.dev, IP 178.238.238.7, no expiry; file root 0600) |
-| 2 | DNS-only records → 178.238.238.7: `*.fockus.dev` (covers `deploy` and every `<project>.fockus.dev`, D020) done 2026-11-12; `*.preview` done 2026-11-13; `maranatha` in phase 07 | Cloudflare | kickoff (D001) | 01–03, 07 | Partial (wildcards done; maranatha in 07) |
+| 2 | DNS-only records → 178.238.238.7: `*.fockus.dev` (covers `deploy` and every `<project>.fockus.dev`, D020) done 2026-11-12; `*.preview` done 2026-11-13; `maranatha.fockus.dev` is covered by `*.fockus.dev` (no record of its own) | Cloudflare | kickoff (D001) | 01–03, 07 | Done |
 | 3 | Brevo: verify fockus.dev (SPF/DKIM/DMARC records in Cloudflare) and create the API/SMTP key (secret, `env set`) | phase 06 alerts | kickoff (D002) | 06 | Pending |
 | 4 | Copy `/etc/kit-deploy/master.key` into César's password manager right after it is generated | VPS | kickoff (D012) | 01/04 | Resolved (2026-11-11) |
 | 5 | GHCR read-only token for the VPS (`docker login ghcr.io` as root, typed by César) — classic, `read:packages`, expires ~2027-11-12: renew before | VPS | kickoff | 02 | Resolved (2026-11-12) |

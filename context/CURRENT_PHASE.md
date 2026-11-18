@@ -5,37 +5,44 @@
 
 ## Now
 
-**Phase 04** done 2026-11-17 (log `PHASE_LOG/04-variables.md`). **Phase 05** shipped 2026-11-18
-(release 5c36b947709b; units W1–W14 #44–#61 in `PHASE_LOG/05-dashboard.md`).
+Phases 04–05: logs `PHASE_LOG/04-variables.md`, `PHASE_LOG/05-dashboard.md`.
 
 **Phase 06 — Alerts and cron: merged 2026-11-18** (#58 alerts D047, #59 cron D048, #60 image prune
 D049, #62 panel Cron tab + alerts D052; log `PHASE_LOG/06-alerts-cron.md`). Security review: no
 findings. On the VPS: release b5c1c45302c6 (2026-11-18), install test ALL PASS 102, migrations 0012–0013; 6 timers active, first alerts check: 23 checked, 0 failing.
 
+**Phase 07 — maranatha: code done 2026-11-18** (kit-deploy #63 KIT_DEPLOY_PREVIEW_URL, #64 template
+switch + `templates/MIGRATING.md`; maranatha#43 its D093; log `PHASE_LOG/07-maranatha.md`). Image tested
+locally like kit-agent (OK). Waiting on César.
+
 ## Blocked (actions for César or external)
 
+- **Phase 07 (César), in order:** ship main (#63: migration 0014 + agent, needed for preview login)
+  → maranatha `deploy/README.md` › "Pasar el sitio a kit-deploy": `project add maranatha
+  Fockus26/maranatha --memory 512`, `db adopt maranatha --yes` (its DB already moved to kit-db,
+  D082 there), token → `gh secret set`, repo into the status token, variables from Vercel,
+  `gh variable set KIT_DEPLOY_ENABLED --body true`. Then one week without an incident; Vercel off.
 - **Phase 06 close (César):** verify fockus.dev in Brevo (SPF/DKIM/DMARC in Cloudflare), then
   `ssh -t kit-vps kit-deploy alerts setup --to <gmail>` (key on stdin) and `kit-deploy alerts test`
   → inbox, not spam. Then each alert on purpose and a real cron job (CRON_SECRET in production).
   Copy and thresholds: CONTENT_CHECKLIST #38–#39.
 
-- **Phase 05 close (César):** sign in at deploy.fockus.dev with the passkey, set a secret variable on kd_hello from Variables, check it shows only `••••`/Reemplazar and is never readable, then delete it. Shipped and domain HTTPS check done 2026-11-18. Phase 07: maranatha uses Supabase today; only if its database moves to kit-db, `ssh kit-vps kit-deploy db adopt maranatha --yes` (D051).
+- **Phase 05 close (César):** sign in at deploy.fockus.dev with the passkey, set a secret variable on kd_hello from Variables, check it shows only `••••`/Reemplazar and is never readable, then delete it. Shipped and domain HTTPS check done 2026-11-18.
 
-- Phase 04 (César): master.key into the password manager (CONTENT_CHECKLIST #4);
-  `ssh kit-vps kit-deploy project pin kd_hello Fockus26/kd-hello`; Actions: Read and write on the
-  GitHub status token; new deploy-vps.yml + Dockerfile into kd-hello; `db create kd_hello` only if
-  it needs a DB. Then the first real build-env / secret-in-container / rebuild run on kd-hello.
+- Phase 04 (César): master.key → password manager (CONTENT_CHECKLIST #4); `project pin kd_hello
+  Fockus26/kd-hello`; status token Actions: Read and write; new workflow + Dockerfile in kd-hello
+  (now with `KIT_DEPLOY_ENABLED`); then the real build-env / secret / rebuild run.
 - Phase 03 leftover: the dashboard cookie is host-only in the browser (César).
 - Each new project's repo must be added to the GitHub status token (Repository access); when the
   token expires, re-run `ship.sh … --install --github-token`.
 - QA pendiente: once at the end (phase 09), per César 2026-11-10.
-- CONTENT_CHECKLIST #12, #14: César confirms the "preview no existe" and "preview dormido" copy.
+- CONTENT_CHECKLIST #12, #14: César confirms the preview copy.
 
 ## Next
 
 - Before moving a real project (César asked 2026-11-18): the real kd-hello run, alerts' delivery
   check (06), and the brief's "Done when" checks (load test during deploy, reboot, kit-deploy
-  stopped, nmap, certbot dry-run). Then phase 07 (maranatha).
+  stopped, nmap, certbot dry-run). Phase 08 can start from `templates/MIGRATING.md`.
 - fail2ban jail for `kit-deploy-auth: failed sign-in` (own small infra unit, D003).
 - César: passkey in his password manager, then passkey sign-in + cookie check in the browser.
 - Own small units: update.sh's last line prints the previous release twice; `server-ready.sh`
@@ -51,6 +58,6 @@ findings. On the VPS: release b5c1c45302c6 (2026-11-18), install test ALL PASS 1
 | 04 | Variables and databases | done 2026-11-17 (real kd-hello run pending César's steps) |
 | 05 | Dashboard (kit UI phases in `phases/ui/`) | shipped 2026-11-18 (passkey + secret check pending César) |
 | 06 | Alerts and cron | shipped 2026-11-18 (Brevo delivery + real cron check pending César) |
-| 07 | First real project: maranatha | pending |
+| 07 | First real project: maranatha | code done 2026-11-18 (César's VPS steps + one week pending) |
 | 08 | Back into the kit | pending |
 | 09 | Final QA ("Done when") | pending |
