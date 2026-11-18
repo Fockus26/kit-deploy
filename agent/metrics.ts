@@ -266,7 +266,10 @@ export function countLines(state: LogState, text: string, now: number): number {
       dropped++;
       continue;
     }
-    let byMinute = state.pending[host];
+    // Own keys only: a host named `constructor` must not reach Object through the prototype.
+    let byMinute = Object.hasOwn(state.pending, host)
+      ? state.pending[host]
+      : undefined;
     if (!byMinute) {
       if (Object.keys(state.pending).length >= MAX_HOSTS) {
         dropped++;

@@ -288,6 +288,20 @@ describe("access log", () => {
     expect(r.requests).toEqual([]);
   });
 
+  test("a host named like an Object property is counted as a host", async () => {
+    const f = fakeDeps();
+    f.files.set(ACCESS_LOG, line("constructor", T0) + line("constructor", T0));
+    const r = await readRequests(f.deps, T0 + MIN + 10_000);
+    expect(r.requests).toEqual([
+      {
+        host: "constructor",
+        minute: "2026-11-17T10:00:00.000Z",
+        count: 2,
+        count5xx: 0,
+      },
+    ]);
+  });
+
   test("hosts are bounded", async () => {
     const f = fakeDeps();
     let text = "";
