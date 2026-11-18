@@ -39,6 +39,7 @@ import {
 import { imageMatchesPin, parsePin, pinPath } from "../lib/core/image-pin";
 import { assertImage } from "../lib/core/validate";
 import type { Deps, RunResult } from "./deps";
+import { sampleMetrics } from "./metrics";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
 
 export const CADDYFILE = "/etc/caddy/Caddyfile";
@@ -274,6 +275,8 @@ export class Agent {
         return this.serial(() => this.createDatabases(req.params.project));
       case "env.build":
         return this.buildEnv(req.params);
+      case "metrics.sample":
+        return sampleMetrics(this.deps, this.now, () => this.list());
     }
   }
 

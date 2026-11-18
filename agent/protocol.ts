@@ -154,6 +154,8 @@ export const Request = z.discriminatedUnion("op", [
       .regex(/^\/[A-Za-z0-9._~/-]{0,200}$/)
       .optional(),
   }),
+  /** D015: one reading of containers, the VPS and Caddy's access log (agent/metrics.ts). */
+  op("metrics.sample", {}),
 ]);
 
 export type Request = z.infer<typeof Request>;
