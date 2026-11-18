@@ -2,6 +2,7 @@
 
 import { Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { redeployAction } from "@/app/(panel)/actions/deployments";
 import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { RelativeTime } from "@/components/kit/relative-time";
@@ -48,6 +49,9 @@ function Health({ health }: { health: DeploymentDetail["health"] }) {
   );
 }
 
+/** `--duration-normal` of app/globals.css: how long the Sheet takes to leave. */
+const SHEET_EXIT_MS = 200;
+
 /**
  * HANDOFF §3 Despliegues: the detail in a right Sheet (480px at most): image, container, port,
  * health check and what happened, with Redeploy (a live one) and Rollback (a kept one). It is
@@ -67,12 +71,27 @@ export function DeploymentSheet({
   const router = useRouter();
   const redeploy = useServerAction(redeployAction);
   const canRedeploy = detail.status === "live";
+  // Closing keeps the Sheet mounted for its exit animation (HANDOFF §6: 200 ms); the URL drops
+  // `?d=` right after, which is what unmounts it.
+  const [open, setOpen] = useState(true);
+  const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (leaving.current) clearTimeout(leaving.current);
+    },
+    [],
+  );
 
   return (
     <Sheet
-      open
-      onOpenChange={(open) => {
-        if (!open) router.replace(closeHref, { scroll: false });
+      open={open}
+      onOpenChange={(next) => {
+        if (next || leaving.current) return;
+        setOpen(false);
+        leaving.current = setTimeout(
+          () => router.replace(closeHref, { scroll: false }),
+          SHEET_EXIT_MS,
+        );
       }}
     >
       <SheetContent side="right" className="overflow-y-auto p-6">

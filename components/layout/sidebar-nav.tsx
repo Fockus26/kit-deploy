@@ -55,12 +55,12 @@ export function SidebarNav({
           </li>
         </ul>
 
-        <h2
+        <p
           id="nav-proyectos"
           className="mt-6 mb-2 px-2 font-medium text-eyebrow text-muted-foreground uppercase"
         >
           Proyectos
-        </h2>
+        </p>
         {projects.length === 0 ? (
           <p className="px-2 text-caption text-muted-foreground">
             Aún no hay proyectos.
