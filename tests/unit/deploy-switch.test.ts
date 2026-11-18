@@ -432,6 +432,40 @@ describe("regenerate", () => {
     expect(r).toMatchObject({ project: "kd_hello", ok: false });
     expect(ops()).toEqual(["container.list", "site.write"]);
   });
+
+  test("the site's redirects go to site.write; only one project when asked (domain check)", async () => {
+    const rows: Row[] = [
+      {
+        id: "d1",
+        sha: sha("a"),
+        status: "live",
+        container: name("a"),
+        port: 20400,
+        createdAt: at(1),
+      },
+    ];
+    const { agent, calls } = fakeAgent({
+      "container.list": () => ok([{ name: name("a"), state: "running" }]),
+    });
+    const repo = memoryRepo(rows, ["example.com"]);
+    const liveSites = repo.liveSites.bind(repo);
+    repo.liveSites = async () =>
+      (await liveSites()).map((s) => ({
+        ...s,
+        redirects: [{ from: "www.example.com", to: "example.com" }],
+      }));
+    const { d } = deps(agent, repo);
+    expect(await regenerate(d, { project: "other" })).toEqual([]);
+    expect(await regenerate(d, { project: "kd_hello" })).toEqual([
+      { project: "kd_hello", ok: true },
+    ]);
+    expect(calls.find((c) => c.op === "site.write")?.params).toEqual({
+      target: { project: "kd_hello", env: "production" },
+      hosts: ["example.com"],
+      port: 20400,
+      redirects: [{ from: "www.example.com", to: "example.com" }],
+    });
+  });
 });
 
 describe("processProject passes the environment's variables", () => {

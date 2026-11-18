@@ -226,3 +226,87 @@ describe("renderPreviewSite", () => {
     ).toThrow(CoreInputError);
   });
 });
+
+describe("renderSite with redirects (D028)", () => {
+  const base = { target: prod, port: 20417 };
+
+  test("to the apex: www gets its own block with a 308, after the site", () => {
+    const site = renderSite({
+      ...base,
+      hosts: ["example.com", "kd-hello.fockus.dev"],
+      redirects: [{ from: "WWW.example.com", to: "example.com" }],
+    });
+    expect(site.content).toBe(
+      [
+        "# Written by kit-deploy for kd_hello — do not edit by hand: `kit-deploy regenerate` rewrites it.",
+        "example.com, kd-hello.fockus.dev {",
+        "\timport kit_access_log",
+        "\treverse_proxy 127.0.0.1:20417",
+        "}",
+        "",
+        "www.example.com {",
+        "\tredir https://example.com{uri} 308",
+        "}",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("to www, and the same set in any order renders the same bytes", () => {
+    const a = renderSite({
+      ...base,
+      hosts: ["www.a.com", "www.b.com"],
+      redirects: [
+        { from: "b.com", to: "www.b.com" },
+        { from: "a.com", to: "www.a.com" },
+      ],
+    });
+    const b = renderSite({
+      ...base,
+      hosts: ["www.a.com", "www.b.com"],
+      redirects: [
+        { from: "a.com", to: "www.a.com" },
+        { from: "b.com", to: "www.b.com" },
+      ],
+    });
+    expect(a.content).toBe(b.content);
+    expect(a.content).toContain(
+      "\na.com {\n\tredir https://www.a.com{uri} 308\n}\n\nb.com {\n\tredir https://www.b.com{uri} 308\n}\n",
+    );
+  });
+
+  test("caddy fmt form: tabs only, no trailing spaces, one blank line between blocks", () => {
+    const { content } = renderSite({
+      ...base,
+      hosts: ["example.com"],
+      redirects: [{ from: "www.example.com", to: "example.com" }],
+    });
+    expect(content).not.toMatch(/ +\n|^ +/m);
+    expect(content).not.toContain("\n\n\n");
+    expect(content.endsWith("}\n")).toBe(true);
+  });
+
+  test.each([
+    [{ from: "www.example.com", to: "elsewhere.com" }, "does not serve"],
+    [{ from: "example.com", to: "example.com" }, "listed twice"],
+    [{ from: "x.preview.fockus.dev", to: "example.com" }, "preview"],
+    [{ from: "bad host", to: "example.com" }, "invalid hostname"],
+  ])("refuses %j", (r, message) => {
+    expect(() =>
+      renderSite({ ...base, hosts: ["example.com"], redirects: [r] }),
+    ).toThrow(message);
+  });
+
+  test("the same source twice is refused", () => {
+    expect(() =>
+      renderSite({
+        ...base,
+        hosts: ["example.com"],
+        redirects: [
+          { from: "www.example.com", to: "example.com" },
+          { from: "www.example.com", to: "example.com" },
+        ],
+      }),
+    ).toThrow("listed twice");
+  });
+});
