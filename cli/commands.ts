@@ -35,6 +35,7 @@ import {
 import { generateDeployToken } from "../lib/tokens";
 import pkg from "../package.json";
 import { type AgentClient, AgentUnreachable } from "./client";
+import { DB_USAGE, dbStatusCommand } from "./db-commands";
 import { type DomainContext, domainCommand } from "./domain-commands";
 import { type EnvContext, envCommand } from "./env-commands";
 import { type LogsContext, logsCommand } from "./logs-commands";
@@ -122,6 +123,9 @@ Commands:
   db create <project>
                      kit-db databases <project> and <project>_preview (kept if there);
                      DATABASE_URL then reaches its containers by itself, never shown
+  db status <project> [--json]
+                     size and last backup of <project> and <project>_preview, the
+                     off-VPS copy and the backup failures that name them
   env ls <project> <environment>
                      a project's variables in production, preview or development; plain
                      values shown, secrets never
@@ -749,7 +753,9 @@ export async function runCli(
       case "db":
         if (args[0] === "create")
           return await dbCreate(client, args.slice(1), json);
-        return fail("usage: kit-deploy db create <project>\n", 2);
+        if (args[0] === "status")
+          return await dbStatusCommand(client, args.slice(1), json);
+        return fail(DB_USAGE, 2);
       case "preview":
         if (args[0] === "sweep")
           return await previewSweep(ctx, args.slice(1), json);
