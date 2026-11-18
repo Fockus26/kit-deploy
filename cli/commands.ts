@@ -44,6 +44,7 @@ import {
   REPO_RE,
 } from "../lib/ops/projects";
 import pkg from "../package.json";
+import { type AlertsContext, alertsCommand } from "./alerts-commands";
 import { type AgentClient, AgentUnreachable } from "./client";
 import { DB_USAGE, dbStatusCommand } from "./db-commands";
 import { type DomainContext, domainCommand } from "./domain-commands";
@@ -54,7 +55,8 @@ import { type MetricsContext, metricsCommand } from "./metrics-commands";
 /** What the database-backed commands need; built lazily so `version` works without a database. */
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
 export type CliContext = EnvContext &
-  DomainContext & {
+  DomainContext &
+  Pick<AlertsContext, "alerts" | "writeAlertsEnv"> & {
     deploy?: () => DeployContext;
     admin?: () => AdminStore;
     users?: () => UserStore;
@@ -155,6 +157,15 @@ Commands:
                      5xx of the last 24 h
   metrics collect    (root) one sample of containers, the VPS and Caddy's access log into
                      the database. Every 30 s by kit-deploy-metrics.timer
+  alerts ls [--all]  open alerts (--all: the last 50, resolved too)
+  alerts check [--dry-run]
+                     (root) site health, certificates, disk, memory, backups and failed
+                     deploys; opens/resolves incidents and emails one digest by Brevo.
+                     Every minute by kit-deploy-alerts.timer
+  alerts setup --to <email>
+                     (root) the Brevo API key from stdin, never argv:
+                     ssh -t kit-vps kit-deploy alerts setup --to <email>
+  alerts test        (root) one sample alert email
   help               this text
 `;
 
@@ -758,6 +769,8 @@ export async function runCli(
         return fail(SWEEP_USAGE, 2);
       case "metrics":
         return await metricsCommand(client, ctx, args, json);
+      case "alerts":
+        return await alertsCommand(client, ctx, args, json);
       case undefined:
       case "help":
       case "--help":

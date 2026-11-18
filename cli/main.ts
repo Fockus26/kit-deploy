@@ -8,6 +8,12 @@
  *                     publishes the commit status with it; `preview sweep` reads PR state and
  *                     edits the PR comment with it
  */
+import { mailerFromEnv } from "../lib/alerts/brevo";
+import {
+  drizzleAlertStore,
+  drizzleAlertsReader,
+  drizzleCheckRepo,
+} from "../lib/alerts/store";
 import { drizzleAdminStore } from "../lib/db/admin";
 import { drizzleEnvStore, sshActor } from "../lib/db/env-store";
 import { db, drizzleStore } from "../lib/db/store";
@@ -27,7 +33,12 @@ import { drizzleMetricsReader } from "../lib/metrics/read";
 import { drizzleMetricsStore } from "../lib/metrics/store";
 import { socketClient } from "./client";
 import { runCli } from "./commands";
-import { loadCliEnv, loadGithubEnv } from "./env";
+import {
+  loadAlertsEnv,
+  loadCliEnv,
+  loadGithubEnv,
+  writeAlertsEnv,
+} from "./env";
 import { writePinFile } from "./pins";
 import { readValue } from "./stdin";
 
@@ -103,6 +114,18 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
         (await regenerate(sw, { project }))[0] ?? { ok: true },
     };
   },
+  alerts: () => {
+    loadCliEnv();
+    loadAlertsEnv();
+    const database = db();
+    return {
+      store: drizzleAlertStore(database),
+      reader: drizzleAlertsReader(database),
+      repo: drizzleCheckRepo(database),
+      mailer: mailerFromEnv(),
+    };
+  },
+  writeAlertsEnv: (key, to) => writeAlertsEnv(key, to),
   sweep: () => {
     loadCliEnv();
     loadGithubEnv();

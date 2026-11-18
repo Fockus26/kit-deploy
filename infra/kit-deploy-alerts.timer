@@ -1,0 +1,13 @@
+# kit-deploy · runs kit-deploy-alerts.service every minute (D047). Installed and enabled by
+# infra/update.sh. Not Persistent: a minute missed while the VPS was down is not checked later.
+[Unit]
+Description=kit-deploy alerts check (every minute)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=kit-deploy-alerts.service
+
+[Install]
+WantedBy=timers.target

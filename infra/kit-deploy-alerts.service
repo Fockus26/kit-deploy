@@ -1,0 +1,24 @@
+# kit-deploy · alerts check (phase 06, brief F10, D047): every production site's /api/health, the
+# certificates (domains, db.fockus.dev, the dashboard, the previews' wildcard), the VPS disk and
+# memory, kit-db's backups and failed production deploys. An incident opens after its rule's
+# streak and closes the same way; whatever changed goes out in one email by Brevo (D002).
+# Started every minute by kit-deploy-alerts.timer; installed by infra/update.sh. Root: it reads
+# /etc/kit-deploy/cli.env and alerts.env (the Brevo key). It changes nothing on the machine: the
+# agent only reads. One line per opened/resolved alert in the journal:
+#   journalctl -u kit-deploy-alerts
+[Unit]
+Description=kit-deploy alerts check
+After=network-online.target kit-agent.service
+Wants=network-online.target
+Requires=kit-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kit-deploy alerts check
+# Each health check is bounded (5 s) and Brevo's call (15 s): a stuck run never overlaps the next.
+TimeoutStartSec=55s
+Nice=10
+MemoryMax=128M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
