@@ -4,18 +4,18 @@ import { BRAND } from "../../lib/brand";
 
 const css = readFileSync("app/globals.css", "utf8");
 const TOKENS = {
-  background: ["background", 1],
-  surface: ["card", 1],
-  primary: ["primary", 1],
-  foreground: ["foreground", 1],
-  muted: ["muted-foreground", 1],
+  background: ["background"],
+  surface: ["card"],
+  primary: ["primary"],
+  foreground: ["foreground"],
+  muted: ["muted-foreground"],
 } as const;
 
 describe("brand", () => {
   test("colours match app/globals.css' dark theme", () => {
     for (const [key, [token]] of Object.entries(TOKENS)) {
       const m = new RegExp(
-        `--${token}: light-dark\(#[0-9a-f]{6}, (#[0-9a-f]{6})\)`,
+        `--${token}: light-dark\\(#[0-9a-f]{6}, (#[0-9a-f]{6})\\)`,
       ).exec(css);
       expect(m?.[1]).toBe(BRAND[key as keyof typeof TOKENS]);
     }
