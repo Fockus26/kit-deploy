@@ -34,3 +34,8 @@ Unit 2 of the «$12 server» review (César picked it after #72).
   applied. certbot renew --dry-run OK. All sites 200; gaby back to healthy.
 - k6 on the VPS after: 20/s p95 446 ms; 50/s p95 361 ms p99 684 ms, 0 dropped, 0 errors → PASS
   (before: 50/s p95 1.81 s, 120 dropped).
+
+## #81 server-ready caddy validate (2026-11-19, merged)
+- cf_token() reads /etc/caddy/cloudflare.env like update.sh; validate gets it; Caddy's error is shown with
+  the token masked (Caddy quotes a rejected token). Test step 6: 44 checks ALL PASS. Caddy's cloudflare
+  module rejects a 34-char token by shape, 40 passes. Goes with the next ship (server-ready is re-run by hand).

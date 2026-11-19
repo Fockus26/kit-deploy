@@ -17,7 +17,7 @@ locally like kit-agent (OK). Waiting on César.
 
 **Batch 2026-11-18 (panel improvements, César):** code done 2026-11-19: #66–#71, #73 audit 20/page, QA fixes #74 reflow + #75 select (D064); QA reports `context/plans/qa-batch-2026-11-18-*.md`, M/B in backlog. Waiting on the ship (César). Plan `context/plans/batch-2026-11-18.md`. kd_hello: `sudo kit-deploy project rm kd_hello` after the next ship, with César's OK (DBs kept). Ship applies migrations 0015–0016 (wave 2 added none) and needs `--github-read-token`.
 
-**VPS tuning (César 2026-11-18/19, «$12 server» video):** #72 keepalive 4s, #76 `bun run load-test`, #80 userland-proxy off — merged and live 2026-11-19 (release 32c0310b6257, `regenerate` ok kd_hello+maranatha, server-ready re-run: dockerd restarted, 8 containers kept, 0 docker-proxy; certbot dry-run OK). kd-hello on the VPS at 50 req/s: before p95 1.81 s / 120 dropped → after p95 361 ms, p99 684 ms, 0 dropped, 0 errors (PASS). Bug: server-ready.sh line 190 `caddy validate` without cloudflare.env → exits 1 after the Docker step. Waiting: per-project `--cpus`, Caddy `encode zstd gzip`. Logs `PHASE_LOG/feat-load-test.md`.
+**VPS tuning (César 2026-11-18/19, «$12 server» video):** #72 keepalive 4s, #76 `bun run load-test`, #80 userland-proxy off — merged and live 2026-11-19 (release 32c0310b6257, `regenerate` ok kd_hello+maranatha, server-ready re-run: dockerd restarted, 8 containers kept, 0 docker-proxy; certbot dry-run OK). kd-hello on the VPS at 50 req/s: before p95 1.81 s / 120 dropped → after p95 361 ms, p99 684 ms, 0 dropped, 0 errors (PASS). #81 (merged 2026-11-19, not shipped): server-ready.sh gives validate the Cloudflare token and masks it in Caddy's errors. Waiting: per-project `--cpus`, Caddy `encode zstd gzip`. Logs `PHASE_LOG/feat-load-test.md`.
 
 ## Blocked (actions for César or external)
 
@@ -48,7 +48,7 @@ locally like kit-agent (OK). Waiting on César.
   stopped, nmap, certbot dry-run). Phase 08 can start from `templates/MIGRATING.md`.
 - fail2ban jail for `kit-deploy-auth: failed sign-in` (own small infra unit, D003).
 - César: passkey in his password manager, then passkey sign-in + cookie check in the browser.
-- Own small units: in-container.sh «Caddy stopped after the failed rehearsal» is flaky (failed 1 of 2, 2026-11-19); update.sh's last line prints the previous release twice; `server-ready.sh`
+- Own small units: in-container.sh «Caddy stopped after the failed rehearsal» is flaky (failed 1 of 4, 2026-11-19); update.sh's last line prints the previous release twice; `server-ready.sh`
   resets /etc/kit-deploy to 0700 (update.sh heals it); templates' actions off Node 20 (phase 08).
 
 ## Phases
