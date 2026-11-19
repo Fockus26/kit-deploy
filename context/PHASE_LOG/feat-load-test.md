@@ -25,3 +25,12 @@ Unit 2 of the «$12 server» review (César picked it after #72).
   (userland-proxy on, no `"userland-proxy": false` in daemon.json); CPU pressure some ~13 %.
 - Candidate units (César): userland-proxy off (daemon-wide, touches gaby/evolution: Docker --test first);
   cache/static pages in the template; `--cpus` per project.
+
+## Ship 2026-11-19 (César: merge #72 #76 #80 and ship everything)
+- Release 32c0310b6257 (#65–#80), update.sh: 17 migrations applied, dashboard + previews sites rewritten.
+- `kit-deploy regenerate`: ok kd_hello, ok maranatha (nothing stopped on purpose; checked `list` first).
+- server-ready.sh re-run: userland-proxy false, dockerd restarted, 8 running containers kept, 0 docker-proxy;
+  then exit 1 at line 190 `caddy validate` (no CLOUDFLARE_API_TOKEN in its env) — later steps were already
+  applied. certbot renew --dry-run OK. All sites 200; gaby back to healthy.
+- k6 on the VPS after: 20/s p95 446 ms; 50/s p95 361 ms p99 684 ms, 0 dropped, 0 errors → PASS
+  (before: 50/s p95 1.81 s, 120 dropped).
