@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckIcon, ChevronDown, Lock } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   Command,
   CommandEmpty,
@@ -25,8 +25,21 @@ import { cn } from "@/lib/utils";
  * that is not in the list can still be used ("Usar «…»"); the server validates it as before.
  *
  * Keyboard: Enter / Space / ↓ open it, typing filters, ↑↓ move, Enter picks, Esc closes (focus
- * goes back to the trigger).
+ * goes back to the trigger). Tab closes it and moves on to the next field, Shift+Tab closes it
+ * back onto the trigger, as a native select does (the popover is portaled and its FocusScope
+ * would otherwise keep Tab on the search input).
  */
+const TABBABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Focuses the first tabbable element after `from` in document order, if any. */
+function focusAfter(from: HTMLElement) {
+  const all = Array.from(
+    document.querySelectorAll<HTMLElement>(TABBABLE),
+  ).filter((el) => el.tabIndex >= 0 && el.getClientRects().length > 0);
+  all[all.indexOf(from) + 1]?.focus();
+}
+
 export function RepoCombobox({
   repos,
   truncated,
@@ -51,6 +64,9 @@ export function RepoCombobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const listId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  /** Set by Tab inside the popover: where focus goes once it has closed. */
+  const tabOut = useRef<"next" | "trigger" | null>(null);
   const shown = filterRepos(repos, query);
   const free = freeTextRepo(repos, query);
 
@@ -65,6 +81,7 @@ export function RepoCombobox({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
+            ref={triggerRef}
             type="button"
             id={id}
             role="combobox"
@@ -101,7 +118,24 @@ export function RepoCombobox({
             />
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
+        <PopoverContent
+          className="w-(--radix-popover-trigger-width) p-0"
+          onKeyDown={(e) => {
+            if (e.key !== "Tab") return;
+            e.preventDefault();
+            tabOut.current = e.shiftKey ? "trigger" : "next";
+            setOpen(false);
+            setQuery("");
+          }}
+          onCloseAutoFocus={(e) => {
+            const dir = tabOut.current;
+            tabOut.current = null;
+            if (dir === "next" && triggerRef.current) {
+              e.preventDefault();
+              focusAfter(triggerRef.current);
+            }
+          }}
+        >
           <Command shouldFilter={false} label="Repositorios de GitHub">
             <CommandInput
               value={query}
