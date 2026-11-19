@@ -58,9 +58,11 @@ export function RemovePasskey({
           // The code is what confirms (the button stays off until it has 6 digits): the cursor
           // starts in its field, not on Cancelar.
           e.preventDefault();
-          e.currentTarget
-            ?.querySelector<HTMLInputElement>("input[name=code]")
-            ?.focus();
+          const content = e.currentTarget;
+          if (content instanceof HTMLElement)
+            content
+              .querySelector<HTMLInputElement>("input[name=code]")
+              ?.focus();
         }}
         onCloseAutoFocus={(e) => {
           const n = done.current;
