@@ -45,5 +45,8 @@
 | 38 | Copy of the alert emails and alert titles ("<p> no responde", "El certificado de <host> vence en N días", "Disco del VPS al N %", "Memoria del VPS al N %", "Falló el backup de <db>", "Falló el despliegue de <p>", ABIERTA/RESUELTA, the footer line) — thresholds to confirm: disk 80 %, memory 90 % for 5 min, site 3 min down / 5 min up | `lib/alerts/checks.ts`, `lib/alerts/email.ts`, `lib/alerts/rules.ts` | phase 06 U1 | 06 | Pending |
 
 | 39 | Copy of the Cron tab (intro, empty state, "Las últimas 50…"), Inicio's alert line and Ajustes › Alertas (intro, "Último correo enviado", "Ninguna todavía"); row 33 ("Llega en la fase 06") is replaced | `app/(panel)/p/[project]/cron/`, `components/cron/`, `app/(panel)/page.tsx`, `app/(panel)/settings/page.tsx` | phase 06 U4 | 06 | Pending |
+| 40 | Share card (OG/Twitter): title "kit-deploy", subtitle "Panel de despliegues", alt "kit-deploy: panel de despliegues" — provisional | `lib/brand-copy.ts` | batch 2026-11-18 W2 (#70) | panel | Pending |
+| 41 | Copy of the "Eliminar passkey" dialog (title, body, last-passkey note, code field + help, buttons) — provisional | `app/(panel)/settings/passkey-controls.tsx` | batch 2026-11-18 W3 (#69) | panel | Pending |
+| 42 | Errors and notices of passkey removal (wrong / reused code, too many tries, no TOTP, 6 digits, removed / already gone) — provisional | `lib/panel/actions/passkeys.ts` (PASSKEY_COPY), `app/(panel)/settings/tables.tsx`, `lib/panel/schemas.ts` | batch 2026-11-18 W3 (#69) | panel | Pending |
 
 <!-- Mark "Resolved" (do not delete the row) when it is done and the code is updated. -->

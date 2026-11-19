@@ -15,6 +15,8 @@ findings. On the VPS: release b5c1c45302c6 (2026-11-18), install test ALL PASS 1
 switch + `templates/MIGRATING.md`; maranatha#43 its D093; log `PHASE_LOG/07-maranatha.md`). Image tested
 locally like kit-agent (OK). Waiting on César.
 
+**Batch 2026-11-18 (panel improvements, César):** wave 1 of 2 merged (#66–#70); wave 2 = repo picker + laptop/audit, then full QA. Plan `context/plans/batch-2026-11-18.md`. kd_hello: `sudo kit-deploy project rm kd_hello` after the next ship, with César's OK (DBs kept). Ship applies migrations 0015–0016.
+
 ## Blocked (actions for César or external)
 
 - **Phase 07 (César, from maranatha's project):** platform side done 2026-11-18 (release f640b62435a4
@@ -34,7 +36,8 @@ locally like kit-agent (OK). Waiting on César.
 - Phase 03 leftover: the dashboard cookie is host-only in the browser (César).
 - Each new project's repo must be added to the GitHub status token (Repository access); when the
   token expires, re-run `ship.sh … --install --github-token`.
-- QA pendiente: once at the end (phase 09), per César 2026-11-10.
+- QA: full panel QA (functional + design) after batch 2026-11-18 wave 2 (César 2026-11-18).
+- Wave 2 W6 needs César: a fine-grained GitHub token, All repositories + Metadata: read, written on the VPS (stdin).
 - CONTENT_CHECKLIST #12, #14: César confirms the preview copy.
 
 ## Next

@@ -67,3 +67,5 @@ One block per item: what, why, version.
 - **What:** `app/globals.css` imports Tailwind without `source(none)`, so it scans `context/`, `.claude/` and other folders for classes. Change it to `@import "tailwindcss" source(none);` plus explicit `@source` for `app/`, `components/`, `lib/` (kit `STACK-NEXTJS.md`). Compare the built CSS before and after: only classes that came from `context/` or `.claude/` may disappear.
 - **Why:** smaller CSS and builds that do not depend on docs or the kit copy.
 - **Version:** v1.x — small unit
+
+- W1 #67: before hydration the Radix hidden select has no options, so a submit in that instant falls back to defaults (logs GET form, new project memory). Medium, check in QA.
