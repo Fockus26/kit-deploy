@@ -17,13 +17,16 @@ user in 15 minutes, then `too_many` (429) until the window passes; a code that c
 is refused for 2 minutes (Better Auth accepts a code one step either side, ~90 s). A wrong code or a
 blocked try logs `kit-deploy-auth: failed sign-in from <ip> path=/panel/passkey-remove status=401|429`
 (`failedLine`, the same shape as the sign-in routes', for the fail2ban jail of D003). The code is in
-no result, message or log line. Migration `0015_passkey_audit` widens the `audit_log_action` check.
+no result, message or log line. Migration `0016_passkey_audit` (on top of 0015, `project.remove`) widens the `audit_log_action` check.
 **Why:** César: "no puedo revocar, eliminar passkeys", and a stolen dashboard cookie alone must not
 be able to strip the account's factors (D041's reasoning). Called server-side, Better Auth's
 verify-totp has no rate limit (its limiter only sees HTTP requests), no account lockout (that is
 for sign-in challenges only) and no memory of used codes — measured in
 `tests/unit/passkey-remove.test.ts` (the same code passes twice), hence the guard. In memory is
 enough for one web container, like Better Auth's own limiter; a restart forgets it, fail2ban does not.
+The guard covers this action only: a stolen session can still try codes on the existing HTTP route
+`/two-factor/verify-totp` (no lockout with a session either), held only by its STRICT rate limit of
+10 per minute and IP (security review, 2026-11-18; not changed here).
 **Discarded alternative:** opening `/passkey/delete-passkey` in the handler (a session alone would
 delete); a WebAuthn re-authentication with another passkey (fails exactly when the device is lost);
 a recovery code instead of TOTP (spends a one-time code on a routine action); counting failures in

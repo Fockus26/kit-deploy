@@ -1,6 +1,6 @@
 {
-  "id": "832f8813-e3de-4d4c-ae0b-042b9bfa988f",
-  "prevId": "feb9c05a-05b7-4312-be02-e7d4b23a29e7",
+  "id": "de8a6e62-47b1-452e-b0fc-4759c4bf4ded",
+  "prevId": "1eea2a3c-7e68-4762-bf00-ebde88ac969a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -246,7 +246,7 @@
       "checkConstraints": {
         "audit_log_action": {
           "name": "audit_log_action",
-          "value": "action in ('env.set', 'env.remove', 'project.add', 'token.create', 'token.revoke', 'domain.add', 'domain.remove', 'project.redeploy', 'project.rollback', 'project.stop', 'project.restart', 'cron.add', 'cron.remove', 'cron.enable', 'cron.disable', 'passkey.remove')"
+          "value": "action in ('env.set', 'env.remove', 'project.add', 'token.create', 'token.revoke', 'domain.add', 'domain.remove', 'project.redeploy', 'project.rollback', 'project.stop', 'project.restart', 'cron.add', 'cron.remove', 'cron.enable', 'cron.disable', 'project.remove', 'passkey.remove')"
         },
         "audit_log_environment": {
           "name": "audit_log_environment",

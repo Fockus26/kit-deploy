@@ -1,0 +1,2 @@
+ALTER TABLE "audit_log" DROP CONSTRAINT "audit_log_action";--> statement-breakpoint
+ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_action" CHECK (action in ('env.set', 'env.remove', 'project.add', 'token.create', 'token.revoke', 'domain.add', 'domain.remove', 'project.redeploy', 'project.rollback', 'project.stop', 'project.restart', 'cron.add', 'cron.remove', 'cron.enable', 'cron.disable', 'project.remove', 'passkey.remove'));
