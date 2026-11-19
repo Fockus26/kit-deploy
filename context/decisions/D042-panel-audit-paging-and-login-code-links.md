@@ -1,4 +1,4 @@
-# D042 · Panel · Auditoría pages by a `?antes=` link; /login opens its code form from two links over one form · Implemented (2026-11-17)
+# D042 · Panel · Auditoría pages by a `?antes=` link; /login opens its code form from two links over one form · Implemented (2026-11-17) · Superseded in part by D063 (Auditoría: 20 rows and `?pagina=N`)
 
 **Decision:** Auditoría shows 50 rows; "Cargar más" is a link to `/settings?antes=<ISO date of the
 last row>#auditoria` (settingsData's cursor) that shows the next 50, with "Volver a los más

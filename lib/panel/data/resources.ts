@@ -284,7 +284,7 @@ export function auditPaging(
 ): { page: number; pages: number; offset: number } {
   const pages = Math.max(1, Math.ceil(total / AUDIT_PAGE));
   const n =
-    typeof requested === "string" && /^d{1,9}$/.test(requested)
+    typeof requested === "string" && /^[0-9]{1,9}$/.test(requested)
       ? Number(requested)
       : 1;
   const page = Math.min(Math.max(n, 1), pages);
