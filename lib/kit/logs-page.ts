@@ -37,6 +37,10 @@ export function cleanQuery(raw: string | undefined): string | undefined {
   return /[\u0000-\u001f\u007f-\u009f]/.test(q) ? undefined : q;
 }
 
+/** The "any level" option's value: a Select item cannot be "". `parseLogFilter` reads it (like any
+ * value that is not a level) as no level filter. */
+export const LEVEL_ALL = "all";
+
 /** What `?env&day&level&q` mean, falling back to production / today when a value is not one of
  * the page's own options (a stale link must not reach the agent as an error). */
 export function parseLogFilter(

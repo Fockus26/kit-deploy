@@ -2,13 +2,14 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AgentDownNotice } from "@/components/kit/agent-down-notice";
 import { Field } from "@/components/kit/field";
+import { OptionSelect } from "@/components/kit/option-select";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
 import { LogsExplorer } from "@/components/logs/logs-explorer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
 import {
   FOLLOW_LINES,
+  LEVEL_ALL,
   LOG_QUERY_MAX,
   type LogRow,
   parseLogFilter,
@@ -37,7 +38,7 @@ export default function LogsPage({
 }
 
 const LEVEL_OPTIONS = [
-  { value: "", label: "Todos los niveles" },
+  { value: LEVEL_ALL, label: "Todos los niveles" },
   { value: "error", label: "Error" },
   { value: "warn", label: "Aviso" },
   { value: "info", label: "Info" },
@@ -89,24 +90,28 @@ function FilterBar({
     >
       <Field label="Despliegue" className="min-w-40 flex-1">
         {(a11y) => (
-          <NativeSelect name="env" defaultValue={f.env} {...a11y}>
-            {filters.sources.map((s) => (
-              <option key={s.env} value={s.env}>
-                {s.label}
-              </option>
-            ))}
-          </NativeSelect>
+          <OptionSelect
+            name="env"
+            defaultValue={f.env}
+            options={filters.sources.map((s) => ({
+              value: s.env,
+              label: s.label,
+            }))}
+            {...a11y}
+          />
         )}
       </Field>
       <Field label="Día (UTC)" className="min-w-40 flex-1">
         {(a11y) => (
-          <NativeSelect name="day" defaultValue={f.day} {...a11y}>
-            {filters.days.map((d, i) => (
-              <option key={d} value={d}>
-                {i === 0 ? `${d} (hoy)` : d}
-              </option>
-            ))}
-          </NativeSelect>
+          <OptionSelect
+            name="day"
+            defaultValue={f.day}
+            options={filters.days.map((d, i) => ({
+              value: d,
+              label: i === 0 ? `${d} (hoy)` : d,
+            }))}
+            {...a11y}
+          />
         )}
       </Field>
       <Field label="Buscar texto" className="min-w-52 flex-[2]">
@@ -124,13 +129,12 @@ function FilterBar({
       </Field>
       <Field label="Nivel" className="min-w-40 flex-1">
         {(a11y) => (
-          <NativeSelect name="level" defaultValue={f.level ?? ""} {...a11y}>
-            {LEVEL_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </NativeSelect>
+          <OptionSelect
+            name="level"
+            defaultValue={f.level ?? LEVEL_ALL}
+            options={LEVEL_OPTIONS}
+            {...a11y}
+          />
         )}
       </Field>
       <Button type="submit">Aplicar</Button>

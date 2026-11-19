@@ -23,6 +23,7 @@ import {
 import { EmptyState } from "@/components/kit/empty-state";
 import { FieldInput, FieldRadioGroup } from "@/components/kit/field";
 import { Notice } from "@/components/kit/notice";
+import { OptionSelect } from "@/components/kit/option-select";
 import { RelativeTime } from "@/components/kit/relative-time";
 import { StatusBadge } from "@/components/kit/status-badge";
 import { Button } from "@/components/ui/button";
@@ -357,18 +358,13 @@ export function DomainsManager({
           {hosts.length > 1 ? (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="dns-host">Ver los registros de</Label>
-              <select
+              <OptionSelect
                 id="dns-host"
-                value={shown ?? ""}
-                onChange={(e) => setPicked(e.target.value)}
-                className="flex min-h-control w-full max-w-md rounded-md border border-input bg-card px-3 py-2 font-mono text-input-touch text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:text-body"
-              >
-                {hosts.map((h) => (
-                  <option key={h} value={h}>
-                    {h}
-                  </option>
-                ))}
-              </select>
+                value={shown ?? undefined}
+                onValueChange={setPicked}
+                options={hosts.map((h) => ({ value: h, label: h }))}
+                className="max-w-md font-mono"
+              />
             </div>
           ) : null}
           {shownDns ? (
