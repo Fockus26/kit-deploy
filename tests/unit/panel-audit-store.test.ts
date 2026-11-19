@@ -33,7 +33,7 @@ describe.skipIf(!url)(
       await db.insert(auditLog).values(
         Array.from({ length: 45 }, (_, i) => ({
           actor: "web:u1",
-          action: "project.stop",
+          action: "project.stop" as const,
           project: `p${i}`,
           at: new Date(t0 - Math.min(i, 30) * 60_000),
         })),
