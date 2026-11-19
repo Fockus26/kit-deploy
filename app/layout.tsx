@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { BRAND } from "@/lib/brand";
+import { DASHBOARD_HOST } from "@/lib/core/constants";
 import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -16,12 +18,26 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: { default: "kit-deploy", template: "%s · kit-deploy" },
   description: "Panel privado de despliegues de kit-deploy.",
+  metadataBase: new URL(`https://${DASHBOARD_HOST}`),
+  applicationName: "kit-deploy",
+  openGraph: {
+    siteName: "kit-deploy",
+    locale: "es",
+    type: "website",
+    title: "kit-deploy",
+    description: "Panel privado de despliegues de kit-deploy.",
+  },
+  twitter: { card: "summary_large_image" },
   // Private dashboard: never indexed (next.config.ts also sends X-Robots-Tag).
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
   colorScheme: "dark light",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: BRAND.background },
+    { media: "(prefers-color-scheme: light)", color: BRAND.backgroundLight },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
