@@ -474,3 +474,97 @@ too (they did in QA: say so). The repo combobox (W6) uses a hidden input — che
 ### Closing
 Changeset: patch — "Panel: los selects conservan lo elegido cuando el servidor rechaza el formulario (antes el token podía salir para otro proyecto)."
 Manual action for César: none.
+
+---
+
+# Follow-ups César approved (2026-11-19, on main @ e6069aa)
+
+César: "en ambas decisiones ok con la variable y con ensanchamos en laptop".
+
+## W10 — `feat/qa-github-fake`
+
+You are worker **W10**. Branch: `feat/qa-github-fake`. Decision: **D065**. CONTENT_CHECKLIST rows:
+none. Migration: none. Changeset: **none** (QA-only, nothing visible). Model · effort: **opus ·
+medium** (it changes where a secret is sent). Docker: **yes** (only `bun run qa:local -- --port 4301
+--preview`). Local build: **yes** (that preview).
+
+### What
+A QA-only way to point the repo list (`lib/github/repos.ts`, D061–D062) at a local fake GitHub, so
+`qa:local` can exercise the combobox path, not only the no-token fallback.
+
+### Approach decided
+- `GITHUB_API_BASE` env, read in `lib/github/repos.ts` (next to `githubReadTokenFromEnv`), passed as
+  `opts.api`. **Accepted only if it is `http://127.0.0.1:<port>`, `http://localhost:<port>` or
+  `http://[::1]:<port>`**; any other value is ignored (logged once without the value) and
+  `GITHUB_API` is used. Why: the read token goes to that host; on the VPS a stray value must never
+  send it elsewhere. The status-token client (`lib/deploy/github.ts`) does **not** read it.
+  `nextPath` must follow `Link` only within that same base (it does for `api.github.com`; keep it).
+- `scripts/qa/github-fake.mjs` (node, no deps): `node scripts/qa/github-fake.mjs --port <p>` serves
+  `GET /user/repos` with ~130 fake repos (`qa-org/…`, some private, varied default branches incl.
+  `develop`), 100 per page with a real `Link: rel="next"` header, checks the `Authorization` header
+  is present (401 otherwise) and never logs it; `--fail 500` / `--slow <ms>` modes for row 45 and
+  the timeout. Usage in its header and in D065: start it, then
+  `GITHUB_API_BASE=http://127.0.0.1:<p> GITHUB_READ_TOKEN=github_pat_qafake bun run qa:local -- --port <port>`
+  (qa-local passes process.env through: `scripts/qa-local.ts:377`). Do **not** edit
+  `scripts/qa-local.ts` (the kit replaces it).
+- Do not touch `app/(panel)/new/page.tsx` (W11's) unless the env must be read there — it should not.
+
+### Verify
+- Unit tests: base accepted / rejected (https://evil, http://10.0.0.1, `http://127.0.0.1.evil.com`,
+  garbage, empty), and the token still only in the header.
+- Run the fake + qa:local and with Playwright (node, `.qa/`) check /new shows the combobox with
+  the fake repos, pagination reached all 130, `--fail 500` shows row 45's hint. Sign in like the QA
+  helpers in `C:\Users\Cesar\Documents\Work\kit-deploy\context\plans\qa-batch-2026-11-18-functional\`
+  (copy `lib.mjs`/`np-common.mjs` into your `.qa/`; `qa:local` without `--no-reset` makes a fresh
+  DB, so delete any `.qa/session*.json` first).
+- Also check the suspected bug the QA left: pick a listed repo (its default branch fills "Rama"),
+  then use «Usar «otro/repo»» — does "Rama" keep the previous repo's branch? If yes, fix it in
+  `components/kit/repo-combobox.tsx` / the form (free text should leave an untouched branch at
+  `main`), with a pure test if possible.
+- `security-review` via a subagent over `git diff origin/main...HEAD` of your slot. typecheck,
+  `bunx biome check <touched files>`, test. Stop servers by PID (`netstat -ano`, `taskkill /T /F`).
+
+### Closing
+No changeset (unless you fixed the branch bug: then patch — "Nuevo proyecto: usar un repo escrito a mano ya no arrastra la rama del repo elegido antes."). Manual action for César: none.
+
+## W11 — `fix/laptop-forms-width`
+
+You are worker **W11**. Branch: `fix/laptop-forms-width`. Decision: **D066**. CONTENT_CHECKLIST
+rows: none. Migration: none. Changeset: **patch**. Model · effort: **sonnet · medium**. Docker:
+**yes** (only `bun run qa:local -- --port 4302 --preview`). Local build: **yes** (that preview).
+
+### What César asks
+At 1280–1536 `/new` and Ajustes › "Nuevo token" are a 560 px column at the left with 450–700 px
+empty (design QA, `context/plans/qa-batch-2026-11-18-design.md` § "[Medio] Laptop 1280–1536").
+César: "ensanchamos en laptop".
+
+### Where
+`app/(panel)/new/page.tsx:12` (`max-w-form-wide`), `app/(panel)/settings/token-controls.tsx:124`
+(`max-w-form-wide`), token `--container-form-wide: 560px` (`app/globals.css:125`). The form itself
+`app/(panel)/new/new-project-form.tsx` (fields, the token-once view after create).
+
+### Approach
+This is a new visual decision and you cannot ask: take the **conservative** option and put the
+other two in the PR with pros and cons (CLAUDE.md "New visual decision"). Conservative = at `lg`
+and up, use the width without making single text fields absurdly long: e.g. the form's fields in
+a two-column grid where they pair naturally (Nombre + Rama, Repositorio full width, Memoria…) with
+the card at a wider container token, or the form plus a side column with what already exists on
+the page (the intro text / the "after creating" steps the form shows) — no new copy invented.
+Below `lg`, exactly as today. New container width → a token in `app/globals.css` recorded in D066,
+no magic values. Check `context/DESIGN_RULES.md` and `DESIGN_TOKENS.md` first; line length of
+text stays ≤ ~75 characters.
+
+### Verify
+- Measure before/after at 1280/1366/1440/1536 and 320/390/768 (Playwright with node in `.qa/`;
+  sign in like the QA helpers in `C:\Users\Cesar\Documents\Work\kit-deploy\context\plans\qa-batch-2026-11-18-functional\`,
+  delete `.qa/session*.json` first): content width, no horizontal scroll, 200 % font
+  (`node scripts/qa/font-200-reflow.mjs <url>`), `scripts/qa/panel-reflow.mjs` 0, and
+  `node scripts/qa/select-after-rejected-submit.mjs <url>` still PASS.
+- `a11y` skill (reading/tab order must follow the visual order of the grid).
+- `bun run shots` of /new and /settings at 1440 and 390 (empty `.pr-shots/` first), `shots:publish`.
+- typecheck, `bunx biome check <touched files>`, test. Stop the server by PID.
+- Do not touch `lib/github/*`, `components/kit/repo-combobox.tsx` (W10).
+
+### Closing
+Changeset: patch — "Panel: Nuevo proyecto y Nuevo token aprovechan el ancho en laptop."
+Manual action for César: none.
