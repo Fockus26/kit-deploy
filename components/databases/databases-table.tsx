@@ -83,6 +83,7 @@ export function DatabasesTable({
       data={rows}
       caption={`Bases de datos de ${project}`}
       minWidth={640}
+      wrapColumns={["name"]}
       getRowId={(r) => r.name}
       empty={
         <EmptyState

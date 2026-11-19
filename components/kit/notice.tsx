@@ -56,7 +56,7 @@ export function Notice({
         aria-hidden="true"
         className="mt-0.5 size-[18px] shrink-0"
       />
-      <div className="min-w-48 flex-1 [overflow-wrap:anywhere]">
+      <div className="min-w-0 flex-1 basis-48 [overflow-wrap:anywhere]">
         <p className="font-medium text-foreground">{title}</p>
         {children ? (
           <div className="mt-1 text-foreground">{children}</div>

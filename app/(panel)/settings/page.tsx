@@ -147,7 +147,7 @@ async function Alerts({ searchParams }: { searchParams: Search }) {
             aria-hidden="true"
             className="mt-0.5 size-[18px] shrink-0 text-muted-foreground"
           />
-          <div className="min-w-48 flex-1">
+          <div className="min-w-0 flex-1 basis-48">
             <p className="font-medium text-foreground">
               Por email desde alertas@fockus.dev
             </p>
@@ -192,7 +192,7 @@ async function Alerts({ searchParams }: { searchParams: Search }) {
                 ) : (
                   <StatusBadge status="warning" label="Abierta" size="table" />
                 )}
-                <span className="min-w-48 flex-1 text-foreground [overflow-wrap:anywhere]">
+                <span className="min-w-0 flex-1 basis-48 text-foreground [overflow-wrap:anywhere]">
                   {a.title}
                 </span>
                 <span className="text-caption text-muted-foreground">

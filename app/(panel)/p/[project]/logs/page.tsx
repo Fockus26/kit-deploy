@@ -88,7 +88,7 @@ function FilterBar({
       aria-label="Filtros de logs"
       className="flex flex-wrap items-end gap-3"
     >
-      <Field label="Despliegue" className="min-w-40 flex-1">
+      <Field label="Despliegue" className="min-w-0 flex-1 basis-40">
         {(a11y) => (
           <OptionSelect
             name="env"
@@ -101,7 +101,7 @@ function FilterBar({
           />
         )}
       </Field>
-      <Field label="Día (UTC)" className="min-w-40 flex-1">
+      <Field label="Día (UTC)" className="min-w-0 flex-1 basis-40">
         {(a11y) => (
           <OptionSelect
             name="day"
@@ -114,7 +114,7 @@ function FilterBar({
           />
         )}
       </Field>
-      <Field label="Buscar texto" className="min-w-52 flex-[2]">
+      <Field label="Buscar texto" className="min-w-0 flex-[2] basis-52">
         {(a11y) => (
           <Input
             type="search"
@@ -127,7 +127,7 @@ function FilterBar({
           />
         )}
       </Field>
-      <Field label="Nivel" className="min-w-40 flex-1">
+      <Field label="Nivel" className="min-w-0 flex-1 basis-40">
         {(a11y) => (
           <OptionSelect
             name="level"

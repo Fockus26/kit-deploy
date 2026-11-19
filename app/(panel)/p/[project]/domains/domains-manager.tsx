@@ -254,6 +254,7 @@ export function DomainsManager({
             data={domains}
             caption={`Dominios de ${project}`}
             minWidth={720}
+            wrapColumns={["host", "redirectsTo"]}
             getRowId={(r) => r.host}
             empty={
               <EmptyState level={3} icon={Globe} title="Sin dominios">
@@ -450,6 +451,7 @@ function DnsRecords({ dns }: { dns: DnsInstructions }) {
         data={rows}
         caption={`Registros DNS para ${dns.host}`}
         minWidth={520}
+        wrapColumns={["name", "value"]}
         getRowId={(r) => r.id}
       />
       {dns.mustNotExist.length > 0 ? (

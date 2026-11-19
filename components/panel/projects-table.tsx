@@ -93,6 +93,7 @@ export function ProjectsTable({
       data={projects}
       caption="Proyectos"
       minWidth={760}
+      wrapColumns={["project", "domain"]}
       getRowId={(p) => p.name}
       empty={
         <EmptyState

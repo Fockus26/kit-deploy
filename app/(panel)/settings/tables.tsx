@@ -99,6 +99,7 @@ export function PasskeysTable({ rows }: { rows: PasskeyRow[] }) {
         data={rows}
         caption="Passkeys de tu cuenta"
         minWidth={640}
+        wrapColumns={["name"]}
         getRowId={(r) => r.id}
         empty={
           <EmptyState level={4} icon={KeyRound} title="Aún no hay passkeys">
@@ -169,6 +170,7 @@ export function TokensTable({ rows }: { rows: TokenRow[] }) {
       data={rows}
       caption="Tokens de despliegue"
       minWidth={760}
+      wrapColumns={["label"]}
       getRowId={(r) => r.id}
       empty={
         <EmptyState level={3} icon={Ticket} title="Aún no hay tokens">
@@ -228,6 +230,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
       data={rows}
       caption="Registro de auditoría"
       minWidth={760}
+      wrapColumns={["detail"]}
       getRowId={(r) => r.id}
       empty={
         <EmptyState level={3} icon={History} title="Aún no hay registros">
