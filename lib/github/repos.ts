@@ -30,27 +30,28 @@ export function githubReadTokenFromEnv(
 
 // QA only (D065): a local fake GitHub on this machine. Exactly scheme, loopback host and port —
 // no path, user info or look-alike host — because the read token is sent to it.
-const LOOPBACK_API =
-  /^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):(\d{1,5})\/?$/;
+const LOOPBACK_API = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):(\d{1,5})\/?$/;
 let warnedBase = false;
 
 /**
  * The API the repo list is asked from: `GITHUB_API_BASE` when it is a loopback
- * `http://127.0.0.1|localhost|[::1]:<port>` (the QA fake, scripts/qa/github-fake.mjs), else
- * GitHub's. Any other value is ignored, so a stray one on the VPS never gets the token.
+ * `http://127.0.0.1|localhost|[::1]:<port>` (the QA fake, scripts/qa/github-fake.mjs) and the
+ * server runs under `qa:local` (`QA_LOCAL=1`), else GitHub's. Any other value is ignored: on the
+ * VPS the previews also listen on loopback ports (D016), and none of them may get the token.
  */
 export function githubApiFromEnv(
   env: Record<string, string | undefined> = process.env,
 ): string {
   const raw = env.GITHUB_API_BASE;
   if (!raw) return GITHUB_API;
-  const m = LOOPBACK_API.exec(raw);
-  const port = m ? Number(m[1]) : 0;
-  if (m && port >= 1 && port <= 65_535) return raw.replace(/\/$/, "");
+  const m = env.QA_LOCAL === "1" ? LOOPBACK_API.exec(raw) : null;
+  const port = m ? Number(m[2]) : 0;
+  // Rebuilt from its parts, so the fake's Link (built on the Host it got) matches it exactly.
+  if (m && port >= 1 && port <= 65_535) return `http://${m[1]}:${port}`;
   if (!warnedBase) {
     warnedBase = true;
     console.warn(
-      "GITHUB_API_BASE ignored: only http://127.0.0.1|localhost|[::1]:<port> is accepted",
+      "GITHUB_API_BASE ignored: only http://127.0.0.1|localhost|[::1]:<port> under qa:local is accepted",
     );
   }
   return GITHUB_API;

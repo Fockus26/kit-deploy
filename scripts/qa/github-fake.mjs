@@ -13,8 +13,9 @@
  * Then, in another terminal (qa-local passes the environment through to the server):
  *   GITHUB_API_BASE=http://127.0.0.1:4310 GITHUB_READ_TOKEN=github_pat_qafake \
  *     bun run qa:local -- --port 4301 [--preview]
- * The panel only accepts a loopback `http://127.0.0.1|localhost|[::1]:<port>` base; any other
- * value is ignored and GitHub is used. Listens on 127.0.0.1 only. Runs with node, no deps.
+ * The panel only accepts a loopback `http://127.0.0.1|localhost|[::1]:<port>` base, and only
+ * under qa:local (`QA_LOCAL=1`, which qa-local sets); otherwise GitHub is used. Listens on
+ * 127.0.0.1 only. Runs with node, no deps.
  */
 import { createServer } from "node:http";
 
@@ -31,6 +32,19 @@ const MAX_PER_PAGE = 100;
 
 if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   console.error("--port must be 1-65535");
+  process.exit(2);
+}
+if (fail !== null && !(Number.isInteger(fail) && fail >= 400 && fail <= 599)) {
+  console.error("--fail must be an HTTP error status, 400-599");
+  process.exit(2);
+}
+if (
+  !Number.isInteger(slowMs) ||
+  slowMs < 0 ||
+  !Number.isInteger(count) ||
+  count < 0
+) {
+  console.error("--slow and --count must be whole numbers");
   process.exit(2);
 }
 
