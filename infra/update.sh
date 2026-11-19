@@ -14,6 +14,8 @@
 # token and *.preview DNS exist → only the last 3 releases are kept. The alerts check timer
 # (phase 06) is installed before the web.
 # The sites never stop: their containers and Caddy are not touched.
+# The web's env-files: web.env, plus github.env (commit statuses) and github-read.env (Nuevo
+# proyecto's repo list, D061) when install.sh wrote them.
 set -euo pipefail
 # Whatever the caller's umask: releases and /run/kit-deploy must be readable by the web user.
 umask 022
@@ -243,6 +245,9 @@ UID_WEB="$(id -u kitdeploy)"
 # github.env (install.sh --github-token) is optional: without it, commit statuses are skipped.
 ENV_FILES=(--env-file "$STATE/web.env")
 [ -f "$STATE/github.env" ] && ENV_FILES+=(--env-file "$STATE/github.env")
+# github-read.env (install.sh --github-read-token, D061) too: without it, Nuevo proyecto's
+# "Repositorio" is a plain owner/repo input. Only the web gets it.
+[ -f "$STATE/github-read.env" ] && ENV_FILES+=(--env-file "$STATE/github-read.env")
 GID_KD="$(getent group kit-deploy | cut -d: -f3)"
 # Bridge network, published on loopback only (D016), like any site. Never --network host: the
 # host's loopback has Caddy's admin API (:2019, no auth), and a compromised web would rewrite

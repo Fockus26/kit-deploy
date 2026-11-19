@@ -213,6 +213,24 @@ check "a value that is not a token is refused" bash -c "! echo 'oops' | bash /tm
 check "odd characters are refused" bash -c "! echo 'ghp_a;rm -rf' | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test"
 check "a refused value leaves the old token" bash -c "[ \"\$(sha256sum /etc/kit-deploy/github.env)\" = '$GH_SHA' ]"
 
+echo "== 5b. The repo-list token (D061): its own file, root 0600, never shown, given to the web"
+FAKE_READ='github_pat_TEST_ONLY_read_never_shown_0000'
+if echo "$FAKE_READ" | bash /tmp/rel/infra/install.sh /release.tgz --github-read-token --test > /tmp/install5.log 2>&1; then
+  pass "install --github-read-token exits 0"; else fail "install --github-read-token exits 0"; tail -10 /tmp/install5.log; fi
+check "github-read.env 0600 root" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/kit-deploy/github-read.env)\" = 'root:root 600' ]"
+check "github-read.env has the token under GITHUB_READ_TOKEN" grep -qx "GITHUB_READ_TOKEN=$FAKE_READ" /etc/kit-deploy/github-read.env
+check "github-read.env has no other key" bash -c "[ \"\$(grep -c '=' /etc/kit-deploy/github-read.env)\" = 1 ]"
+check "github.env untouched" bash -c "[ \"\$(sha256sum /etc/kit-deploy/github.env)\" = '$GH_SHA' ]"
+check "token never printed" bash -c "! grep -qF '$FAKE_READ' /tmp/install5.log"
+check "cesar (kit-deploy group) cannot read it" bash -c "! su cesar -c 'cat /etc/kit-deploy/github-read.env' 2>/dev/null"
+check "web gets it as a third env-file" grep -q 'env-file /etc/kit-deploy/web.env --env-file /etc/kit-deploy/github.env --env-file /etc/kit-deploy/github-read.env' /var/log/kit-deploy-web.cmd
+check "token not in the web command" bash -c "! grep -qF '$FAKE_READ' /var/log/kit-deploy-web.cmd"
+READ_SHA=$(sha256sum /etc/kit-deploy/github-read.env)
+check "a value that is not a token is refused" bash -c "! echo 'oops' | bash /tmp/rel/infra/install.sh /release.tgz --github-read-token --test"
+check "odd characters are refused" bash -c "! echo 'ghp_a;rm -rf' | bash /tmp/rel/infra/install.sh /release.tgz --github-read-token --test"
+check "a refused value leaves the old token" bash -c "[ \"\$(sha256sum /etc/kit-deploy/github-read.env)\" = '$READ_SHA' ]"
+check "--github-token later keeps github-read.env" bash -c "echo '$FAKE_GH' | bash /tmp/rel/infra/install.sh /release.tgz --github-token --test >/dev/null 2>&1 && [ \"\$(sha256sum /etc/kit-deploy/github-read.env)\" = '$READ_SHA' ]"
+
 echo "== 6. Refusals"
 check "update without install refuses" bash -c "mv /etc/kit-deploy/cli.env /tmp/cli.env.bak; ! bash /tmp/rel/infra/update.sh /release.tgz --test; r=\$?; mv /tmp/cli.env.bak /etc/kit-deploy/cli.env; exit \$r"
 check "a bad --admin-user is refused" bash -c "! bash /tmp/rel/infra/install.sh /release.tgz --admin-user 'a;b' --test"
