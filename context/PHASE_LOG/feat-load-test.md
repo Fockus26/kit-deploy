@@ -17,3 +17,11 @@ Unit 2 of the «$12 server» review (César picked it after #72).
 - On the VPS: app direct ~35 ms, via Caddy with new TLS 140–290 ms; load 0.7, 5.7 GB free.
 - Laptop numbers are network-bound (RTT + Docker Desktop NAT). Real figures need k6 on the VPS
   (`--network host --resolve 127.0.0.1`) or a nearby machine — César's call. Posted on #76.
+
+## On the VPS itself (2026-11-19, César's OK; image and /tmp files removed after)
+- 50/s·60 s: 47/s done, 120 dropped, med 249 ms p95 1.81 s p99 5.55 s, 0 errors. 20/s: p95 1.29 s.
+  15/s `/api/health`: p95 556 ms via Caddy, 103 ms direct (a rerun via Caddy: 125 ms — runs are noisy).
+- At 20/s: next-server 174 % CPU (kd-hello `/` is dynamic, no-store); docker-proxy 74 % CPU
+  (userland-proxy on, no `"userland-proxy": false` in daemon.json); CPU pressure some ~13 %.
+- Candidate units (César): userland-proxy off (daemon-wide, touches gaby/evolution: Docker --test first);
+  cache/static pages in the template; `--cpus` per project.

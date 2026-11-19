@@ -17,7 +17,7 @@ locally like kit-agent (OK). Waiting on César.
 
 **Batch 2026-11-18 (panel improvements, César):** code done 2026-11-19: #66–#71, #73 audit 20/page, QA fixes #74 reflow + #75 select (D064); QA reports `context/plans/qa-batch-2026-11-18-*.md`, M/B in backlog. Waiting on the ship (César). Plan `context/plans/batch-2026-11-18.md`. kd_hello: `sudo kit-deploy project rm kd_hello` after the next ship, with César's OK (DBs kept). Ship applies migrations 0015–0016 (wave 2 added none) and needs `--github-read-token`.
 
-**VPS tuning (César 2026-11-18, from the «$12 server» video):** #72 Caddy upstream keepalive 4s (open; on ship then `kit-deploy regenerate`, check `list` first, D050). #76 `bun run load-test` (k6 in Docker, p95<500/p99<1s/err<1 %, `--strict` for a deploy, `--resolve`) — open; first kd-hello run from the laptop is network-bound (~200 ms RTT), next: k6 on the VPS (César). Waiting: per-project `--cpus`, Caddy `encode zstd gzip`. Logs `PHASE_LOG/fix-caddy-upstream-keepalive.md`, `PHASE_LOG/feat-load-test.md`.
+**VPS tuning (César 2026-11-18, from the «$12 server» video):** #72 Caddy upstream keepalive 4s (open; on ship then `kit-deploy regenerate`, check `list` first, D050). #76 `bun run load-test` (k6 in Docker, p95<500/p99<1s/err<1 %, `--strict` for a deploy, `--resolve`) — open; first kd-hello run from the laptop is network-bound (~200 ms RTT), on the VPS: 0 errors but p95 > 500 ms from ~15–20 req/s (dynamic page + docker-proxy 74 % CPU). Waiting: per-project `--cpus`, Caddy `encode zstd gzip`. Logs `PHASE_LOG/fix-caddy-upstream-keepalive.md`, `PHASE_LOG/feat-load-test.md`.
 
 ## Blocked (actions for César or external)
 
