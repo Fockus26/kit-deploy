@@ -12,7 +12,7 @@ import type { PreviewItem } from "@/lib/panel/data";
 export function PreviewCards({ previews }: { previews: PreviewItem[] }) {
   if (previews.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-card">
+      <div className="flex h-full flex-col justify-center rounded-lg border border-border bg-card">
         <EmptyState level={3} icon={Eye} title="Sin previews">
           Cada pull request abierto contra el repo tendrá aquí su preview.
         </EmptyState>
