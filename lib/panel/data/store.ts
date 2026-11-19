@@ -4,7 +4,7 @@
  * env_vars and the auth secrets are not read here. Behind an interface so the readers are tested
  * without Postgres.
  */
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import {
   auditLog,
   authPasskey,
@@ -65,7 +65,8 @@ export type AuditRow = {
 };
 
 export const MAX_DEPLOYMENTS = 100;
-export const AUDIT_PAGE = 50;
+/** Ajustes › Auditoría shows this many rows per page (D063). */
+export const AUDIT_PAGE = 20;
 
 export interface PanelStore {
   projects(): Promise<ProjectRow[]>;
@@ -87,8 +88,10 @@ export interface PanelStore {
   ): Promise<{ id: string; sha: string; generation: number } | null>;
   passkeys(userId: string): Promise<PasskeyRow[]>;
   twoFactorEnabled(userId: string): Promise<boolean>;
-  /** Newest first; `before` is the previous page's last `at`. */
-  audit(opts?: { before?: Date; limit?: number }): Promise<AuditRow[]>;
+  /** Newest first; `offset` rows skipped (D063: page N skips (N - 1) × AUDIT_PAGE). */
+  audit(opts?: { offset?: number; limit?: number }): Promise<AuditRow[]>;
+  /** How many audit rows there are in all (the page count). */
+  auditCount(): Promise<number>;
 }
 
 const DEPLOYMENT = {
@@ -235,9 +238,14 @@ export function drizzlePanelStore(db: Db): PanelStore {
           name: auditLog.name,
         })
         .from(auditLog)
-        .where(opts.before ? lt(auditLog.at, opts.before) : sql`true`)
-        .orderBy(desc(auditLog.at))
-        .limit(Math.min(opts.limit ?? AUDIT_PAGE, AUDIT_PAGE));
+        .orderBy(desc(auditLog.at), desc(auditLog.id))
+        .limit(Math.min(opts.limit ?? AUDIT_PAGE, AUDIT_PAGE))
+        .offset(Math.max(opts.offset ?? 0, 0));
+    },
+
+    async auditCount() {
+      const [row] = await db.select({ n: count() }).from(auditLog);
+      return row?.n ?? 0;
     },
   };
 }

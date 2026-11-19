@@ -269,22 +269,45 @@ export type SettingsData = {
   totp: boolean;
   tokens: TokenRow[];
   audit: AuditRow[];
-  /** Pass as `before` for the next page; null on the last one. */
-  auditNext: Date | null;
+  /** Auditoría's page (1-based, already clamped) and how many there are (at least 1). */
+  auditPage: number;
+  auditPages: number;
 };
+
+/**
+ * Auditoría's paging (D063): `?pagina=N`, 1-based. Anything that is not a whole number ≥ 1 is
+ * page 1, past the last is the last, and no rows at all is still "page 1 of 1".
+ */
+export function auditPaging(
+  total: number,
+  requested: unknown,
+): { page: number; pages: number; offset: number } {
+  const pages = Math.max(1, Math.ceil(total / AUDIT_PAGE));
+  const n =
+    typeof requested === "string" && /^d{1,9}$/.test(requested)
+      ? Number(requested)
+      : 1;
+  const page = Math.min(Math.max(n, 1), pages);
+  return { page, pages, offset: (page - 1) * AUDIT_PAGE };
+}
 
 export async function readSettings(
   deps: PanelDeps,
   userId: string,
-  auditBefore?: Date,
+  auditPage?: string,
 ): Promise<SettingsData> {
-  const [recent, passkeys, totp, tokens, audit] = await Promise.all([
+  const [recent, passkeys, totp, tokens, total] = await Promise.all([
     deps.alerts.recent(RECENT_ALERTS),
     deps.store.passkeys(userId),
     deps.store.twoFactorEnabled(userId),
     deps.tokens.list(),
-    deps.store.audit(auditBefore ? { before: auditBefore } : {}),
+    deps.store.auditCount(),
   ]);
+  const paging = auditPaging(total, auditPage);
+  const audit = await deps.store.audit({
+    offset: paging.offset,
+    limit: AUDIT_PAGE,
+  });
   return {
     alerts: recent.map((a) => ({
       id: a.id,
@@ -299,7 +322,8 @@ export async function readSettings(
     totp,
     tokens,
     audit,
-    auditNext: audit.length === AUDIT_PAGE ? (audit.at(-1)?.at ?? null) : null,
+    auditPage: paging.page,
+    auditPages: paging.pages,
   };
 }
 

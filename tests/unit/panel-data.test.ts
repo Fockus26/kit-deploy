@@ -11,6 +11,7 @@ import {
   readProjectOverview,
 } from "../../lib/panel/data/projects";
 import {
+  auditPaging,
   readCron,
   readDatabases,
   readDomains,
@@ -19,10 +20,12 @@ import {
   readLogsTail,
   readSettings,
 } from "../../lib/panel/data/resources";
-import type {
-  DeploymentRow,
-  PanelStore,
-  ProjectRow,
+import {
+  AUDIT_PAGE,
+  type AuditRow,
+  type DeploymentRow,
+  type PanelStore,
+  type ProjectRow,
 } from "../../lib/panel/data/store";
 import { memoryAlertStore } from "./alerts-fakes";
 import { domainRow, domainWorld, T0 } from "./domain-fakes";
@@ -59,7 +62,11 @@ function dep(over: Partial<DeploymentRow>): DeploymentRow {
   };
 }
 
-function memoryStore(rows: DeploymentRow[], projects = [PROJECT]): PanelStore {
+function memoryStore(
+  rows: DeploymentRow[],
+  projects = [PROJECT],
+  audit: AuditRow[] = [],
+): PanelStore {
   const byNewest = () => [...rows].sort((a, b) => +b.createdAt - +a.createdAt);
   return {
     async projects() {
@@ -113,8 +120,11 @@ function memoryStore(rows: DeploymentRow[], projects = [PROJECT]): PanelStore {
     async twoFactorEnabled() {
       return true;
     },
-    async audit() {
-      return [];
+    async audit({ offset = 0, limit = AUDIT_PAGE } = {}) {
+      return audit.slice(offset, offset + limit);
+    },
+    async auditCount() {
+      return audit.length;
     },
   };
 }
@@ -160,14 +170,32 @@ const down: AgentClient = {
   },
 };
 
-function world(opts: { agent?: AgentClient; rows?: DeploymentRow[] } = {}) {
+function auditRows(n: number): AuditRow[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `a${i}`,
+    at: new Date(T0 - i * 60_000),
+    actor: "web:u1",
+    action: "project.stop",
+    project: "kd_hello",
+    environment: null,
+    name: null,
+  }));
+}
+
+function world(
+  opts: {
+    agent?: AgentClient;
+    rows?: DeploymentRow[];
+    audit?: AuditRow[];
+  } = {},
+) {
   const alerts = memoryAlertStore();
   const cronJobs: CronJob[] = [];
   const env = memoryEnv();
   const domains = domainWorld([], { projects: ["kd_hello"] });
   const deps: PanelDeps = {
     agent: opts.agent ?? realAgent().client,
-    store: memoryStore(opts.rows ?? []),
+    store: memoryStore(opts.rows ?? [], [PROJECT], opts.audit ?? []),
     env: env.store,
     domains: domains.deps.store,
     metrics,
@@ -473,8 +501,40 @@ describe("panel data: domains, logs, databases, settings", () => {
       passkeys: [{ name: "MacBook" }],
       tokens: [],
       audit: [],
-      auditNext: null,
+      auditPage: 1,
+      auditPages: 1,
     });
+  });
+
+  test("Auditoría pages of 20: page math (empty, 20, 21, last, out of range, garbage)", () => {
+    expect(AUDIT_PAGE).toBe(20);
+    expect(auditPaging(0, undefined)).toEqual({ page: 1, pages: 1, offset: 0 });
+    expect(auditPaging(20, "1")).toEqual({ page: 1, pages: 1, offset: 0 });
+    expect(auditPaging(20, "2")).toEqual({ page: 1, pages: 1, offset: 0 });
+    expect(auditPaging(21, "2")).toEqual({ page: 2, pages: 2, offset: 20 });
+    expect(auditPaging(45, "3")).toEqual({ page: 3, pages: 3, offset: 40 });
+    expect(auditPaging(45, "99")).toEqual({ page: 3, pages: 3, offset: 40 });
+    for (const bad of ["0", "-2", "abc", "2.5", "", "1e3", undefined, 4, ["2"]])
+      expect(auditPaging(45, bad).page).toBe(1);
+  });
+
+  test("Auditoría: each page is 20 rows, newest first; the last has the rest", async () => {
+    const audit = auditRows(45);
+    const w = world({ audit });
+    const first = await readSettings(w.deps, USER.userId);
+    expect(first.audit.map((r) => r.id)).toEqual(
+      audit.slice(0, 20).map((r) => r.id),
+    );
+    expect([first.auditPage, first.auditPages]).toEqual([1, 3]);
+    const last = await readSettings(w.deps, USER.userId, "3");
+    expect(last.audit).toHaveLength(5);
+    expect(last.audit[0]?.id).toBe("a40");
+    const past = await readSettings(w.deps, USER.userId, "50");
+    expect(past.auditPage).toBe(3);
+    // An old `?antes=` link has no `pagina`: page 1.
+    expect((await readSettings(w.deps, USER.userId, undefined)).auditPage).toBe(
+      1,
+    );
   });
 });
 
