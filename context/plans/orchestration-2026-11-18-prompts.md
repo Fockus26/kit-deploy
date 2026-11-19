@@ -392,3 +392,85 @@ Cargar más" part (say so in D063 and mark D042 "Superseded in part by D063").
 ### Closing
 Changeset: patch — "Panel: las páginas aprovechan el ancho en laptop y Auditoría pagina de 20 en 20 con Anterior/Siguiente."
 Manual action for César: none.
+
+---
+
+# QA fixes (2026-11-19, on main @ 599afcc)
+
+## W8 — `fix/panel-reflow-qa`
+
+You are worker **W8**. Branch: `fix/panel-reflow-qa`. Decision: **D064** only if you change a rule
+(probably none: say so). CONTENT_CHECKLIST rows: none. Migration: none. Changeset: **patch**.
+Model · effort: **sonnet · medium**. Docker: **yes** (only `bun run qa:local -- --port 4302 --preview`,
+Postgres in Docker; never the real DB). Local build: **yes** (that preview). Test services: no.
+
+### What to fix — the two Altos of the batch's design QA
+Report: `C:\Users\Cesar\Documents\Work\kit-deploy\context\plans\qa-batch-2026-11-18-design.md`
+§ Hallazgos, the two `[Alto]` entries (read both whole). The reproduction scripts are already in
+your slot: `.qa/repro/1-word-break.mjs` and `.qa/repro/4-notice-font200.mjs` (they FAILed on main
+@ 599afcc; copies in `context/plans/qa-batch-2026-11-18-design/repro/`).
+
+1. **Tables break words letter by letter on mobile**: `components/kit/data-table.tsx:115` puts
+   `[overflow-wrap:anywhere]` on every `td`. Fix the **class**, not the listed tables: every table
+   built on DataTable and any other `<table>` in `app/` / `components/`
+   (`grep -rn "overflow-wrap:anywhere\|<table" components app`). Short tokens (status chips, SHAs,
+   environment, type, dates, `••••`) never wrap (`whitespace-nowrap`); the table gets a min width
+   so its wrapper scrolls horizontally (check the wrapper has overflow-x); `anywhere` stays only on
+   free-text columns (domain, detail, error) — give DataTable a per-column option if it has none.
+   The measured guard decides, not the grep.
+2. **Notice overflows at 200 % browser font (390 px)**: `min-w-48` in `components/kit/notice.tsx:59`
+   and `app/(panel)/settings/page.tsx:150`, `:195`. Sweep every rem `min-w-<n>` inside a flex row
+   in `components/` and `app/` that can exceed the viewport at a 32 px base font: `min-w-0`
+   (flex-wrap already wraps) or a token. No magic values.
+
+### How to verify
+- Sign in like the QA did (its scripts in this slot's `.qa/` show how; `.env.test.local`, never print values).
+- Both repro scripts PASS on your branch; in the PR, main's FAIL (from the QA report) and your PASS outputs.
+- Leave two guards versioned next to `scripts/qa/panel-reflow.mjs`: `scripts/qa/table-word-break.mjs`
+  and `scripts/qa/font-200-reflow.mjs`, each taking the base URL.
+- `scripts/qa/panel-reflow.mjs` still 0 overflows; `a11y` skill; `bun run test:related`, typecheck, lint, test.
+- `bun run shots` of /p/<p>/deployments at 390 (empty `.pr-shots/` first), then `shots:publish`.
+- Stop the server when done. A functional-qa may be running on port 4301 / wt1: leave it alone.
+
+### Closing
+Changeset: patch — "Panel: las tablas ya no parten palabras en el móvil y los avisos no desbordan con la fuente del navegador grande."
+Manual action for César: none.
+
+## W9 — `fix/select-form-reset`
+
+You are worker **W9**. Branch: `fix/select-form-reset`. Decision: **D064** (how a select keeps its
+value across a rejected Server Action). CONTENT_CHECKLIST rows: none. Migration: none. Changeset:
+**patch**. Model · effort: **opus · medium** (a token silently minted for the wrong project).
+Docker: **yes** (only `bun run qa:local -- --port 4301 --preview`). Local build: **yes** (that preview).
+
+### What to fix — the Alto of the batch's functional QA
+Report: `C:\Users\Cesar\Documents\Work\kit-deploy\context\plans\qa-batch-2026-11-18-functional.md`,
+the `Alto` entry (read it whole). A select inside a `<form action={…}>` with `useActionState`
+returns to its first value after the server rejects a submit: Nuevo proyecto saves 512 MB when
+1024 was chosen; Ajustes › Nuevo token mints the token for another project. Cause found by QA:
+React runs `form.reset()` after the action and Radix Select (2.4.1) listens to that reset and
+overwrites the controlled state. Code: `components/kit/option-select.tsx` (W1, D053),
+`components/ui/select.tsx`; users: `grep -rn "OptionSelect\|<Select" app components`.
+
+Fix the **class**: every select in a form with a Server Action keeps the chosen value after a
+rejected submit and submits what is shown. Pick the approach after checking the installed Radix
+and React 19 behaviour (Context7 + `node_modules`): e.g. the component re-applies its value on the
+form's `reset` event, or the forms keep their values and pass them back as `defaultValue`/key —
+whichever keeps one place for the rule. Check the other inputs of those forms keep their values
+too (they did in QA: say so). The repo combobox (W6) uses a hidden input — check it the same way.
+
+### How to verify
+- The repro and its helpers are already in your slot's `.qa/` (`repro/2-select-vuelve-al-inicial.mjs`,
+  `lib.mjs`, `np-common.mjs`, `pk-common.mjs`, `setup-accounts.mjs`; the QA account's secrets in
+  `.qa/secrets.json`, gitignored, never print it). Run from the slot root:
+  `node --env-file=.env.test.local .qa/repro/2-select-vuelve-al-inicial.mjs http://localhost:4301`.
+  On main @ 599afcc it printed `FAIL memoria: … saved=512MB (chosen 1024); token: minted for "b1"
+  (chosen maranatha)`; on your branch it must PASS. Both outputs in the PR. If the fresh DB needs
+  the accounts, run `.qa/setup-accounts.mjs` first.
+- Version the guard as `scripts/qa/select-after-rejected-submit.mjs` (base URL argument).
+- `a11y` skill; `bun run test:related`, typecheck, `bunx biome check <every file you touched or added>`, test.
+- Stop the server by PID (`netstat -ano | grep :4301`, `taskkill /T /F /PID <pid>`).
+
+### Closing
+Changeset: patch — "Panel: los selects conservan lo elegido cuando el servidor rechaza el formulario (antes el token podía salir para otro proyecto)."
+Manual action for César: none.

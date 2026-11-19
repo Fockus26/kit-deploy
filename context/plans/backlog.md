@@ -69,3 +69,28 @@ One block per item: what, why, version.
 - **Version:** v1.x — small unit
 
 - W1 #67: before hydration the Radix hidden select has no options, so a submit in that instant falls back to defaults (logs GET form, new project memory). Medium, check in QA.
+
+## From the batch 2026-11-18 design QA (Medio/Bajo; report `qa-batch-2026-11-18-design.md`)
+
+- Medio: ~75 controls under `size.control` (44 px) at ≤768 (theme button 32, Reintentar/Copiar 32, tabs 40, SHA links 37).
+- Medio: "No se pudo hablar con kit-agent" repeated in header and body of project tabs; content starts at y≈400 at 1280–1536.
+- Medio: forced-colors — primary button loses its border (`border border-transparent` on filled variants).
+- Medio: lines of ~99–101 chars in Ajustes and ~82 in Dominios from 1536 px.
+- Medio (design decision for César): at 1280–1536 `/new` and "Nuevo token" stay a 560 px column with 450–700 px empty (HANDOFF form width; W7 left it).
+- Bajo: 2560/3840 content capped at 1440 and left-aligned, not centred.
+- Bajo: project tabs cut at 360 with no scroll hint.
+- Bajo: magic values `size-[18px]`, `min-[360px]:`, `tracking-[0.08em]` (26 matches).
+- Bajo: QA seed has too few audit rows to exercise paging (W7 seeded 45 by hand).
+
+## From the batch 2026-11-18 functional QA (Medio/Bajo; report `qa-batch-2026-11-18-functional.md`, repros in `qa-batch-2026-11-18-functional/`)
+
+- Medio: after removing a passkey no "eliminada" notice and focus lands on `<body>` (row unmounts before `onCloseAutoFocus`). Repro `repro/1-aviso-passkey-eliminada.mjs`.
+- Medio: names `www`, `deploy`, `db`, `preview` or ending in `_` rejected as «Revisa los datos del formulario.» with no field marked (schema lets them through; `addProject` rejects).
+- Medio: network failure / 500 on Nuevo proyecto submit loses what was typed (`useActionState` without try/catch → error boundary).
+- Medio: same repo with other case (`QA/Mem-x` vs `qa/mem-x`) creates a second project (unique is case-sensitive).
+- Bajo: accepted values that later fail: repo `owner/repo.git`, branches git refuses (`refs/heads/main`, `feature/`, `main.lock`, `-rf`).
+- Bajo: duplicate repo marks «Ya existe.» on Nombre.
+- Bajo: passkey removal copy — expired session lacks «Entrar» link; phone-time hint never shown; account without TOTP promised «con tu app de autenticación».
+- Bajo: Auditoría `?pagina=9999999999` → page 1 while `?pagina=999` → last.
+- Suspected (not measured): combobox — pick a listed repo, then «Usar «…»» keeps the previous repo's branch.
+- Decision for César: a QA-only `GITHUB_API_BASE` so `qa:local` can point the repo list at a local fake (combobox path otherwise untestable locally).
