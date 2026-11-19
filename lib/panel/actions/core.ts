@@ -21,7 +21,8 @@ export type FailureCode =
   | "not_found"
   | "conflict"
   | "agent"
-  | "failed";
+  | "failed"
+  | "too_many";
 
 const STATUS: Record<FailureCode, number> = {
   unauthorized: 401,
@@ -31,6 +32,7 @@ const STATUS: Record<FailureCode, number> = {
   conflict: 409,
   agent: 503,
   failed: 500,
+  too_many: 429,
 };
 
 export type ActionFailure = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { History, KeyRound, Ticket } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DataTable,
   type DataTableColumn,
@@ -9,8 +10,10 @@ import {
 import { EmptyState } from "@/components/kit/empty-state";
 import { RelativeTime } from "@/components/kit/relative-time";
 import { StatusBadge } from "@/components/kit/status-badge";
+import { ACCOUNT_AUDIT_PROJECT } from "@/lib/db/account-scope";
 import type { TokenRow } from "@/lib/db/tokens";
 import type { SettingsData } from "@/lib/panel/data";
+import { type RemovedNotice, RemovePasskey } from "./passkey-controls";
 import { RevokeToken } from "./token-controls";
 
 type PasskeyRow = SettingsData["passkeys"][number];
@@ -47,20 +50,63 @@ const passkeyColumns: DataTableColumn<PasskeyRow>[] = pk.columns([
   }),
 ]);
 
+/** Eliminar (D055) per row; after a removal the row is gone, so the notice above takes focus. */
 export function PasskeysTable({ rows }: { rows: PasskeyRow[] }) {
+  const [notice, setNotice] = useState<RemovedNotice | null>(null);
+  const status = useRef<HTMLOutputElement>(null);
+  const last = rows.length === 1;
+
+  useEffect(() => {
+    if (notice) status.current?.focus();
+  }, [notice]);
+
+  const columns = useMemo(
+    () => [
+      ...passkeyColumns,
+      ...pk.columns([
+        pk.display({
+          id: "actions",
+          header: () => <span className="sr-only">Acciones</span>,
+          cell: (c) => (
+            <RemovePasskey
+              passkey={c.row.original}
+              last={last}
+              onRemoved={setNotice}
+            />
+          ),
+        }),
+      ]),
+    ],
+    [last],
+  );
+
   return (
-    <DataTable
-      columns={passkeyColumns}
-      data={rows}
-      caption="Passkeys de tu cuenta"
-      minWidth={560}
-      getRowId={(r) => r.id}
-      empty={
-        <EmptyState level={4} icon={KeyRound} title="Aún no hay passkeys">
-          Registra una con un enlace de alta (abajo).
-        </EmptyState>
-      }
-    />
+    <div className="flex flex-col gap-3">
+      {notice ? (
+        // PLACEHOLDER (CONTENT_CHECKLIST row 42): the notice's text is provisional.
+        <output
+          ref={status}
+          tabIndex={-1}
+          className="block text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+        >
+          {notice.removed
+            ? `Passkey ${notice.name ? `«${notice.name}» ` : ""}eliminada. Ese dispositivo ya no puede entrar al panel.`
+            : "Esa passkey ya no estaba en tu cuenta."}
+        </output>
+      ) : null}
+      <DataTable
+        columns={columns}
+        data={rows}
+        caption="Passkeys de tu cuenta"
+        minWidth={640}
+        getRowId={(r) => r.id}
+        empty={
+          <EmptyState level={4} icon={KeyRound} title="Aún no hay passkeys">
+            Registra una con un enlace de alta (abajo).
+          </EmptyState>
+        }
+      />
+    </div>
   );
 }
 
@@ -151,7 +197,13 @@ const auditColumns: DataTableColumn<AuditRow>[] = au.columns([
   }),
   au.accessor("project", {
     header: "Proyecto",
-    cell: (c) => <span className="font-mono">{c.getValue()}</span>,
+    // A row about the account (a passkey removed, D055) has no project.
+    cell: (c) =>
+      c.getValue() === ACCOUNT_AUDIT_PROJECT ? (
+        <span className="text-muted-foreground">Cuenta</span>
+      ) : (
+        <span className="font-mono">{c.getValue()}</span>
+      ),
   }),
   au.display({
     id: "detail",
