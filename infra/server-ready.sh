@@ -187,7 +187,19 @@ http://$DB_DOMAIN {
 import sites/*.caddy
 EOF
 caddy fmt --overwrite /etc/caddy/Caddyfile >/dev/null 2>&1 || true
-caddy validate --config /etc/caddy/Caddyfile >/dev/null
+# Once the previews site exists (update.sh writes it), the whole config needs the Cloudflare token,
+# and only the unit loads cloudflare.env: without it here, validate failed and the re-run stopped
+# (VPS, 2026-11-19). Read, not sourced — the file is data — and never printed, as update.sh does.
+# Caddy quotes a token it rejects in its error: the error is shown with the token masked.
+CF_TOKEN="$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' /etc/caddy/cloudflare.env 2>/dev/null | head -1 || true)"
+printf '%s' "$CF_TOKEN" | grep -Eq '^[A-Za-z0-9_-]{20,}$' || CF_TOKEN=""
+if ! VALIDATE_OUT="$(CLOUDFLARE_API_TOKEN="$CF_TOKEN" caddy validate --config /etc/caddy/Caddyfile 2>&1)"; then
+  [ -z "$CF_TOKEN" ] || VALIDATE_OUT="${VALIDATE_OUT//"$CF_TOKEN"/<CLOUDFLARE_API_TOKEN>}"
+  printf '%s\n' "$VALIDATE_OUT" | tail -5 >&2
+  echo "caddy validate refused /etc/caddy/Caddyfile." >&2
+  exit 1
+fi
+unset CF_TOKEN VALIDATE_OUT
 # validate runs as root and opens the log files: they would stay root 0600 and the caddy user
 # could not write them (the service failed on the VPS, 2026-11-11).
 chown -R caddy:caddy /var/log/caddy
