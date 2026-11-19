@@ -49,6 +49,7 @@ Surfaces separate by 1px borders, not shadows (D007). Shadows only for what floa
 | size.content-max | 1440px | main content max width, aligned left |
 | size.form | 400px | the /login and /enrol card (`--container-form`) |
 | size.form-wide | 560px | the Nuevo proyecto form card (`--container-form-wide`) |
+| size.form-split | 880px | the same forms from 1024 (`lg`), two fields per row (`--container-form-split`, D066) |
 
 ## Layout (HANDOFF §4)
 

@@ -123,6 +123,8 @@
   --container-form: 400px;
   /* HANDOFF §3 "Nuevo proyecto": the form card's max width. */
   --container-form-wide: 560px;
+  /* D066: the same forms from `lg` up, two fields per row (Nuevo proyecto, Nuevo token). */
+  --container-form-split: 880px;
   --container-content: 1440px;
 
   /* TYPOGRAPHY.md › scale: 360–1023 here; 1024–1919 and ≥1920 below (HANDOFF §1). */

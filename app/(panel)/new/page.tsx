@@ -6,10 +6,10 @@ import { NewProjectForm } from "./new-project-form";
 
 export const metadata = { title: "Nuevo proyecto" };
 
-/** HANDOFF §3 "Nuevo proyecto": the form in a card (max 560), then its token, shown once. */
+/** HANDOFF §3 "Nuevo proyecto": the form in a card (max 560; two columns from `lg`, D066), then its token, shown once. */
 export default function NewProjectPage() {
   return (
-    <div className="flex max-w-form-wide flex-col gap-6">
+    <div className="flex max-w-form-wide flex-col gap-6 lg:max-w-form-split">
       <div className="flex flex-col gap-2">
         <h1 className="font-semibold text-foreground text-h1">
           Nuevo proyecto
