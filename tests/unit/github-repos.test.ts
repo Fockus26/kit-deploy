@@ -1,10 +1,13 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
+  branchAfterPick,
+  DEFAULT_BRANCH,
   filterRepos,
   freeTextRepo,
   type Repo,
 } from "../../lib/github/repo-filter";
 import {
+  githubApiFromEnv,
   githubReadTokenFromEnv,
   listRepos,
   nextPath,
@@ -322,5 +325,129 @@ describe("freeTextRepo", () => {
     expect(freeTextRepo(REPOS, "solo-nombre")).toBeNull();
     expect(freeTextRepo(REPOS, "a/b/c")).toBeNull();
     expect(freeTextRepo(REPOS, "a/b c")).toBeNull();
+  });
+});
+
+describe("branchAfterPick", () => {
+  const develop = { ...REPOS[0], defaultBranch: "develop" };
+  test("a listed repo brings its default branch", () => {
+    expect(branchAfterPick("main", develop, false)).toBe("develop");
+  });
+  test("a typed repo after a listed one goes back to main, not the old branch", () => {
+    const afterListed = branchAfterPick("main", develop, false);
+    expect(branchAfterPick(afterListed, null, false)).toBe(DEFAULT_BRANCH);
+    expect(DEFAULT_BRANCH).toBe("main");
+  });
+  test("a branch the user typed is kept, whatever is picked", () => {
+    expect(branchAfterPick("release", develop, true)).toBe("release");
+    expect(branchAfterPick("release", null, true)).toBe("release");
+  });
+});
+
+describe("githubApiFromEnv (D065)", () => {
+  const QA = { QA_LOCAL: "1" };
+  test("unset or empty: GitHub", () => {
+    expect(githubApiFromEnv({})).toBe(API);
+    expect(githubApiFromEnv({ ...QA, GITHUB_API_BASE: "" })).toBe(API);
+  });
+  test("outside qa:local even a loopback base is ignored (the VPS previews listen there)", () => {
+    expect(githubApiFromEnv({ GITHUB_API_BASE: "http://127.0.0.1:4310" })).toBe(
+      API,
+    );
+    expect(
+      githubApiFromEnv({
+        QA_LOCAL: "true",
+        GITHUB_API_BASE: "http://127.0.0.1:4310",
+      }),
+    ).toBe(API);
+  });
+  test("a leading-zero port is normalised, so the fake's Link still matches", () => {
+    expect(
+      githubApiFromEnv({ ...QA, GITHUB_API_BASE: "http://127.0.0.1:04310" }),
+    ).toBe("http://127.0.0.1:4310");
+  });
+  test("a loopback http base with a port is accepted, without a trailing slash", () => {
+    expect(
+      githubApiFromEnv({ ...QA, GITHUB_API_BASE: "http://127.0.0.1:4310" }),
+    ).toBe("http://127.0.0.1:4310");
+    expect(
+      githubApiFromEnv({ ...QA, GITHUB_API_BASE: "http://localhost:4310/" }),
+    ).toBe("http://localhost:4310");
+    expect(
+      githubApiFromEnv({ ...QA, GITHUB_API_BASE: "http://[::1]:65535" }),
+    ).toBe("http://[::1]:65535");
+  });
+  test("anything else is ignored, so the token never goes elsewhere", () => {
+    for (const bad of [
+      "https://evil.example",
+      "http://evil.example:4310",
+      "http://10.0.0.1:4310",
+      "http://127.0.0.1.evil.com:4310",
+      "http://127.0.0.1:4310.evil.com",
+      "http://127.0.0.1:4310@evil.com",
+      "http://user@127.0.0.1:4310",
+      "http://127.0.0.1",
+      "http://127.0.0.1:0",
+      "http://127.0.0.1:70000",
+      "http://127.0.0.1:4310/api",
+      "http://127.0.0.1:4310?x=1",
+      "https://127.0.0.1:4310",
+      " http://127.0.0.1:4310",
+      "not a url",
+    ]) {
+      expect(githubApiFromEnv({ ...QA, GITHUB_API_BASE: bad })).toBe(API);
+    }
+  });
+  test("a refused value is logged once and never echoed", () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      githubApiFromEnv({
+        ...QA,
+        GITHUB_API_BASE: "https://secret-host.example",
+      });
+      githubApiFromEnv({
+        ...QA,
+        GITHUB_API_BASE: "https://secret-host.example",
+      });
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).not.toContain("secret-host");
+      expect(warn.mock.calls.length).toBeLessThanOrEqual(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+  test("listRepos on the fake: its URL, Link only within that base, token only in the header", async () => {
+    const base = githubApiFromEnv({
+      ...QA,
+      GITHUB_API_BASE: "http://127.0.0.1:4310",
+    });
+    const { f, calls } = fakeFetch([
+      {
+        body: [raw(1)],
+        link: `<${base}/user/repos?per_page=100&page=2>; rel="next"`,
+      },
+      {
+        body: [raw(2)],
+        link: '<http://127.0.0.1:43100/user/repos?page=3>; rel="next"',
+      },
+    ]);
+    const list = await listRepos(TOKEN, { fetch: f, api: base });
+    expect(calls.map((c) => c.url)).toEqual([
+      `${base}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
+      `${base}/user/repos?per_page=100&page=2`,
+    ]);
+    expect(list).toMatchObject({ kind: "ok", truncated: false });
+    for (const c of calls) {
+      expect(c.url).not.toContain(TOKEN);
+      expect((c.init.headers as Record<string, string>).Authorization).toBe(
+        `Bearer ${TOKEN}`,
+      );
+    }
+  });
+  test("the cache is per API: a list from GitHub is not served for the fake", async () => {
+    const { f, calls } = fakeFetch(() => ({ body: [raw(1)] }));
+    await listRepos(TOKEN, { fetch: f, api: API });
+    await listRepos(TOKEN, { fetch: f, api: "http://127.0.0.1:4310" });
+    expect(calls).toHaveLength(2);
   });
 });

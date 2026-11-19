@@ -39,3 +39,20 @@ export function freeTextRepo(
   const lower = q.toLowerCase();
   return repos.some((r) => r.fullName.toLowerCase() === lower) ? null : q;
 }
+
+/** "Rama de producción" before anything is picked, and for a repo whose default is unknown. */
+export const DEFAULT_BRANCH = "main";
+
+/**
+ * "Rama" after a pick: a branch the user typed is kept; otherwise it follows the pick — the
+ * listed repo's default branch, or `main` for a typed repo ("Usar «…»"), never the branch of a
+ * repo picked before.
+ */
+export function branchAfterPick(
+  current: string,
+  repo: Repo | null,
+  branchEdited: boolean,
+): string {
+  if (branchEdited) return current;
+  return repo ? repo.defaultBranch : DEFAULT_BRANCH;
+}

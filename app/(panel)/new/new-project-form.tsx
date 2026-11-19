@@ -17,7 +17,11 @@ import { RepoCombobox } from "@/components/kit/repo-combobox";
 import { TokenOnce } from "@/components/kit/token-once";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LOGIN_PATH } from "@/lib/auth/next-path";
-import type { RepoList } from "@/lib/github/repo-filter";
+import {
+  branchAfterPick,
+  DEFAULT_BRANCH,
+  type RepoList,
+} from "@/lib/github/repo-filter";
 import type { ProjectCreateResult } from "@/lib/panel/actions/projects";
 import { MAX, MEMORY_CHOICES } from "@/lib/panel/schemas";
 
@@ -39,7 +43,12 @@ async function step(_prev: State, input: Input): Promise<State> {
   return { kind: "result", result: await createProjectAction(null, input) };
 }
 
-const EMPTY = { name: "", repo: "", branch: "main", memoryMb: "512" };
+const EMPTY = {
+  name: "",
+  repo: "",
+  branch: DEFAULT_BRANCH,
+  memoryMb: "512",
+};
 
 // PLACEHOLDER (CONTENT_CHECKLIST rows 44–45): provisional copy until César confirms it.
 const REPO_HINT = {
@@ -53,7 +62,8 @@ export function NewProjectForm({ repos }: { repos: RepoList }) {
   const [state, dispatch, pending] = useActionState(step, null);
   // Controlled: React resets a form after its action, and a refused form keeps what was typed.
   const [values, setValues] = useState(EMPTY);
-  // Picking a repo fills "Rama" with its default branch, until the user edits that field.
+  // Picking a repo fills "Rama" with its default branch (`main` for a typed one), until the user
+  // edits that field.
   const [branchEdited, setBranchEdited] = useState(false);
   const savedRef = useRef<HTMLParagraphElement>(null);
 
@@ -195,8 +205,7 @@ export function NewProjectForm({ repos }: { repos: RepoList }) {
                     setValues((v) => ({
                       ...v,
                       repo: fullName,
-                      branch:
-                        repo && !branchEdited ? repo.defaultBranch : v.branch,
+                      branch: branchAfterPick(v.branch, repo, branchEdited),
                     }))
                   }
                 />
