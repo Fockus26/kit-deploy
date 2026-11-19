@@ -112,7 +112,7 @@ export function PanelHeader({
                   <span
                     aria-current="page"
                     className={cn(
-                      "text-foreground wrap-anywhere",
+                      "block truncate text-foreground",
                       c.mono && "font-mono",
                     )}
                   >
@@ -122,7 +122,7 @@ export function PanelHeader({
                   <Link
                     href={c.href}
                     className={cn(
-                      "rounded-sm text-muted-foreground underline-offset-4 wrap-anywhere hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                      "block truncate rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                       c.mono && "font-mono",
                     )}
                   >
