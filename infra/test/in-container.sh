@@ -51,6 +51,7 @@ check "Caddy has dns.providers.cloudflare" bash -c "caddy list-modules | grep -q
 check "daemon.json max-size 10m" bash -c "jq -e '.\"log-opts\".\"max-size\" == \"10m\"' /etc/docker/daemon.json"
 check "daemon.json max-file 3" bash -c "jq -e '.\"log-opts\".\"max-file\" == \"3\"' /etc/docker/daemon.json"
 check "daemon.json live-restore" bash -c "jq -e '.\"live-restore\" == true' /etc/docker/daemon.json"
+check "daemon.json userland-proxy off" bash -c "jq -e '.\"userland-proxy\" == false' /etc/docker/daemon.json"
 check "dockerd accepts daemon.json" dockerd --validate --config-file /etc/docker/daemon.json
 check "other host gets 404, not the challenge dir" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: $D' http://127.0.0.1/)\" = 404 ]"
 check "Caddy logs owned by caddy" bash -c "[ -z \"$(find /var/log/caddy ! -user caddy)\" ]"
