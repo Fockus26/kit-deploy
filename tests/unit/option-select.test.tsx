@@ -26,11 +26,22 @@ const render = (defaultValue: string) =>
   );
 
 describe("OptionSelect", () => {
-  test("renders a hidden native select with the name, so a form submits it", () => {
+  test("the value travels in its own hidden input under the name, also server-side (D064)", () => {
     const html = render("error");
+    expect(html).toMatch(
+      /<input[^>]*type="hidden"[^>]*name="level"[^>]*value="error"/,
+    );
+    // Radix's native select is not named: the browser's form reset rewinds it, so it must not
+    // be what the form submits.
     const select = html.match(/<select[^>]*>/)?.[0] ?? "";
-    expect(select).toContain('name="level"');
-    expect(select).toContain('aria-hidden="true"');
+    expect(select).not.toContain("name=");
+  });
+
+  test("without a name there is nothing to submit", () => {
+    const html = renderToStaticMarkup(
+      <OptionSelect defaultValue="error" options={OPTIONS} />,
+    );
+    expect(html).not.toContain('type="hidden"');
   });
 
   test("the label names the trigger (id lands on the combobox button)", () => {
