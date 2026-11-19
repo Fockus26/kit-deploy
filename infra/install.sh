@@ -4,6 +4,7 @@
 #   bash install.sh /tmp/kit-deploy-<sha12>.tgz [--admin-user <ssh user>]
 #   bash install.sh <tgz> --ghcr-login <github user>    # also: docker login ghcr.io (token on stdin)
 #   bash install.sh <tgz> --github-token                # also: the commit-status token (stdin)
+#   bash install.sh <tgz> --github-read-token           # also: the repo-list token (stdin)
 #   bash install.sh <tgz> --test                        # in the Docker test
 #
 # What it sets up (once), then hands over to update.sh for the release itself:
@@ -17,6 +18,11 @@
 #   5. Optional: github.env (root 0600) with GITHUB_STATUS_TOKEN, the platform's own fine-grained
 #      token (only "Commit statuses: read and write" on the projects' repos). The web gets it with
 #      a second --env-file; the CLI reads it only as root. Read from stdin; rewritten each time.
+#   6. Optional: github-read.env (root 0600) with GITHUB_READ_TOKEN, a second fine-grained token
+#      (All repositories, only "Metadata: read") for Nuevo proyecto's repo list (D061). Its own
+#      file, so --github-token (which rewrites github.env whole) never drops it. Only the web gets
+#      it (a third --env-file); the CLI never reads it. Same checks and writing as step 5.
+#      With both flags, the status token is read first, then this one.
 set -euo pipefail
 
 TEST=0
@@ -24,18 +30,20 @@ TGZ=""
 ADMIN_USER=""
 GHCR_USER=""
 GITHUB_TOKEN_IN=0
+GITHUB_READ_TOKEN_IN=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --test) TEST=1; shift ;;
     --admin-user) ADMIN_USER="$2"; shift 2 ;;
     --ghcr-login) GHCR_USER="$2"; shift 2 ;;
     --github-token) GITHUB_TOKEN_IN=1; shift ;;
+    --github-read-token) GITHUB_READ_TOKEN_IN=1; shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *) TGZ="$1"; shift ;;
   esac
 done
 [ "$(id -u)" = 0 ] || { echo "Run it as root." >&2; exit 1; }
-[ -f "$TGZ" ] || { echo "Usage: install.sh <kit-deploy-<sha>.tgz> [--admin-user u] [--ghcr-login u] [--github-token] [--test]" >&2; exit 1; }
+[ -f "$TGZ" ] || { echo "Usage: install.sh <kit-deploy-<sha>.tgz> [--admin-user u] [--ghcr-login u] [--github-token] [--github-read-token] [--test]" >&2; exit 1; }
 command -v kit-db >/dev/null || { echo "kit-db is missing: run the kit's bootstrap.sh first." >&2; exit 1; }
 [ -f /etc/kit-deploy/master.key ] || { echo "Run infra/server-ready.sh first." >&2; exit 1; }
 case "$ADMIN_USER" in *[!a-z0-9_-]*) echo "Bad --admin-user." >&2; exit 1 ;; esac
@@ -115,6 +123,27 @@ if [ "$GITHUB_TOKEN_IN" = 1 ]; then
   chown root:root "$STATE/github.env.tmp" && chmod 0600 "$STATE/github.env.tmp"
   mv "$STATE/github.env.tmp" "$STATE/github.env"
   echo "Written (github.env 0600 root). The web picks it up with the release below."
+fi
+
+if [ "$GITHUB_READ_TOKEN_IN" = 1 ]; then
+  say "GitHub token for the repo list"
+  echo "Paste the read-only GitHub token (fine-grained, All repositories, Metadata: read), then Enter (it is not shown):"
+  if [ -t 0 ]; then IFS= read -rs TOKEN; echo; else IFS= read -r TOKEN || true; fi
+  # Checked before anything is written: a typo must not replace a working token.
+  case "$TOKEN" in
+    github_pat_*|ghp_*) ;;
+    *) unset TOKEN; echo "That is not a GitHub token (github_pat_… or ghp_…); nothing written." >&2; exit 1 ;;
+  esac
+  case "$TOKEN" in
+    *[!A-Za-z0-9_]*) unset TOKEN; echo "The token has unexpected characters; nothing written." >&2; exit 1 ;;
+  esac
+  # printf is a builtin: the token never appears in a process' arguments.
+  ( umask 077
+    printf '# kit-deploy GitHub repo list (read-only). Written by infra/install.sh --github-read-token.\nGITHUB_READ_TOKEN=%s\n' "$TOKEN" > "$STATE/github-read.env.tmp" )
+  unset TOKEN
+  chown root:root "$STATE/github-read.env.tmp" && chmod 0600 "$STATE/github-read.env.tmp"
+  mv "$STATE/github-read.env.tmp" "$STATE/github-read.env"
+  echo "Written (github-read.env 0600 root). The web picks it up with the release below."
 fi
 
 mkdir -p /opt/kit-deploy/releases

@@ -5,12 +5,17 @@
  * response body nor anything that could carry the token.
  */
 
+import { isRepo } from "../github/repo-name";
+
 export const GITHUB_API = "https://api.github.com";
 
 export class GitHubError extends Error {
-  constructor(message: string) {
+  /** GitHub's HTTP status when it answered; undefined when it could not be reached. */
+  readonly status?: number;
+  constructor(message: string, status?: number) {
     super(message);
     this.name = "GitHubError";
+    this.status = status;
   }
 }
 
@@ -57,7 +62,7 @@ export function githubRequest(
     if (!expect.includes(res.status)) {
       // The body is not read into the error: only the status code leaves here.
       await discard(res);
-      throw new GitHubError(`github answered ${res.status}`);
+      throw new GitHubError(`github answered ${res.status}`, res.status);
     }
     return res;
   };
@@ -67,13 +72,12 @@ export async function discard(res: Response): Promise<void> {
   await res.body?.cancel().catch(() => undefined);
 }
 
-// The same rule as `projects_repo_format` in the schema.
-const REPO =
-  /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$/;
+// The rule itself lives in a pure module, so the client's repo picker can use it too.
+export { isRepo };
 
 /** A GitHub `owner/name` checked before it goes into a URL path. */
 export function assertRepo(repo: string): string {
-  if (!REPO.test(repo)) throw new GitHubError(`bad repo "${repo}"`);
+  if (!isRepo(repo)) throw new GitHubError(`bad repo "${repo}"`);
   return repo;
 }
 
