@@ -5,6 +5,8 @@
  * response body nor anything that could carry the token.
  */
 
+import { isRepo } from "../github/repo-name";
+
 export const GITHUB_API = "https://api.github.com";
 
 export class GitHubError extends Error {
@@ -70,18 +72,12 @@ export async function discard(res: Response): Promise<void> {
   await res.body?.cancel().catch(() => undefined);
 }
 
-// The same rule as `projects_repo_format` in the schema.
-const REPO =
-  /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$/;
-
-/** Whether `repo` is a GitHub `owner/name` the platform accepts. */
-export function isRepo(repo: string): boolean {
-  return REPO.test(repo);
-}
+// The rule itself lives in a pure module, so the client's repo picker can use it too.
+export { isRepo };
 
 /** A GitHub `owner/name` checked before it goes into a URL path. */
 export function assertRepo(repo: string): string {
-  if (!REPO.test(repo)) throw new GitHubError(`bad repo "${repo}"`);
+  if (!isRepo(repo)) throw new GitHubError(`bad repo "${repo}"`);
   return repo;
 }
 

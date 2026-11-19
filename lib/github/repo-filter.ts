@@ -3,7 +3,7 @@
  * (what it shows). Nothing here talks to GitHub.
  */
 
-import { isRepo } from "@/lib/deploy/github";
+import { isRepo } from "@/lib/github/repo-name";
 
 /** The only fields of a GitHub repo that ever leave the server. */
 export type Repo = {
