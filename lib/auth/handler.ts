@@ -58,9 +58,16 @@ const json = (status: number, code: string, headers: HeadersInit = {}) =>
   );
 
 /** The client's address as Caddy forwarded it; "-" if absent or not one plain IP. */
-export function clientIp(request: Request): string {
-  const v = request.headers.get("x-forwarded-for")?.trim() ?? "";
+export function clientIp(request: Request | Headers): string {
+  const headers = request instanceof Headers ? request : request.headers;
+  const v = headers.get("x-forwarded-for")?.trim() ?? "";
   return isIP(v) ? v : "-";
+}
+
+/** The fail2ban line (D003) for a refused code anywhere: the sign-in routes above and the panel's
+ * TOTP re-check (lib/panel/actions/passkeys.ts, D055). Never the code itself. */
+export function failedLine(ip: string, path: string, status: number): string {
+  return `kit-deploy-auth: failed sign-in from ${ip} path=${path} status=${status}`;
 }
 
 export async function handleAuth(
@@ -111,9 +118,7 @@ export async function handleAuth(
 
   const response = await deps.auth.handler(request);
   if (SIGN_IN.has(path) && response.status >= 400 && response.status < 500) {
-    log(
-      `kit-deploy-auth: failed sign-in from ${clientIp(request)} path=${path} status=${response.status}`,
-    );
+    log(failedLine(clientIp(request), path, response.status));
   }
   return response;
 }

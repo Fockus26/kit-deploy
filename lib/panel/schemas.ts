@@ -237,6 +237,22 @@ export const tokenRevokeSchema = z.object({
   confirm: confirmField,
 });
 
+/** Eliminar passkey (D055): Better Auth's text id, and the app's 6 digits (spaces allowed, as
+ * some apps show "123 456"). The code is never echoed in a message. */
+export const passkeyRemoveSchema = z.object({
+  id: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,128}$/, { message: "Passkey no válida." }),
+  code: z
+    .string({ message: "Escribe los 6 dígitos de tu app." })
+    .transform((s) => s.replace(/\s/g, ""))
+    .pipe(
+      z.string().regex(/^\d{6}$/, {
+        message: "Escribe los 6 dígitos de tu app.",
+      }),
+    ),
+});
+
 /** Logs page filters (read, not an action): the agent's own bounds (agent/protocol.ts). */
 export const logEnvField = z
   .string()
