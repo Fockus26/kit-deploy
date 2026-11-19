@@ -11,6 +11,7 @@ import {
 } from "@/components/kit/data-table";
 import { EmptyState } from "@/components/kit/empty-state";
 import {
+  Field,
   FieldCheckbox,
   FieldInput,
   FieldRadioGroup,
@@ -20,6 +21,7 @@ import { type LogLine, LogViewer } from "@/components/kit/log-viewer";
 import { Meter } from "@/components/kit/meter";
 import { MetricCard } from "@/components/kit/metric-card";
 import { Notice } from "@/components/kit/notice";
+import { OptionSelect } from "@/components/kit/option-select";
 import { RelativeTime } from "@/components/kit/relative-time";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
 import { type Status, StatusBadge } from "@/components/kit/status-badge";
@@ -378,6 +380,20 @@ export function Gallery() {
             help="Nunca se muestra después de guardar."
             name="value"
           />
+          <Field label="Memoria" help="El límite del contenedor.">
+            {(a11y) => (
+              <OptionSelect
+                {...a11y}
+                name="memory"
+                defaultValue="512"
+                options={[
+                  { value: "256", label: "256 MB" },
+                  { value: "512", label: "512 MB" },
+                  { value: "1024", label: "1024 MB" },
+                ]}
+              />
+            )}
+          </Field>
           <FieldCheckbox
             label="Es un secreto"
             help="El valor no se podrá leer después."

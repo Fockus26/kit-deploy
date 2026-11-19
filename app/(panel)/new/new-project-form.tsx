@@ -12,9 +12,9 @@ import { createProjectAction } from "@/app/(panel)/actions/projects";
 import { CommandLine } from "@/components/kit/command-line";
 import { Field, FieldInput } from "@/components/kit/field";
 import { Notice } from "@/components/kit/notice";
+import { OptionSelect } from "@/components/kit/option-select";
 import { TokenOnce } from "@/components/kit/token-once";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { NativeSelect } from "@/components/ui/native-select";
 import { LOGIN_PATH } from "@/lib/auth/next-path";
 import type { ProjectCreateResult } from "@/lib/panel/actions/projects";
 import { MAX, MEMORY_CHOICES } from "@/lib/panel/schemas";
@@ -195,18 +195,16 @@ export function NewProjectForm() {
           error={fields.memoryMb}
         >
           {(a11y) => (
-            <NativeSelect
+            <OptionSelect
               {...a11y}
               name="memoryMb"
               value={values.memoryMb}
-              onChange={set("memoryMb")}
-            >
-              {MEMORY_CHOICES.map((mb) => (
-                <option key={mb} value={mb}>
-                  {mb} MB
-                </option>
-              ))}
-            </NativeSelect>
+              onValueChange={(v) => setValues((s) => ({ ...s, memoryMb: v }))}
+              options={MEMORY_CHOICES.map((mb) => ({
+                value: String(mb),
+                label: `${mb} MB`,
+              }))}
+            />
           )}
         </Field>
         <div className="flex flex-wrap gap-2">

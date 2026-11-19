@@ -14,9 +14,9 @@ import {
 import { ConfirmDialog } from "@/components/kit/confirm-dialog";
 import { Field, FieldInput } from "@/components/kit/field";
 import { Notice } from "@/components/kit/notice";
+import { OptionSelect } from "@/components/kit/option-select";
 import { TokenOnce } from "@/components/kit/token-once";
 import { Button } from "@/components/ui/button";
-import { NativeSelect } from "@/components/ui/native-select";
 import type { TokenRow } from "@/lib/db/tokens";
 import type {
   TokenCreateResult,
@@ -145,21 +145,14 @@ export function NewTokenForm({ projects }: { projects: string[] }) {
         <>
           <Field label="Proyecto" error={failed?.fields?.project}>
             {(a11y) => (
-              <NativeSelect
+              <OptionSelect
                 {...a11y}
                 name="project"
                 value={values.project}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, project: e.target.value }))
-                }
+                onValueChange={(v) => setValues((s) => ({ ...s, project: v }))}
+                options={projects.map((p) => ({ value: p, label: p }))}
                 className="font-mono"
-              >
-                {projects.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </NativeSelect>
+              />
             )}
           </Field>
           <FieldInput
