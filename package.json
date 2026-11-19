@@ -20,6 +20,8 @@
     "test:infra": "bash infra/test/server-ready.test.sh",
     "test:infra:install": "bash infra/test/install.test.sh",
     "test:infra:previews": "bash infra/test/previews.test.sh",
+    "test:infra:load": "bash infra/test/load-test.test.sh",
+    "load-test": "bash scripts/load-test.sh",
     "release": "bash scripts/release.sh",
     "shots": "node scripts/pr-screenshots.ts .pr-shots.json",
     "context:backup": "bash scripts/context-backup.sh",
