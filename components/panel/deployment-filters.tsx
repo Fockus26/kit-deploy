@@ -2,10 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useId } from "react";
+import { OptionSelect } from "@/components/kit/option-select";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DeploymentStatus } from "@/lib/db/schema";
 import { deploymentsHref } from "@/lib/kit/deployments-url";
+
+// A Select item cannot be "": this is "Todos".
+const STATUS_ALL = "all";
 
 type Env = "production" | "preview";
 
@@ -67,21 +71,15 @@ export function DeploymentFilters({
           <Label htmlFor={selectId} className="text-body">
             Estado
           </Label>
-          <select
+          <OptionSelect
             id={selectId}
-            value={status ?? ""}
-            onChange={(e) =>
-              go(env, (e.target.value || undefined) as DeploymentStatus)
+            value={status ?? STATUS_ALL}
+            onValueChange={(v) =>
+              go(env, v === STATUS_ALL ? undefined : (v as DeploymentStatus))
             }
-            className="min-h-control rounded-md border border-input bg-card px-3 py-2 text-foreground text-input-touch outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:text-body"
-          >
-            <option value="">Todos</option>
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            options={[{ value: STATUS_ALL, label: "Todos" }, ...STATUS_OPTIONS]}
+            className="w-auto min-w-40"
+          />
         </div>
       </div>
       {panel("production")}

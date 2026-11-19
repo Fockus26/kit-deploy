@@ -56,7 +56,7 @@ export function DataTable<T extends RowData>({
   const rows = table.getRowModel().rows;
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
       {/* Focusable so the keyboard can scroll it (axe: scrollable-region-focusable). */}
       <section
         className="relative overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -123,7 +123,9 @@ export function DataTable<T extends RowData>({
           </tbody>
         </table>
       </section>
-      {rows.length === 0 && empty ? empty : null}
+      {rows.length === 0 && empty ? (
+        <div className="flex flex-1 flex-col justify-center">{empty}</div>
+      ) : null}
     </div>
   );
 }

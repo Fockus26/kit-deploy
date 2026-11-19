@@ -186,10 +186,12 @@ export function DeploymentsTable({
   }
   return (
     <TableContext value={{ project, liveSha, detailHref }}>
-      <div className="hidden md:block">{table}</div>
+      <div className="hidden md:flex md:flex-col [&>div]:flex-1">{table}</div>
       <div className="md:hidden">
         {items.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card">{empty}</div>
+          <div className="flex flex-col justify-center rounded-lg border border-border bg-card">
+            {empty}
+          </div>
         ) : (
           <ul className="flex flex-col gap-2">
             {items.map((d) => (

@@ -127,7 +127,7 @@ async function Summary({
       <div className="flex flex-wrap gap-6">
         <Section
           title="Despliegues recientes"
-          className="min-w-0 flex-[3_1_520px]"
+          className="flex min-w-0 flex-[3_1_520px] flex-col [&>:not(:first-child)]:flex-1"
           aside={
             <Link href={detailBase} className={LINK}>
               Ver todos
@@ -145,7 +145,7 @@ async function Summary({
         </Section>
         <Section
           title="Previews activos"
-          className="min-w-0 flex-[2_1_320px]"
+          className="flex min-w-0 flex-[2_1_320px] flex-col [&>:not(:first-child)]:flex-1"
           aside={
             <span className="font-mono">
               {previews.running} de {previews.limit} encendidos
