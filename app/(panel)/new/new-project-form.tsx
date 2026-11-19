@@ -13,9 +13,11 @@ import { CommandLine } from "@/components/kit/command-line";
 import { Field, FieldInput } from "@/components/kit/field";
 import { Notice } from "@/components/kit/notice";
 import { OptionSelect } from "@/components/kit/option-select";
+import { RepoCombobox } from "@/components/kit/repo-combobox";
 import { TokenOnce } from "@/components/kit/token-once";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LOGIN_PATH } from "@/lib/auth/next-path";
+import type { RepoList } from "@/lib/github/repo-filter";
 import type { ProjectCreateResult } from "@/lib/panel/actions/projects";
 import { MAX, MEMORY_CHOICES } from "@/lib/panel/schemas";
 
@@ -39,10 +41,20 @@ async function step(_prev: State, input: Input): Promise<State> {
 
 const EMPTY = { name: "", repo: "", branch: "main", memoryMb: "512" };
 
-export function NewProjectForm() {
+// PLACEHOLDER (CONTENT_CHECKLIST rows 44–45): provisional copy until César confirms it.
+const REPO_HINT = {
+  "no-token":
+    "La lista de tus repos no está configurada en el servidor. Escribe owner/repo.",
+  error:
+    "No se pudo cargar la lista de tus repos de GitHub. Escribe owner/repo.",
+} as const;
+
+export function NewProjectForm({ repos }: { repos: RepoList }) {
   const [state, dispatch, pending] = useActionState(step, null);
   // Controlled: React resets a form after its action, and a refused form keeps what was typed.
   const [values, setValues] = useState(EMPTY);
+  // Picking a repo fills "Rama" with its default branch, until the user edits that field.
+  const [branchEdited, setBranchEdited] = useState(false);
   const savedRef = useRef<HTMLParagraphElement>(null);
 
   const result = state?.kind === "result" ? state.result : null;
@@ -51,7 +63,10 @@ export function NewProjectForm() {
 
   useEffect(() => {
     if (state?.kind === "saved") savedRef.current?.focus();
-    if (state?.kind === "result" && state.result.ok) setValues(EMPTY);
+    if (state?.kind === "result" && state.result.ok) {
+      setValues(EMPTY);
+      setBranchEdited(false);
+    }
   }, [state]);
 
   if (result?.ok) {
@@ -161,25 +176,54 @@ export function NewProjectForm() {
           spellCheck={false}
           className="[&_input]:font-mono"
         />
-        <FieldInput
-          label="Repositorio"
-          name="repo"
-          value={values.repo}
-          onChange={set("repo")}
-          help="En GitHub, como owner/nombre."
-          error={fields.repo}
-          required
-          maxLength={MAX.repo}
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          className="[&_input]:font-mono"
-        />
+        {repos.kind === "ok" ? (
+          <Field
+            label="Repositorio"
+            help="En GitHub, como owner/nombre."
+            error={fields.repo}
+          >
+            {(a11y) => (
+              <RepoCombobox
+                {...a11y}
+                name="repo"
+                value={values.repo}
+                repos={repos.repos}
+                truncated={repos.truncated}
+                onPick={(fullName, repo) =>
+                  setValues((v) => ({
+                    ...v,
+                    repo: fullName,
+                    branch:
+                      repo && !branchEdited ? repo.defaultBranch : v.branch,
+                  }))
+                }
+              />
+            )}
+          </Field>
+        ) : (
+          <FieldInput
+            label="Repositorio"
+            name="repo"
+            value={values.repo}
+            onChange={set("repo")}
+            help={REPO_HINT[repos.kind]}
+            error={fields.repo}
+            required
+            maxLength={MAX.repo}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            className="[&_input]:font-mono"
+          />
+        )}
         <FieldInput
           label="Rama de producción"
           name="branch"
           value={values.branch}
-          onChange={set("branch")}
+          onChange={(e) => {
+            setBranchEdited(true);
+            set("branch")(e);
+          }}
           help="Cada push a esta rama despliega producción."
           error={fields.branch}
           required

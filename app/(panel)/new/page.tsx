@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { SkeletonCard } from "@/components/kit/skeleton-card";
+import { githubReadTokenFromEnv, listRepos } from "@/lib/github/repos";
+import { panelUser } from "@/lib/panel/session";
 import { NewProjectForm } from "./new-project-form";
 
 export const metadata = { title: "Nuevo proyecto" };
@@ -16,7 +20,21 @@ export default function NewProjectPage() {
           despliegue, una sola vez.
         </p>
       </div>
-      <NewProjectForm />
+      <Suspense fallback={<SkeletonCard title="Datos del proyecto" rows={4} />}>
+        <Form />
+      </Suspense>
     </div>
   );
+}
+
+/**
+ * The repo list is read here, at request time (D061): the read-only token stays on the server
+ * and only each repo's name, visibility, last push and default branch reach the form. The whole
+ * form waits for it (cached 5 min), so a field never swaps under the cursor.
+ */
+async function Form() {
+  // Signed in first (it also awaits connection(): the env is read per request, not at build).
+  await panelUser();
+  const repos = await listRepos(githubReadTokenFromEnv());
+  return <NewProjectForm repos={repos} />;
 }
