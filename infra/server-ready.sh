@@ -82,13 +82,17 @@ else
   apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null
 fi
 
-say "/etc/docker/daemon.json (logs 10m x 3, live-restore)"
+say "/etc/docker/daemon.json (logs 10m x 3, live-restore, no userland proxy)"
 # Merged, not overwritten: whatever the VPS already had stays. live-restore keeps running
 # containers (gaby, evolution_*, every site) alive while dockerd restarts.
+# userland-proxy off: Caddy → 127.0.0.1:<port> goes by iptables NAT instead of one docker-proxy
+# process per published port, which took 74 % of a CPU at 20 req/s on kd-hello (load test,
+# 2026-11-19). Ports stay on 127.0.0.1 only (D016): infra/test/userland-proxy.test.sh checks
+# both, and the switch on a live daemon, in Docker-in-Docker.
 mkdir -p /etc/docker
 DJ=/etc/docker/daemon.json
 OLD='{}'; [ -s "$DJ" ] && OLD=$(cat "$DJ")
-NEW=$(printf '%s' "$OLD" | jq -S '. + {"log-driver":"json-file","log-opts":((."log-opts" // {}) + {"max-size":"10m","max-file":"3"}),"live-restore":true}')
+NEW=$(printf '%s' "$OLD" | jq -S '. + {"log-driver":"json-file","log-opts":((."log-opts" // {}) + {"max-size":"10m","max-file":"3"}),"live-restore":true,"userland-proxy":false}')
 if [ "$(printf '%s' "$OLD" | jq -S .)" != "$NEW" ]; then
   [ -s "$DJ" ] && cp "$DJ" "$DJ.bak-$(date +%Y%m%d%H%M%S)"
   printf '%s\n' "$NEW" > "$DJ"
@@ -103,7 +107,7 @@ if [ "$TEST" = 0 ]; then
     BEFORE=$(docker ps -q | sort)
     systemctl reload docker      # live-restore is reloadable: on before the restart
     sleep 2
-    systemctl restart docker     # log-opts are not (they apply to containers created from now on)
+    systemctl restart docker     # log-opts and userland-proxy are not (log-opts: new containers only)
     sleep 3
     AFTER=$(docker ps -q | sort)
     if [ "$BEFORE" != "$AFTER" ]; then
