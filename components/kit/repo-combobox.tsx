@@ -71,6 +71,7 @@ export function RepoCombobox({
             aria-expanded={open}
             aria-haspopup="listbox"
             aria-controls={open ? listId : undefined}
+            aria-required="true"
             aria-invalid={ariaInvalid}
             aria-describedby={ariaDescribedBy}
             onKeyDown={(e) => {

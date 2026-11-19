@@ -32,7 +32,7 @@ function CommandInput({
   return (
     <div
       data-slot="command-input-wrapper"
-      className="flex items-center gap-2 border-border border-b px-2"
+      className="flex items-center gap-2 border-border border-b-2 px-2 focus-within:border-ring"
     >
       <Search
         aria-hidden="true"
