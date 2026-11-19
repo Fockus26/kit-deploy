@@ -118,15 +118,10 @@ export const databases = cache(async (project: string) => {
   return readDatabases(panelDeps(), project);
 });
 
-/** `auditBefore`: the previous page's `auditNext` (an ISO date in the URL). */
-export const settingsData = cache(async (auditBefore?: string) => {
+/** `auditPage`: the raw `?pagina=` (readSettings clamps it, D063). */
+export const settingsData = cache(async (auditPage?: string) => {
   const user = await panelUser();
-  const before = auditBefore ? new Date(auditBefore) : undefined;
-  return readSettings(
-    panelDeps(),
-    user.userId,
-    before && !Number.isNaN(+before) ? before : undefined,
-  );
+  return readSettings(panelDeps(), user.userId, auditPage);
 });
 
 /** null: no such project (the page calls `notFound()`). */

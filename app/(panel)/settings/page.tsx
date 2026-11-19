@@ -19,11 +19,22 @@ const AUDIT_ID = "auditoria";
 
 type Search = PageProps<"/settings">["searchParams"];
 
-/** `?antes=<ISO date>`: the audit page cursor (settingsData ignores one that is not a date). */
+/** `?pagina=N`: Auditoría's page (D063; readSettings clamps it, and an old `?antes=` link is page 1). */
 async function cursor(searchParams: Search): Promise<string | undefined> {
-  const { antes } = await searchParams;
-  return typeof antes === "string" ? antes : undefined;
+  const { pagina } = await searchParams;
+  return typeof pagina === "string" ? pagina : undefined;
 }
+
+/** Page 1 is the plain URL; the anchor keeps the reader on Auditoría. */
+function auditHref(page: number): string {
+  return page <= 1
+    ? `${SETTINGS}#${AUDIT_ID}`
+    : `${SETTINGS}?pagina=${page}#${AUDIT_ID}`;
+}
+
+const PAGER = buttonVariants({ variant: "outline" });
+/** The end of the range: text, not a link, and struck through the same way as a disabled button. */
+const PAGER_OFF = `${PAGER} pointer-events-none opacity-50`;
 
 const H2 = "font-semibold text-foreground text-h2";
 const H3 = "font-semibold text-foreground text-h3";
@@ -217,10 +228,8 @@ async function Tokens({ searchParams }: { searchParams: Search }) {
 }
 
 async function Audit({ searchParams }: { searchParams: Search }) {
-  const before = await cursor(searchParams);
-  const data = await settingsData(before);
-  const since = before ? new Date(before) : null;
-  const paged = since !== null && !Number.isNaN(+since);
+  const data = await cursor(searchParams).then(settingsData);
+  const { auditPage: page, auditPages: pages } = data;
   return (
     <section
       id={AUDIT_ID}
@@ -233,32 +242,34 @@ async function Audit({ searchParams }: { searchParams: Search }) {
       <p className="text-muted-foreground">
         Quién hizo qué y cuándo, desde el panel o la CLI. Solo nombres, nunca
         valores.
-        {paged ? " Estás viendo registros anteriores." : ""}
       </p>
       <AuditTable rows={data.audit} />
-      {paged || data.auditNext ? (
-        <nav
-          aria-label="Páginas de la auditoría"
-          className="flex flex-wrap gap-2"
-        >
-          {paged ? (
-            <Link
-              href={`${SETTINGS}#${AUDIT_ID}`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Volver a los más recientes
-            </Link>
-          ) : null}
-          {data.auditNext ? (
-            <Link
-              href={`${SETTINGS}?antes=${encodeURIComponent(data.auditNext.toISOString())}#${AUDIT_ID}`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Cargar más
-            </Link>
-          ) : null}
-        </nav>
-      ) : null}
+      <nav
+        aria-label="Paginación de auditoría"
+        className="flex flex-wrap items-center gap-3"
+      >
+        {page > 1 ? (
+          <Link href={auditHref(page - 1)} className={PAGER}>
+            Anterior
+          </Link>
+        ) : (
+          <span aria-disabled="true" className={PAGER_OFF}>
+            Anterior
+          </span>
+        )}
+        <span className="text-muted-foreground">
+          Página {page} de {pages}
+        </span>
+        {page < pages ? (
+          <Link href={auditHref(page + 1)} className={PAGER}>
+            Siguiente
+          </Link>
+        ) : (
+          <span aria-disabled="true" className={PAGER_OFF}>
+            Siguiente
+          </span>
+        )}
+      </nav>
     </section>
   );
 }
