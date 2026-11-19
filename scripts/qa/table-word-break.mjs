@@ -53,8 +53,7 @@ for (const w of [320, 360, 390, 430, 768]) {
         const p = n.parentElement;
         if (!p || p.closest(".sr-only,script,style")) continue;
         const re = /\S+/g;
-        let m;
-        while ((m = re.exec(n.data))) {
+        for (const m of n.data.matchAll(re)) {
           if (m[0].length < 4 || m[0].length > 14) continue;
           const rg = document.createRange();
           rg.setStart(n, m.index);
