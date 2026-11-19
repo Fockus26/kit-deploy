@@ -4,6 +4,16 @@
 # Each preview is one file in /etc/caddy/previews/ (a host matcher + its handle), written by
 # kit-agent; a host with no file gets the "preview no existe" page with a real 404 (D017).
 
+# Every proxy to an app (Next, Node) closes its idle connections before the app does: Caddy keeps
+# them 2 min by default, Node 5 s, and a request on a socket the app just closed is a 502 for a
+# POST (Caddy's docs, reverse_proxy › keepalive). Same value as lib/core/constants.ts
+# UPSTREAM_KEEPALIVE and infra/update.sh.
+(kit_upstream) {
+	transport http {
+		keepalive 4s
+	}
+}
+
 # Every preview's handle is exactly one import, rendered by lib/core/caddy.ts renderPreviewSite:
 #   running:  `import kit_preview 127.0.0.1:<port>`
 #   asleep:   `import kit_preview_asleep <project> <pr>` (D017: stopped to stay within 4 running)
@@ -16,10 +26,13 @@
 (kit_preview_gate) {
 	handle /__kit-deploy/exchange {
 		rewrite * /api/v1/preview-exchange
-		reverse_proxy 127.0.0.1:3100
+		reverse_proxy 127.0.0.1:3100 {
+			import kit_upstream
+		}
 	}
 	forward_auth 127.0.0.1:3100 {
 		uri /api/v1/preview-auth
+		import kit_upstream
 	}
 }
 
@@ -30,6 +43,7 @@
 	route {
 		import kit_preview_gate
 		reverse_proxy {args[0]} {
+			import kit_upstream
 			header_up Cookie `(?:^|;\s*)kd_preview=[^;]*` ""
 			header_up Cookie `^;\s*` ""
 		}

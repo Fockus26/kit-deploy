@@ -25,6 +25,13 @@ export const CADDY_PREVIEW_ASLEEP_SNIPPET = "kit_preview_asleep";
 /** The snippet the base Caddyfile defines: one JSON access log for metrics (D015) and logs (D014). */
 export const CADDY_ACCESS_LOG_SNIPPET = "kit_access_log";
 
+/** How long Caddy keeps an idle connection to an app before closing it itself. Caddy's default is
+ * 2 min, while Node (Next standalone without KEEP_ALIVE_TIMEOUT) closes idle sockets at 5 s: Caddy
+ * then reuses a socket the app just closed, and a non-idempotent request (a form POST, a Server
+ * Action) gets a 502 — Caddy's docs warn about exactly this. Below the app's timeout, Caddy always
+ * closes first. Same value in `infra/caddy/kit-previews.caddy` and `infra/update.sh`. */
+export const UPSTREAM_KEEPALIVE = "4s";
+
 /** The central Postgres' host: containers resolve it to the VPS itself (brief, Architecture). */
 export const DB_HOST = "db.fockus.dev";
 

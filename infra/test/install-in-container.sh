@@ -134,7 +134,8 @@ echo "127.0.0.1 deploy.fockus.dev" >> /etc/hosts
 if bash /opt/kit-deploy/current/infra/update.sh /release.tgz --test > /tmp/update.log 2>&1; then
   pass "update exits 0"; else fail "update exits 0"; tail -20 /tmp/update.log; fi
 check "/etc/kit-deploy back to 0710 root:kit-deploy" bash -c "[ \"\$(stat -c '%U:%G %a' /etc/kit-deploy)\" = 'root:kit-deploy 710' ]"
-check "dashboard site proxies 127.0.0.1:3100" grep -qP '^\treverse_proxy 127.0.0.1:3100$' /etc/caddy/sites/kit-deploy.caddy
+check "dashboard site proxies 127.0.0.1:3100" grep -qP '^\treverse_proxy 127.0.0.1:3100 \{$' /etc/caddy/sites/kit-deploy.caddy
+check "dashboard site closes idle app sockets before Node does" grep -qP '^\t\t\tkeepalive 4s$' /etc/caddy/sites/kit-deploy.caddy
 check "dashboard site imports the access log" grep -qP '^\timport kit_access_log$' /etc/caddy/sites/kit-deploy.caddy
 check "caddy validate ran before" grep -q '^caddy validate' /tmp/caddy.log
 # As many as the release ships (each new migration bumped a hard-coded number here).
