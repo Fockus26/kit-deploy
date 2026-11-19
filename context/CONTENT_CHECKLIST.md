@@ -48,5 +48,7 @@
 | 40 | Share card (OG/Twitter): title "kit-deploy", subtitle "Panel de despliegues", alt "kit-deploy: panel de despliegues" — provisional | `lib/brand-copy.ts` | batch 2026-11-18 W2 (#70) | panel | Pending |
 | 41 | Copy of the "Eliminar passkey" dialog (title, body, last-passkey note, code field + help, buttons) — provisional | `app/(panel)/settings/passkey-controls.tsx` | batch 2026-11-18 W3 (#69) | panel | Pending |
 | 42 | Errors and notices of passkey removal (wrong / reused code, too many tries, no TOTP, 6 digits, removed / already gone) — provisional | `lib/panel/actions/passkeys.ts` (PASSKEY_COPY), `app/(panel)/settings/tables.tsx`, `lib/panel/schemas.ts` | batch 2026-11-18 W3 (#69) | panel | Pending |
+| 44 | Repo combobox copy: no-token hint «La lista de tus repos no está configurada en el servidor. Escribe owner/repo.», «Elige un repositorio», «Busca owner/repo», «Usar «…»», «Privado», no-match and 500-repos notes — provisional | `components/kit/repo-combobox.tsx` | batch 2026-11-18 W6 (#71) | panel | Pending |
+| 45 | Repo list load error «No se pudo cargar la lista de tus repos de GitHub. Escribe owner/repo.» — provisional | `components/kit/repo-combobox.tsx` | batch 2026-11-18 W6 (#71) | panel | Pending |
 
 <!-- Mark "Resolved" (do not delete the row) when it is done and the code is updated. -->

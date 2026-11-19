@@ -245,3 +245,150 @@ future project) is removed the platform's way, not by hand on the VPS.
 Changeset: minor — "Nuevo comando `kit-deploy project rm` para quitar un proyecto de la plataforma (las bases de datos se conservan)."
 Manual action for César: none in the PR; the orchestrator runs it on kd_hello on the VPS after the
 ship, with César's OK.
+
+---
+
+# Wave 2 (written 2026-11-18 on main @ f2209d9)
+
+## W6 — `feat/repo-picker`
+
+You are worker **W6**. Branch: `feat/repo-picker`. Decisions: **D061–D062**. CONTENT_CHECKLIST
+rows: **44–45**. Migration: **none** (nothing is stored). Changeset: **minor**. Model · effort:
+**opus · medium**. Docker: **yes** (only for `bun run test:infra:install`, once, at the end; no
+other Docker). Local build: **no**. Test services: **no**. Dev server: **no**.
+
+Earlier decisions: D011 (web never touches Docker / master key), D053 (W1's Select) — `cat` them.
+Wave 1 is merged: `components/ui/select.tsx` and `components/kit/option-select.tsx` exist — match
+their trigger/popup styles (same tokens) for the combobox.
+
+### What César asks
+> Que el campo "Repositorio" de Nuevo proyecto sea una lista buscable de mis repos, como en Vercel.
+> La lista sale de un segundo token fine-grained de GitHub de solo lectura (All repositories +
+> Metadata: read) que yo escribo en el VPS; mientras no exista, el campo sigue aceptando
+> `owner/repo` a mano.
+
+### Where the code is
+- Form: `app/(panel)/new/new-project-form.tsx` (client; "Repositorio" `FieldInput` at :164-176,
+  `EMPTY` at :40, `MAX.repo` from `lib/panel/schemas.ts`). Page (server): `app/(panel)/new/page.tsx`.
+- GitHub client: `lib/deploy/github.ts` (`githubRequest(token, opts)`, `GITHUB_API`,
+  `githubTokenFromEnv` :81 reads `GITHUB_STATUS_TOKEN`). Its header rule: the token only goes in
+  the Authorization header; errors carry the HTTP status, never the body. Reuse it.
+- How the status token reaches the web: `infra/install.sh` :17-19 and :99-118 (`--github-token`,
+  stdin, `github_pat_*|ghp_*` check, `printf` builtin, 0600 root, tmp + mv),
+  `infra/update.sh` :243-245 (`--env-file $STATE/github.env` if present), `scripts/ship.sh`
+  (passes install.sh options through; usage at :4-9), the install test
+  `infra/test/install-in-container.sh` :200-215 (checks for github.env).
+
+### Approach decided
+- **Separate file, not the status token's**: `install.sh --github-read-token` writes
+  `/etc/kit-deploy/github-read.env` with `GITHUB_READ_TOKEN=` — same checks and same writing
+  pattern as `--github-token` (copy that block; it must not touch `github.env`, which
+  `--github-token` rewrites whole). `update.sh` adds `--env-file $STATE/github-read.env` when it
+  exists. Only the web reads it; the CLI does not need it. Document both in their headers;
+  `ship.sh`'s usage lines get the new flag.
+- `lib/github/repos.ts` (or next to `lib/deploy/github.ts`): `listRepos(token, opts)` →
+  `GET /user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
+  following the `Link: rel="next"` header up to a cap (5 pages / 500 repos), returning only
+  `{ fullName, private, pushedAt, defaultBranch }`. Cache in module memory for 5 minutes; a
+  failure is not cached. Token missing → `{ kind: "no-token" }`; error → `{ kind: "error", status }`;
+  it never throws to the page, never logs the token or the response body.
+- The server page reads the list and passes **only those fields** to the form (no API route; the
+  token never reaches the client). `/new` becomes dynamic: check the Next 16 docs in
+  `node_modules/next/dist/docs/` for the right way (connection() / dynamic rendering) first.
+- Combobox: shadcn `popover` + `command` (adds `cmdk`; written as shadcn new-york writes them, on
+  the `radix-ui` package already installed — Context7 for cmdk's current API). New primitives:
+  `components/ui/popover.tsx`, `components/ui/command.tsx`; the composed field in
+  `components/kit/repo-combobox.tsx`. Search filters by `owner/repo`; private repos show a
+  "Privado" badge (text, not color only); keyboard: open with Enter/↓, type to filter, Enter
+  picks, Esc closes; the value lands in the same `repo` form field. Picking a repo also sets
+  "Rama" to its default branch if the user has not edited that field.
+- **Free text always works**: the combobox lets you use an `owner/repo` that is not in the list
+  (a "Usar «owner/repo»" item), and with `no-token` or `error` the field is today's plain
+  `FieldInput` plus one muted hint (row 44: no token configured; row 45: the list could not be
+  loaded — both end in "Escribe owner/repo"). The value's validation stays the server's
+  (`lib/panel/schemas.ts`), unchanged.
+- D061: the read token and its file; D062: the combobox and the no-token fallback.
+
+### Known traps
+- `update.sh` passes `github.env` as a whole file and `--github-token` rewrites it: a new key put
+  there would be lost. Hence the separate file.
+- `grep -rn "github.env\|github-token" tests/ infra/test/` before editing; keep those green.
+- No DOM test environment here (`bun:test`, no happy-dom): unit-test `listRepos` (pagination by
+  Link, cap, cache, failure not cached, 401/403/timeout, no-token, the token only in the header —
+  fake `fetch` like the commit-status tests) and the pure filter/mapping. The UI is verified by
+  the a11y gate and the batch QA after the wave (it runs `qa:local`, with no token: the fallback).
+- `bun add cmdk` only; no other new dependency.
+
+### How to verify
+- `bun run test:related`, then build / typecheck / lint / test.
+- `bun run test:infra:install` once (Docker): add checks for `--github-read-token` (0600 root,
+  key name, a refused value keeps the old file, the web gets it as an env-file, cesar cannot read it,
+  `github.env` untouched).
+- `a11y` skill (combobox: role=combobox, aria-expanded, listbox/options, visible focus) and
+  `security-review` through a subagent over `git diff origin/main...HEAD` of your slot (new secret).
+
+### Closing
+Changeset: minor — "Nuevo proyecto: el campo Repositorio busca entre tus repos de GitHub (con un token de solo lectura); sin el token se sigue escribiendo owner/repo."
+Manual action for César (PR body): create the fine-grained token (Repository access: All
+repositories; Repository permissions › Metadata: Read-only; nothing else) and write it with
+`bash scripts/ship.sh build/kit-deploy-<sha>.tgz --install --github-read-token` (stdin) at the
+batch ship. Report rows 44–45's copy for the orchestrator to add to CONTENT_CHECKLIST.
+
+## W7 — `fix/panel-laptop-audit`
+
+You are worker **W7**. Branch: `fix/panel-laptop-audit`. Decision: **D063**. CONTENT_CHECKLIST
+rows: **none**. Migration: **none**. Changeset: **patch**. Model · effort: **sonnet · medium**.
+Docker: **yes** (only for `bun run qa:local -- --port <your port>`: Postgres in Docker with the
+`.env.test.local` accounts; never the real database). Local build: **no**. Test services: **no**.
+Dev server: **yes, only through `qa:local` on your slot's port** (César authorizes it for this unit).
+
+Earlier decisions: D042 (Auditoría paging by link) — `cat` it; this unit supersedes its "50 +
+Cargar más" part (say so in D063 and mark D042 "Superseded in part by D063").
+
+### What César asks
+> En la laptop (1280–1536) hay páginas que dejan espacio sin usar. Y Auditoría: 20 filas y
+> paginación real (Anterior / Siguiente), no 50 + "Cargar más".
+
+### Where the code is
+- Shell: `components/layout/panel-shell.tsx:13` (`max-w-content` = 1440px, `app/globals.css:126`).
+  Narrow containers: `app/(panel)/new/page.tsx:8` (`max-w-form-wide`, a form: keep it),
+  `app/(panel)/p/[project]/domains/page.tsx:17` and `env/page.tsx:18` (`max-w-3xl`),
+  `components/cron/cron-tables.tsx:147` (`max-w-xl`), `components/databases/databases-table.tsx:59`
+  and `cron-tables.tsx:120` (`max-w-prose`, text — likely fine). Grids:
+  `grep -rn "grid-cols" "app/(panel)" components`.
+- Audit: `AUDIT_PAGE` `lib/panel/data/store.ts:68`, `audit(opts)` in that file (cursor `before`),
+  `auditNext` `lib/panel/data/resources.ts:302`, the section and its "Cargar más" link in
+  `app/(panel)/settings/page.tsx` (~:230-265), the `?antes=` parsing in `settingsData`.
+
+### Approach decided
+- (a) Measure first: with `qa:local` up, a Playwright script in `.qa/` (run with `node`) visits
+  every panel route logged in (`scripts/qa-session.ts` / `qa-roles.ts` show how QA signs in;
+  routes: `/`, `/new`, `/settings`, and every tab under `/p/<seeded project>/…`) at 1280, 1366,
+  1440 and 1536 × 800, and records per route the main content's width vs the viewport and any
+  grid that stays 1-column. Fix the class where a page leaves > ~30 % unused for no reason
+  (tables and lists may widen; a single form stays at its form width — that is the HANDOFF, not
+  waste). Existing tokens / Tailwind scale only; a needed container token goes in "Missing
+  tokens" of your report instead of a magic value. Re-run after: the before/after table goes in
+  the PR. Check 320 px still has no horizontal scroll.
+- (b) Audit: `AUDIT_PAGE = 20`; `?pagina=N` (1-based; invalid → 1, past the last → last) with
+  `offset` + a `count()` for the total; `Anterior` / `Siguiente` links (at the ends: plain text
+  with `aria-disabled`, not a link — not by color only) and "Página N de M" between them, inside a
+  `nav aria-label="Paginación de auditoría"`, `#auditoria` anchor kept. Old `?antes=` links land
+  on page 1. Still link-based, no client state (like D042). Update the store interface, its
+  Drizzle implementation and the fakes; tests for the page math (empty, exactly 20, 21, last
+  page, out of range, garbage) and the store's offset/limit.
+
+### Known traps
+- Do not touch `components/ui/*`, `components/kit/option-select.tsx`, nor
+  `app/(panel)/new/new-project-form.tsx` (W6's). Leave `app/(panel)/new/page.tsx` as it is.
+- Machine load: two workers run; one `qa:local`, one browser tab; stop the server when done.
+- No DOM test env: layout is verified by the measuring script, not by unit tests.
+
+### How to verify
+- `bun run test:related`, then build / typecheck / lint / test.
+- The measuring script's before/after; `a11y` skill over the pagination and every changed page.
+- `bun run shots` for /settings (Auditoría) and one widened page, then `shots:publish`.
+
+### Closing
+Changeset: patch — "Panel: las páginas aprovechan el ancho en laptop y Auditoría pagina de 20 en 20 con Anterior/Siguiente."
+Manual action for César: none.

@@ -39,8 +39,16 @@ Slot and port: in the message that launches each worker.
 | W3 | D055–D056 | 41–42 | none | minor | opus · medium | no | no |
 | W4 | D057–D058 | none | none | patch | sonnet · medium | no | no |
 | W5 | D059–D060 | 43 | none (unless your prompt says) | minor | opus · medium | no | no |
-| W6 (wave 2) | D061–D062 | 44–45 | — | minor | — | — | — |
-| W7 (wave 2) | D063 | none | — | patch | — | — | — |
+| W6 (wave 2) | D061–D062 | 44–45 | none | minor | opus · medium | yes (install test only) | no |
+| W7 (wave 2) | D063 | none | none | patch | sonnet · medium | yes (qa:local only) | no |
+
+**Wave 2 ownership:** W6 owns `app/(panel)/new/new-project-form.tsx`, the new
+`components/ui/popover.tsx` / `command.tsx` / `components/kit/repo-combobox.tsx`, `infra/install.sh`,
+`infra/update.sh`, `scripts/ship.sh` and the install test. W7 owns the panel pages' layout
+containers, the audit in `lib/panel/data/store.ts` / `resources.ts` and `app/(panel)/settings/page.tsx`.
+Nobody edits `app/(panel)/new/page.tsx` except W6. César authorizes W7 one dev server through
+`qa:local` on its slot's port. `security-review` from a slot = a subagent over
+`git diff origin/main...HEAD` of that slot.
 
 ## Shared shapes
 

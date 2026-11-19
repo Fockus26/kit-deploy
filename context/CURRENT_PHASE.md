@@ -17,6 +17,8 @@ locally like kit-agent (OK). Waiting on César.
 
 **Batch 2026-11-18 (panel improvements, César):** wave 1 of 2 merged (#66–#70); wave 2 = repo picker + laptop/audit, then full QA. Plan `context/plans/batch-2026-11-18.md`. kd_hello: `sudo kit-deploy project rm kd_hello` after the next ship, with César's OK (DBs kept). Ship applies migrations 0015–0016.
 
+**VPS tuning (César 2026-11-18, from the «$12 server» video):** #72 Caddy upstream keepalive 4s < Node's 5s (no 502 on POSTs) — open; on ship then `kit-deploy regenerate` (check `list` first, D050). Waiting: k6 load test, per-project `--cpus`, Caddy `encode zstd gzip`. Log `PHASE_LOG/fix-caddy-upstream-keepalive.md`.
+
 ## Blocked (actions for César or external)
 
 - **Phase 07 (César, from maranatha's project):** platform side done 2026-11-18 (release f640b62435a4
