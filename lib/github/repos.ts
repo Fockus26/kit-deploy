@@ -2,7 +2,8 @@
  * César's GitHub repos for Nuevo proyecto's picker (D061), with the read-only token
  * (`GITHUB_READ_TOKEN`, from `/etc/kit-deploy/github-read.env`). Same rules as
  * lib/deploy/github.ts: the token only goes in the Authorization header, and a failure is only
- * its HTTP status. It never throws and never logs; only the `Repo` fields leave here.
+ * its HTTP status. It never throws; it logs only a refused `GITHUB_API_BASE`, once and without
+ * its value. Only the `Repo` fields leave here.
  */
 
 import {
@@ -27,8 +28,37 @@ export function githubReadTokenFromEnv(
   return env.GITHUB_READ_TOKEN || null;
 }
 
+// QA only (D065): a local fake GitHub on this machine. Exactly scheme, loopback host and port —
+// no path, user info or look-alike host — because the read token is sent to it.
+const LOOPBACK_API =
+  /^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):(\d{1,5})\/?$/;
+let warnedBase = false;
+
+/**
+ * The API the repo list is asked from: `GITHUB_API_BASE` when it is a loopback
+ * `http://127.0.0.1|localhost|[::1]:<port>` (the QA fake, scripts/qa/github-fake.mjs), else
+ * GitHub's. Any other value is ignored, so a stray one on the VPS never gets the token.
+ */
+export function githubApiFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const raw = env.GITHUB_API_BASE;
+  if (!raw) return GITHUB_API;
+  const m = LOOPBACK_API.exec(raw);
+  const port = m ? Number(m[1]) : 0;
+  if (m && port >= 1 && port <= 65_535) return raw.replace(/\/$/, "");
+  if (!warnedBase) {
+    warnedBase = true;
+    console.warn(
+      "GITHUB_API_BASE ignored: only http://127.0.0.1|localhost|[::1]:<port> is accepted",
+    );
+  }
+  return GITHUB_API;
+}
+
 // One list per process: the panel has one user. A failure is never kept.
-let cache: { token: string; at: number; list: RepoList } | null = null;
+let cache: { token: string; api: string; at: number; list: RepoList } | null =
+  null;
 
 /** Tests only: forget the cached list. */
 export function resetRepoCache(): void {
@@ -43,11 +73,16 @@ export async function listRepos(
 ): Promise<RepoList> {
   if (!token) return { kind: "no-token" };
   const now = opts.now ?? Date.now;
-  if (cache && cache.token === token && now() - cache.at < REPOS_CACHE_MS)
+  const api = opts.api ?? githubApiFromEnv();
+  if (
+    cache &&
+    cache.token === token &&
+    cache.api === api &&
+    now() - cache.at < REPOS_CACHE_MS
+  )
     return cache.list;
 
-  const api = opts.api ?? GITHUB_API;
-  const request = githubRequest(token, { timeoutMs: 5_000, ...opts });
+  const request = githubRequest(token, { timeoutMs: 5_000, ...opts, api });
   const repos: Repo[] = [];
   let path: string | null = FIRST_PAGE;
   let pages = 0;
@@ -70,7 +105,7 @@ export async function listRepos(
     };
   }
   const list: RepoList = { kind: "ok", repos, truncated: path !== null };
-  cache = { token, at: now(), list };
+  cache = { token, api, at: now(), list };
   return list;
 }
 
