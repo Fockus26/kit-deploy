@@ -17,6 +17,7 @@ import {
 import { drizzleCronStore } from "../lib/cron/store";
 import { drizzleAdminStore } from "../lib/db/admin";
 import { drizzleEnvStore, sshActor } from "../lib/db/env-store";
+import { drizzleProjectRemovalStore } from "../lib/db/project-remove";
 import { db, drizzleStore } from "../lib/db/store";
 import { drizzleUserStore } from "../lib/db/users";
 import { statusPublisherFromEnv } from "../lib/deploy/commit-status";
@@ -69,6 +70,10 @@ const { code, out, err } = await runCli(process.argv.slice(2), agent, {
   admin: () => {
     loadCliEnv();
     return drizzleAdminStore(db());
+  },
+  removal: () => {
+    loadCliEnv();
+    return drizzleProjectRemovalStore(db());
   },
   users: () => {
     loadCliEnv();

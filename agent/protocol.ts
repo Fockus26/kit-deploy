@@ -216,6 +216,9 @@ export const Request = z.discriminatedUnion("op", [
     keep: z.number().int().min(1).max(50),
     dryRun: z.boolean().optional(),
   }),
+  /** D059: everything kit-deploy put on the machine for a project (its Caddy files, containers,
+   * images and pin), never its databases; `dryRun` only lists it (agent/project-remove.ts). */
+  op("project.remove", { project, dryRun: z.boolean() }),
 ]);
 
 export type Request = z.infer<typeof Request>;

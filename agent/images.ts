@@ -20,9 +20,9 @@ export type PruneResult = {
 const TIMEOUT_MS = 60_000;
 const PROJECT_FILE = /^[a-z0-9][a-z0-9_]{0,39}$/;
 
-type Image = { id: string; ref: string; created: number };
+export type Image = { id: string; ref: string; created: number };
 
-function parseImages(stdout: string, pin: string): Image[] {
+export function parseImages(stdout: string, pin: string): Image[] {
   const out: Image[] = [];
   for (const line of stdout.split("\n")) {
     const [id, repo, tag, created] = line.trim().split("\t");

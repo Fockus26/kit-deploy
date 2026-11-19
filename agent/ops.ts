@@ -49,6 +49,7 @@ import { Busy, Limiter } from "./limit";
 import { type LogDeps, searchLogs, tailLogs } from "./logs";
 import { systemLogDeps } from "./logs-system";
 import { sampleMetrics } from "./metrics";
+import { removeProject } from "./project-remove";
 import { AGENT_VERSION, type ErrorCode, type Request } from "./protocol";
 
 export const CADDYFILE = "/etc/caddy/Caddyfile";
@@ -339,6 +340,15 @@ export class Agent {
         // Serial: never beside a deploy's pull or run.
         return this.serial(() =>
           pruneImages(this.deps, req.params.keep, req.params.dryRun ?? false),
+        );
+      case "project.remove":
+        // Serial: no deploy, preview or site write of any project between its steps.
+        return this.serial(() =>
+          removeProject(this.deps, req.params.project, req.params.dryRun, {
+            list: () => this.list(req.params.project),
+            applySiteChanges: (files, change) =>
+              this.applySiteChanges(files, change),
+          }),
         );
     }
   }
@@ -805,15 +815,26 @@ export class Agent {
   }
 
   /** Validate the whole config with the new file in place; on any failure put the previous one back. */
-  private async applySiteChange(
+  private applySiteChange(
     path: string,
     previous: string | null,
     change: () => Promise<void>,
   ): Promise<void> {
-    const restore = () =>
-      previous === null
-        ? this.deps.removeFile(path)
-        : this.deps.writeFileAtomic(path, previous);
+    return this.applySiteChanges([{ path, previous }], change);
+  }
+
+  /** The same for several files at once (project.remove): one validate, one reload, and on any
+   * failure every file put back as it was. */
+  private async applySiteChanges(
+    files: readonly { path: string; previous: string | null }[],
+    change: () => Promise<void>,
+  ): Promise<void> {
+    const restore = async () => {
+      for (const { path, previous } of files) {
+        if (previous === null) await this.deps.removeFile(path);
+        else await this.deps.writeFileAtomic(path, previous);
+      }
+    };
     await change();
     // Only validate provisions modules in this process; reload hands the config to the running
     // Caddy, which has the token from its own unit. The token is never logged or returned.
