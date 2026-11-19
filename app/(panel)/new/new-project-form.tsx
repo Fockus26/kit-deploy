@@ -162,95 +162,98 @@ export function NewProjectForm({ repos }: { repos: RepoList }) {
         <h2 id="nuevo-proyecto-form" className="font-semibold text-h2">
           Datos del proyecto
         </h2>
-        <FieldInput
-          label="Nombre"
-          name="name"
-          value={values.name}
-          onChange={set("name")}
-          help="Minúsculas, números y _; empieza por letra o número. Es también su subdominio y el nombre de su base."
-          error={fields.name}
-          required
-          maxLength={MAX.project}
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          className="[&_input]:font-mono"
-        />
-        {repos.kind === "ok" ? (
-          <Field
-            label="Repositorio"
-            help="En GitHub, como owner/nombre."
-            error={fields.repo}
-          >
-            {(a11y) => (
-              <RepoCombobox
-                {...a11y}
-                name="repo"
-                value={values.repo}
-                repos={repos.repos}
-                truncated={repos.truncated}
-                onPick={(fullName, repo) =>
-                  setValues((v) => ({
-                    ...v,
-                    repo: fullName,
-                    branch:
-                      repo && !branchEdited ? repo.defaultBranch : v.branch,
-                  }))
-                }
-              />
-            )}
-          </Field>
-        ) : (
+        {/* One column below `lg`; from `lg` two per row, in DOM order (D066). */}
+        <div className="grid gap-5 lg:grid-cols-2 *:min-w-0">
           <FieldInput
-            label="Repositorio"
-            name="repo"
-            value={values.repo}
-            onChange={set("repo")}
-            help={REPO_HINT[repos.kind]}
-            error={fields.repo}
+            label="Nombre"
+            name="name"
+            value={values.name}
+            onChange={set("name")}
+            help="Minúsculas, números y _; empieza por letra o número. Es también su subdominio y el nombre de su base."
+            error={fields.name}
             required
-            maxLength={MAX.repo}
+            maxLength={MAX.project}
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
             className="[&_input]:font-mono"
           />
-        )}
-        <FieldInput
-          label="Rama de producción"
-          name="branch"
-          value={values.branch}
-          onChange={(e) => {
-            setBranchEdited(true);
-            set("branch")(e);
-          }}
-          help="Cada push a esta rama despliega producción."
-          error={fields.branch}
-          required
-          maxLength={MAX.branch}
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          className="[&_input]:font-mono"
-        />
-        <Field
-          label="Memoria"
-          help="El límite del contenedor de producción."
-          error={fields.memoryMb}
-        >
-          {(a11y) => (
-            <OptionSelect
-              {...a11y}
-              name="memoryMb"
-              value={values.memoryMb}
-              onValueChange={(v) => setValues((s) => ({ ...s, memoryMb: v }))}
-              options={MEMORY_CHOICES.map((mb) => ({
-                value: String(mb),
-                label: `${mb} MB`,
-              }))}
+          {repos.kind === "ok" ? (
+            <Field
+              label="Repositorio"
+              help="En GitHub, como owner/nombre."
+              error={fields.repo}
+            >
+              {(a11y) => (
+                <RepoCombobox
+                  {...a11y}
+                  name="repo"
+                  value={values.repo}
+                  repos={repos.repos}
+                  truncated={repos.truncated}
+                  onPick={(fullName, repo) =>
+                    setValues((v) => ({
+                      ...v,
+                      repo: fullName,
+                      branch:
+                        repo && !branchEdited ? repo.defaultBranch : v.branch,
+                    }))
+                  }
+                />
+              )}
+            </Field>
+          ) : (
+            <FieldInput
+              label="Repositorio"
+              name="repo"
+              value={values.repo}
+              onChange={set("repo")}
+              help={REPO_HINT[repos.kind]}
+              error={fields.repo}
+              required
+              maxLength={MAX.repo}
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              className="[&_input]:font-mono"
             />
           )}
-        </Field>
+          <FieldInput
+            label="Rama de producción"
+            name="branch"
+            value={values.branch}
+            onChange={(e) => {
+              setBranchEdited(true);
+              set("branch")(e);
+            }}
+            help="Cada push a esta rama despliega producción."
+            error={fields.branch}
+            required
+            maxLength={MAX.branch}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            className="[&_input]:font-mono"
+          />
+          <Field
+            label="Memoria"
+            help="El límite del contenedor de producción."
+            error={fields.memoryMb}
+          >
+            {(a11y) => (
+              <OptionSelect
+                {...a11y}
+                name="memoryMb"
+                value={values.memoryMb}
+                onValueChange={(v) => setValues((s) => ({ ...s, memoryMb: v }))}
+                options={MEMORY_CHOICES.map((mb) => ({
+                  value: String(mb),
+                  label: `${mb} MB`,
+                }))}
+              />
+            )}
+          </Field>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" loading={pending}>
             Crear proyecto

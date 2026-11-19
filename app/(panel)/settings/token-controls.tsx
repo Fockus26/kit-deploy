@@ -121,7 +121,7 @@ export function NewTokenForm({ projects }: { projects: string[] }) {
     <form
       action={dispatch}
       aria-labelledby="nuevo-token"
-      className="flex max-w-form-wide flex-col gap-4 rounded-lg border border-border bg-card p-5"
+      className="flex max-w-form-wide flex-col gap-4 rounded-lg lg:max-w-form-split border border-border bg-card p-5"
     >
       <h3
         ref={heading}
@@ -143,30 +143,34 @@ export function NewTokenForm({ projects }: { projects: string[] }) {
         </p>
       ) : (
         <>
-          <Field label="Proyecto" error={failed?.fields?.project}>
-            {(a11y) => (
-              <OptionSelect
-                {...a11y}
-                name="project"
-                value={values.project}
-                onValueChange={(v) => setValues((s) => ({ ...s, project: v }))}
-                options={projects.map((p) => ({ value: p, label: p }))}
-                className="font-mono"
-              />
-            )}
-          </Field>
-          <FieldInput
-            label="Etiqueta (opcional)"
-            name="label"
-            value={values.label}
-            onChange={(e) =>
-              setValues((v) => ({ ...v, label: e.target.value }))
-            }
-            help="Para reconocerlo en la tabla, p. ej. «GitHub Actions»."
-            error={failed?.fields?.label}
-            maxLength={MAX.tokenLabel}
-            autoComplete="off"
-          />
+          <div className="grid gap-4 lg:grid-cols-2 *:min-w-0">
+            <Field label="Proyecto" error={failed?.fields?.project}>
+              {(a11y) => (
+                <OptionSelect
+                  {...a11y}
+                  name="project"
+                  value={values.project}
+                  onValueChange={(v) =>
+                    setValues((s) => ({ ...s, project: v }))
+                  }
+                  options={projects.map((p) => ({ value: p, label: p }))}
+                  className="font-mono"
+                />
+              )}
+            </Field>
+            <FieldInput
+              label="Etiqueta (opcional)"
+              name="label"
+              value={values.label}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, label: e.target.value }))
+              }
+              help="Para reconocerlo en la tabla, p. ej. «GitHub Actions»."
+              error={failed?.fields?.label}
+              maxLength={MAX.tokenLabel}
+              autoComplete="off"
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" loading={pending}>
               Crear token
