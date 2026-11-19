@@ -356,6 +356,7 @@ export function EnvManager({
                       data={list.vars}
                       caption={`Variables de ${ENV_TAB_LABEL[e]} en ${project}`}
                       minWidth={640}
+                      wrapColumns={["name"]}
                       getRowId={(v) => v.name}
                       empty={
                         <EmptyState

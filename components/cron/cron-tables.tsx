@@ -137,6 +137,7 @@ export function CronJobsTable({
       data={jobs}
       caption={`Tareas programadas de ${project}`}
       minWidth={640}
+      wrapColumns={["path"]}
       getRowId={(r) => r.id}
       empty={
         <EmptyState
@@ -172,6 +173,7 @@ export function CronRunsTable({
       data={runs}
       caption={`Ejecuciones de ${project}`}
       minWidth={720}
+      wrapColumns={["path", "error"]}
       getRowId={(r) => r.id}
       empty={
         <EmptyState level={3} icon={History} title="Aún no hay ejecuciones">

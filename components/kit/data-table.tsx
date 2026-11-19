@@ -24,6 +24,10 @@ export function dataTableColumns<T extends RowData>() {
  * HANDOFF §2 · DataTable on TanStack Table: a real `<table>` inside a card that scrolls on its
  * own (`overflow-x: auto`) with its own `minWidth` (560–760). Column definitions must be stable
  * (module scope). An action column's header is sr-only text ("Acciones").
+ *
+ * Cells never wrap (`whitespace-nowrap`): status chips, SHAs, dates and `••••` stay whole and the
+ * card scrolls instead. Only the column ids in `wrapColumns` (free text: domain, detail, error)
+ * may break anywhere, with a floor width so they never collapse to one letter per line.
  */
 export function DataTable<T extends RowData>({
   columns,
@@ -31,6 +35,7 @@ export function DataTable<T extends RowData>({
   caption,
   captionVisible = false,
   minWidth,
+  wrapColumns,
   empty,
   getRowId,
   selectedRowId,
@@ -42,6 +47,8 @@ export function DataTable<T extends RowData>({
   captionVisible?: boolean;
   /** px; the table scrolls inside its box below this width. */
   minWidth: number;
+  /** Ids of the free-text columns whose cells may wrap; every other cell stays on one line. */
+  wrapColumns?: readonly string[];
   /** An <EmptyState> shown inside the card when there are no rows. */
   empty?: React.ReactNode;
   getRowId?: (row: T) => string;
@@ -112,7 +119,12 @@ export function DataTable<T extends RowData>({
                   {row.getAllCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className="px-4 py-2.5 align-middle [overflow-wrap:anywhere]"
+                      className={cn(
+                        "px-4 py-2.5 align-middle",
+                        wrapColumns?.includes(cell.column.id)
+                          ? "min-w-40 [overflow-wrap:anywhere]"
+                          : "whitespace-nowrap",
+                      )}
                     >
                       <table.FlexRender cell={cell} />
                     </td>

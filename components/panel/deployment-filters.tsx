@@ -67,7 +67,7 @@ export function DeploymentFilters({
             </span>
           </TabsTrigger>
         </TabsList>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full items-center gap-2">
           <Label htmlFor={selectId} className="text-body">
             Estado
           </Label>
@@ -78,7 +78,7 @@ export function DeploymentFilters({
               go(env, v === STATUS_ALL ? undefined : (v as DeploymentStatus))
             }
             options={[{ value: STATUS_ALL, label: "Todos" }, ...STATUS_OPTIONS]}
-            className="w-auto min-w-40"
+            className="w-auto min-w-0 sm:min-w-40"
           />
         </div>
       </div>
