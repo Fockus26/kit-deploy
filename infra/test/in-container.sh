@@ -85,6 +85,24 @@ run > /tmp/run4.log 2>&1 || { fail "run over an existing daemon.json"; tail -20 
 check "existing keys kept" bash -c "jq -e '.\"data-root\" == \"/var/lib/docker\" and .\"log-opts\".labels == \"x\" and .\"log-opts\".\"max-size\" == \"10m\"' /etc/docker/daemon.json"
 check "backup of the old daemon.json" bash -c "ls /etc/docker/daemon.json.bak-* >/dev/null"
 
+echo "== 6. Re-run once a site needs the Cloudflare token (the previews site, by DNS-01)"
+printf '*.preview.test {\n\ttls {\n\t\tdns cloudflare {env.CLOUDFLARE_API_TOKEN}\n\t}\n\trespond ok\n}\n' > /etc/caddy/sites/dns01.caddy
+rm -f /etc/caddy/cloudflare.env
+if run > /tmp/run5.log 2>&1; then fail "without cloudflare.env the re-run is refused"; else pass "without cloudflare.env the re-run is refused"; fi
+# Fake tokens: Caddy's Cloudflare module checks the shape only (40 characters pass, 34 do not).
+FAKE_TOKEN=kdtestnotarealtoken0123456789abcdefghij
+echo "CLOUDFLARE_API_TOKEN=$FAKE_TOKEN" > /etc/caddy/cloudflare.env
+# The token reaches a running Caddy only on a restart (update.sh's caddy_lacks_token on the VPS).
+caddy stop >/dev/null 2>&1 || true
+if run > /tmp/run6.log 2>&1; then pass "with cloudflare.env, validate gets the token and the re-run passes"; else fail "with cloudflare.env, validate gets the token and the re-run passes"; tail -5 /tmp/run6.log; fi
+check "the token is never printed" bash -c "! grep -qF '$FAKE_TOKEN' /tmp/run6.log"
+BAD_TOKEN=kdtest_not_a_real_token_0123456789
+echo "CLOUDFLARE_API_TOKEN=$BAD_TOKEN" > /etc/caddy/cloudflare.env
+if run > /tmp/run7.log 2>&1; then fail "a token Caddy rejects stops the re-run"; else pass "a token Caddy rejects stops the re-run"; fi
+check "Caddy's error is shown with the rejected token masked" bash -c "grep -qF '<CLOUDFLARE_API_TOKEN>' /tmp/run7.log && ! grep -qF '$BAD_TOKEN' /tmp/run7.log"
+rm -f /etc/caddy/sites/dns01.caddy /etc/caddy/cloudflare.env
+caddy stop >/dev/null 2>&1 || true
+
 echo
 [ "$FAILS" = 0 ] && { echo "ALL PASS"; exit 0; }
 echo "$FAILS FAILED"; exit 1

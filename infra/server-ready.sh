@@ -51,10 +51,18 @@ ACME=/var/www/acme
 STATE=/etc/kit-deploy
 
 say() { echo "== $*"; }
+# The Cloudflare token (CONTENT_CHECKLIST #1), as update.sh reads it: the file is data, not sourced,
+# and the value is never printed. Once the previews site exists (DNS-01) every validate needs it.
+cf_token() {
+  local t
+  t="$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' /etc/caddy/cloudflare.env 2>/dev/null | head -1 || true)"
+  if printf '%s' "$t" | grep -Eq '^[A-Za-z0-9_-]{20,}$'; then printf '%s' "$t"; fi
+}
 caddy_reload() {
   if [ "$TEST" = 1 ]; then
+    # No systemd in the test: the token goes in the way the unit's EnvironmentFile puts it.
     if pgrep -x caddy >/dev/null; then caddy reload --config /etc/caddy/Caddyfile >/dev/null
-    else caddy start --config /etc/caddy/Caddyfile >/dev/null 2>&1; fi
+    else CLOUDFLARE_API_TOKEN="$(cf_token)" caddy start --config /etc/caddy/Caddyfile >/dev/null 2>&1; fi
   else
     systemctl enable -q caddy
     if systemctl is-active -q caddy; then systemctl reload caddy; else systemctl start caddy; fi
@@ -187,7 +195,17 @@ http://$DB_DOMAIN {
 import sites/*.caddy
 EOF
 caddy fmt --overwrite /etc/caddy/Caddyfile >/dev/null 2>&1 || true
-caddy validate --config /etc/caddy/Caddyfile >/dev/null
+# Only the unit loads cloudflare.env: without the token here, validate failed once the previews site
+# existed and the re-run stopped (VPS, 2026-11-19). Caddy quotes a token it rejects in its error:
+# the error is shown with the token masked.
+CF_TOKEN="$(cf_token)"
+if ! VALIDATE_OUT="$(CLOUDFLARE_API_TOKEN="$CF_TOKEN" caddy validate --config /etc/caddy/Caddyfile 2>&1)"; then
+  [ -z "$CF_TOKEN" ] || VALIDATE_OUT="${VALIDATE_OUT//"$CF_TOKEN"/<CLOUDFLARE_API_TOKEN>}"
+  printf '%s\n' "$VALIDATE_OUT" | tail -5 >&2
+  echo "caddy validate refused /etc/caddy/Caddyfile." >&2
+  exit 1
+fi
+unset CF_TOKEN VALIDATE_OUT
 # validate runs as root and opens the log files: they would stay root 0600 and the caddy user
 # could not write them (the service failed on the VPS, 2026-11-11).
 chown -R caddy:caddy /var/log/caddy
