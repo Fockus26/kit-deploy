@@ -25,14 +25,14 @@ export function projectTabHref(project: string, segment: string): string {
 }
 
 const TAB =
-  "-mb-px inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-body";
+  "inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-body";
 
 export function ProjectTabs({ project }: { project: string }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Secciones del proyecto" className="border-border border-b">
       {/* Narrow screens scroll the row inside its own box, never the page. */}
-      <ul className="flex overflow-x-auto">
+      <ul className="flex overflow-x-auto overflow-y-hidden">
         {PROJECT_TABS.map((tab) => {
           const href = projectTabHref(project, tab.segment);
           const active = pathname === href;

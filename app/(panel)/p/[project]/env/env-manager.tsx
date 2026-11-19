@@ -58,7 +58,7 @@ function RowActions({ row }: { row: EnvVar }) {
   const verb = row.secret ? "Reemplazar" : "Editar";
   const where = ENV_TAB_LABEL[ctx.environment];
   return (
-    <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-nowrap justify-end gap-2">
       <Button
         variant="outline"
         size="sm"
@@ -98,7 +98,10 @@ const columns: DataTableColumn<EnvVar>[] = col.columns([
   col.accessor("name", {
     header: "Nombre",
     cell: (c) => (
-      <span className="font-medium font-mono text-foreground">
+      <span
+        className="block max-w-[28ch] truncate font-medium font-mono text-foreground"
+        title={c.getValue()}
+      >
         {c.getValue()}
       </span>
     ),
@@ -118,7 +121,14 @@ const columns: DataTableColumn<EnvVar>[] = col.columns([
         );
       if (v.value === null)
         return <span className="text-muted-foreground">No disponible</span>;
-      return <span className="font-mono">{v.value}</span>;
+      return (
+        <span
+          className="block max-w-[40ch] truncate font-mono text-muted-foreground"
+          title={v.value}
+        >
+          {v.value}
+        </span>
+      );
     },
   }),
   col.display({
