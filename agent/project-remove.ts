@@ -62,9 +62,7 @@ const PROJECT_FILE = /^[a-z0-9][a-z0-9_]{0,39}$/;
 
 /** The end of a command's stderr, one line, bounded. */
 function why(r: { code: number; stderr: string }): string {
-  return (
-    r.stderr.trim().split("\n").at(-1)?.slice(0, 200) || `exit ${r.code}`
-  );
+  return r.stderr.trim().split("\n").at(-1)?.slice(0, 200) || `exit ${r.code}`;
 }
 
 /** The project's Caddy files that carry kit-deploy's header for their name, with their content. */
