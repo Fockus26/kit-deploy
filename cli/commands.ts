@@ -59,6 +59,11 @@ import { type EnvContext, envCommand } from "./env-commands";
 import { imagesCommand } from "./images-commands";
 import { type LogsContext, logsCommand } from "./logs-commands";
 import { type MetricsContext, metricsCommand } from "./metrics-commands";
+import {
+  PROJECT_RM_USAGE,
+  type ProjectRemoveContext,
+  projectRmCommand,
+} from "./project-commands";
 
 /** What the database-backed commands need; built lazily so `version` works without a database. */
 export type DeployContext = { switch: SwitchDeps; store: DeployStore };
@@ -66,7 +71,8 @@ export type CliContext = EnvContext &
   DomainContext &
   DbContext &
   Pick<AlertsContext, "alerts" | "writeAlertsEnv"> &
-  Pick<CronContext, "cron"> & {
+  Pick<CronContext, "cron"> &
+  Pick<ProjectRemoveContext, "removal"> & {
     deploy?: () => DeployContext;
     admin?: () => AdminStore;
     users?: () => UserStore;
@@ -118,6 +124,10 @@ Commands:
   project pin <project> <owner/repo>
                      (root) the only repository whose images get the project's variables;
                      'project add' as root does it too
+  project rm <project> [--yes]
+                     (root) take a project off the platform: its rows, Caddy files,
+                     containers, images and pin. Its kit-db databases are kept (it prints
+                     how to drop them). Without --yes it only says what it would remove
   domain add <project> <host> [--redirect none|to-apex|to-www]
                      one more host for a project's production; it goes into Caddy once its
                      DNS resolves to the VPS (prints the records to create)
@@ -779,8 +789,10 @@ export async function runCli(
         if (args[0] === "add")
           return await projectAdd(ctx, args.slice(1), json);
         if (args[0] === "pin") return await projectPin(ctx, args.slice(1));
+        if (args[0] === "rm")
+          return await projectRmCommand(client, ctx, args.slice(1), json);
         return fail(
-          "usage: kit-deploy project add <project> <owner/repo> [...]\n",
+          `usage: kit-deploy project add <project> <owner/repo> [...]\n${PROJECT_RM_USAGE}`,
           2,
         );
       case "domain":
