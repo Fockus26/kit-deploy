@@ -281,7 +281,8 @@ fi
 say "Dashboard site ($DASHBOARD_HOST)"
 SITE=/etc/caddy/sites/kit-deploy.caddy
 if getent ahosts "$DASHBOARD_HOST" >/dev/null 2>&1; then
-  NEW="$(printf '# Written by kit-deploy infra/update.sh.\n%s {\n\timport kit_access_log\n\treverse_proxy 127.0.0.1:%s\n}\n' "$DASHBOARD_HOST" "$WEB_PORT")"
+  # keepalive below Node's 5 s, as lib/core/constants.ts UPSTREAM_KEEPALIVE (else 502s on POSTs).
+  NEW="$(printf '# Written by kit-deploy infra/update.sh.\n%s {\n\timport kit_access_log\n\treverse_proxy 127.0.0.1:%s {\n\t\ttransport http {\n\t\t\tkeepalive 4s\n\t\t}\n\t}\n}\n' "$DASHBOARD_HOST" "$WEB_PORT")"
   if [ "$(cat "$SITE" 2>/dev/null)" != "$NEW" ]; then
     printf '%s\n' "$NEW" > "$SITE.tmp" && chmod 644 "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
     if caddy_validate; then

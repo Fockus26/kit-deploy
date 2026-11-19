@@ -6,6 +6,7 @@ import {
   CADDY_SITES_DIR,
   PORT_RANGE,
   PREVIEW_DOMAIN,
+  UPSTREAM_KEEPALIVE,
 } from "./constants";
 import { previewHost, siteName, type Target } from "./target";
 import { assertHost, assertIntInRange, CoreInputError } from "./validate";
@@ -109,7 +110,11 @@ export function renderSite(input: SiteInput): SiteFile {
     `# Written by kit-deploy for ${name} — do not edit by hand: \`kit-deploy regenerate\` rewrites it.`,
     `${hosts.join(", ")} {`,
     `\timport ${CADDY_ACCESS_LOG_SNIPPET}`,
-    `\treverse_proxy 127.0.0.1:${port}`,
+    `\treverse_proxy 127.0.0.1:${port} {`,
+    "\t\ttransport http {",
+    `\t\t\tkeepalive ${UPSTREAM_KEEPALIVE}`,
+    "\t\t}",
+    "\t}",
     "}",
     ...redirects.flatMap((r) => [
       "",
