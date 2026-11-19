@@ -38,7 +38,7 @@ locally like kit-agent (OK). Waiting on César.
 - Phase 03 leftover: the dashboard cookie is host-only in the browser (César).
 - Each new project's repo must be added to the GitHub status token (Repository access); when the
   token expires, re-run `ship.sh … --install --github-token`.
-- Batch 2026-11-18 ship (César's OK): migrations 0015–0016, `--github-read-token` (César creates the read-only token: All repositories, Metadata: Read-only), then `project rm kd_hello --yes`. César decides: QA-only `GITHUB_API_BASE` for testing the repo combobox locally; widening /new and Nuevo token at laptop widths.
+- Batch 2026-11-18 ship (César's OK): migrations 0015–0016, `--github-read-token` (César creates the read-only token: All repositories, Metadata: Read-only), then `project rm kd_hello --yes`. Release from main 25b03f3 → `build/kit-deploy-25b03f33d4de.tgz`. César's copy pending: hint for an expired read token (backlog Medio).
 - CONTENT_CHECKLIST #12, #14: César confirms the preview copy.
 
 ## Next

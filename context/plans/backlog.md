@@ -92,5 +92,8 @@ One block per item: what, why, version.
 - Bajo: duplicate repo marks «Ya existe.» on Nombre.
 - Bajo: passkey removal copy — expired session lacks «Entrar» link; phone-time hint never shown; account without TOTP promised «con tu app de autenticación».
 - Bajo: Auditoría `?pagina=9999999999` → page 1 while `?pagina=999` → last.
-- Suspected (not measured): combobox — pick a listed repo, then «Usar «…»» keeps the previous repo's branch.
-- Decision for César: a QA-only `GITHUB_API_BASE` so `qa:local` can point the repo list at a local fake (combobox path otherwise untestable locally).
+- Bajo: `githubRequest` (`lib/deploy/github.ts:47`) follows 30x redirects with `Authorization`; set `redirect: "error"` (W10, #78).
+- Bajo a11y: repo combobox search input — cmdk's `aria-labelledby` overrides `aria-label="Buscar repositorio"`; name ends up «Repositorios de GitHub» (`components/kit/repo-combobox.tsx`).
+- Medio a11y (combobox QA 2026-11-19): Tab doesn't leave the open repo combobox (only Esc) — `components/kit/repo-combobox.tsx:104`, FocusScope `loop`. Repro `context/plans/qa-batch-2026-11-18-combobox/1-tab-atrapado.mjs`.
+- Medio: 401/403 (expired/revoked read token) shows the generic «No se pudo cargar la lista…» and logs nothing — `new-project-form.tsx:54-59`, `lib/github/repos.ts:102-106`. Needs César's copy for an "expired token" hint (CONTENT_CHECKLIST row 45). Repro `4-token-caducado.mjs`.
+- Bajo (combobox QA): 5 s timeout is per page (up to 5 pages → ~23 s skeleton); hidden input skips `required` + focus to `<body>` after «Falta el repositorio.»; empty list says «Ningún repositorio coincide» unsearched; repos already linked have no mark and «Ya existe.» lands on Nombre; Esc keeps the query. Report `context/plans/qa-batch-2026-11-18-combobox.md`.
