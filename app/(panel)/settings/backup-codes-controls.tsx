@@ -41,6 +41,8 @@ type Kind = "view" | "regenerate";
 export function BackupCodesControls() {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("view");
+  // While a check is in flight Esc does not close: a regenerate's new codes would be lost.
+  const [busy, setBusy] = useState(false);
   const viewButton = useRef<HTMLButtonElement>(null);
   const newButton = useRef<HTMLButtonElement>(null);
 
@@ -75,6 +77,9 @@ export function BackupCodesControls() {
         <AlertDialogContent
           // The code is what confirms: Body puts the cursor in its field, not on Cancelar.
           onOpenAutoFocus={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => {
+            if (busy) e.preventDefault();
+          }}
           onCloseAutoFocus={(e) => {
             // No AlertDialogTrigger (one dialog, two buttons): Radix would drop focus on <body>.
             e.preventDefault();
@@ -86,6 +91,7 @@ export function BackupCodesControls() {
             kind={kind}
             // Body remounts with the new key, on the code field of Generar nuevos.
             onRegenerate={() => setKind("regenerate")}
+            onBusy={setBusy}
           />
         </AlertDialogContent>
       </AlertDialog>
@@ -113,9 +119,11 @@ const TEXT = {
 function Body({
   kind,
   onRegenerate,
+  onBusy,
 }: {
   kind: Kind;
   onRegenerate: () => void;
+  onBusy: (busy: boolean) => void;
 }) {
   const action =
     kind === "view" ? viewBackupCodesAction : regenerateBackupCodesAction;
@@ -128,6 +136,11 @@ function Body({
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const formId = useId();
+
+  useEffect(() => {
+    onBusy(pending);
+    return () => onBusy(false);
+  }, [pending, onBusy]);
 
   // On mount: when the dialog opens, and when "no codes left" switches it to Generar nuevos.
   useEffect(() => {
