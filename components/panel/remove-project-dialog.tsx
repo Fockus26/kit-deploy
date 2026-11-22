@@ -155,7 +155,8 @@ function Body({ project }: { project: string }) {
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="font-mono"
+          // On the field's wrapper: a 40-character name in the label wraps at 320 px.
+          className="[overflow-wrap:anywhere]"
         />
         <FieldInput
           ref={codeInput}
