@@ -1,19 +1,19 @@
 /**
  * The real dependencies of Eliminar passkey (lib/panel/actions/passkeys.ts, D055). Server only.
- * The guard lives as long as the web process: one container (lib/auth/totp-check.ts).
+ * The guard lives as long as the web process (one container) and is shared with every other
+ * action confirmed with a code (lib/panel/totp-guard.ts).
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { clientIp } from "@/lib/auth/handler";
-import { betterAuthTotp, memoryTotpGuard } from "@/lib/auth/totp-check";
+import { betterAuthTotp } from "@/lib/auth/totp-check";
 import { drizzlePasskeyStore } from "@/lib/db/passkeys";
 import { db } from "@/lib/db/store";
 import type { PasskeyDeps } from "./actions/passkeys";
 import { drizzlePanelStore } from "./data/store";
 import { sessionUser } from "./session";
-
-const guard = memoryTotpGuard();
+import { panelTotpGuard as guard } from "./totp-guard";
 
 export function passkeyDeps(): PasskeyDeps {
   const database = db();

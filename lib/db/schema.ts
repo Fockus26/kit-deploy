@@ -306,6 +306,8 @@ export const AUDIT_ACTIONS = [
   "cron.disable",
   "project.remove",
   "passkey.remove",
+  "backup_codes.view",
+  "backup_codes.regenerate",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
