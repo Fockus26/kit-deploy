@@ -1,9 +1,10 @@
 "use client";
 
-import { Download, KeyRound, TriangleAlert } from "lucide-react";
+import { KeyRound, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { CopyButton } from "@/components/auth/copy-button";
 import { FormAlert, type Notice } from "@/components/auth/form-alert";
+import { RecoveryCodeList } from "@/components/auth/recovery-codes";
 import { TotpQr } from "@/components/auth/totp-qr";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -60,22 +61,6 @@ function secretOf(uri: string): string {
 /** "JBSWY3DPEHPK3PXP" → "JBSW Y3DP EHPK 3PXP": easier to type by hand. */
 function grouped(secret: string): string {
   return secret.replace(/(.{4})(?=.)/g, "$1 ");
-}
-
-function downloadCodes(codes: string[]) {
-  const text = [
-    "kit-deploy · códigos de recuperación (deploy.fockus.dev)",
-    "Cada código sirve una sola vez.",
-    "",
-    ...codes,
-    "",
-  ].join("\n");
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "kit-deploy-codigos-de-recuperacion.txt";
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export function EnrolFlow() {
@@ -476,27 +461,11 @@ export function EnrolFlow() {
           entrar una sola vez. Guárdalos en tu gestor de contraseñas.
         </AlertDescription>
       </Alert>
-      <ol
-        aria-label="Códigos de recuperación"
-        className="mb-4 grid grid-cols-1 gap-2 rounded-lg border border-border bg-raised p-4 font-mono text-mono min-[360px]:grid-cols-2"
-      >
-        {codes.map((c) => (
-          <li key={c} className="break-all">
-            {c}
-          </li>
-        ))}
-      </ol>
-      <div className="mb-6 flex flex-wrap gap-3">
-        <CopyButton value={codes.join("\n")} label="Copiar los 10" />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => downloadCodes(codes)}
-        >
-          <Download aria-hidden="true" />
-          Descargar .txt
-        </Button>
-      </div>
+      <RecoveryCodeList
+        codes={codes}
+        copyLabel="Copiar los 10"
+        className="mb-6"
+      />
       <div className="mb-6 flex items-start gap-3">
         <input
           id="saved"

@@ -269,6 +269,12 @@ export const passkeyRemoveSchema = z.object({
     ),
 });
 
+/** Ajustes › Códigos de recuperación › Ver / Generar nuevos (D067): only the app's 6 digits,
+ * read exactly as Eliminar passkey reads them. */
+export const backupCodesSchema = z.object({
+  code: passkeyRemoveSchema.shape.code,
+});
+
 /** Logs page filters (read, not an action): the agent's own bounds (agent/protocol.ts). */
 export const logEnvField = z
   .string()

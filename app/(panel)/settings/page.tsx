@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { settingsData } from "@/lib/panel/data";
 import { listProjects } from "@/lib/panel/projects";
 import { panelUser } from "@/lib/panel/session";
+import { BackupCodesControls } from "./backup-codes-controls";
 import { AuditTable, PasskeysTable, TokensTable } from "./tables";
 import { NewTokenForm } from "./token-controls";
 
@@ -121,10 +122,13 @@ async function Access({ searchParams }: { searchParams: Search }) {
                 <StatusBadge status="warning" label="Sin configurar" />
               )}
             </div>
+            {/* PLACEHOLDER (CONTENT_CHECKLIST row 48): the card's texts are provisional. */}
             <p className="text-muted-foreground">
-              Se crearon en el alta, junto con la app de autenticación. Cada
-              código sirve una sola vez.
+              {data.totp
+                ? "Se crearon en el alta. Cada código sirve una sola vez; para verlos o generar nuevos, confirma con tu app de autenticación."
+                : "Se crean en el alta, junto con la app de autenticación. Cada código sirve una sola vez."}
             </p>
+            {data.totp ? <BackupCodesControls /> : null}
           </div>
         </div>
       </div>
