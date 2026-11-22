@@ -163,6 +163,22 @@ export const stopSchema = z.object({
   confirm: confirmField,
 });
 
+/** Eliminar proyecto (D069): the name typed, and the app's current 6 digits (spaces allowed, as
+ * some apps show "123 456"). The code is never echoed in a message. */
+export const projectRemoveSchema = z.object({
+  project: projectField,
+  confirm: confirmField,
+  code: z
+    .string({ message: "Escribe los 6 dígitos de tu app." })
+    .trim()
+    .transform((s) => s.replace(/\s/g, ""))
+    .pipe(
+      z.string().regex(/^\d{6}$/, {
+        message: "Escribe los 6 dígitos de tu app.",
+      }),
+    ),
+});
+
 export const domainAddSchema = z.object({
   project: projectField,
   host: hostField,
