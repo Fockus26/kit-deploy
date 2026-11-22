@@ -7,10 +7,12 @@ import { RelativeTime } from "@/components/kit/relative-time";
 import { SkeletonCard } from "@/components/kit/skeleton-card";
 import { NEW_PROJECT_PATH } from "@/components/layout/sidebar-nav";
 import { ProjectsTable } from "@/components/panel/projects-table";
+import { RemovedProjectNotice } from "@/components/panel/removed-project-notice";
 import { Section } from "@/components/panel/section";
 import { buttonVariants } from "@/components/ui/button";
 import { formatBytes, formatNumber } from "@/lib/kit/panel-format";
 import { homeData } from "@/lib/panel/data";
+import { removedNotice } from "@/lib/panel/removed-notice";
 
 export const metadata = { title: "Inicio" };
 
@@ -21,8 +23,11 @@ const NEW_PROJECT = (
   </Link>
 );
 
-/** HANDOFF §3 Inicio: header, Estado del servidor, Alertas abiertas and the projects table. */
-export default function Home() {
+/**
+ * HANDOFF §3 Inicio: header, Estado del servidor, Alertas abiertas and the projects table; after
+ * Eliminar proyecto, its notice on top (D070).
+ */
+export default function Home({ searchParams }: PageProps<"/">) {
   return (
     <Suspense
       fallback={
@@ -33,13 +38,22 @@ export default function Home() {
         </div>
       }
     >
-      <HomeContent />
+      <HomeContent searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function HomeContent() {
-  const { projects, lastDeployAt, vps, alerts } = await homeData();
+async function HomeContent({
+  searchParams,
+}: Pick<PageProps<"/">, "searchParams">) {
+  const [{ projects, lastDeployAt, vps, alerts }, search] = await Promise.all([
+    homeData(),
+    searchParams,
+  ]);
+  const removed = removedNotice(
+    search,
+    projects.map((p) => p.name),
+  );
   const count =
     projects.length === 1 ? "1 proyecto" : `${projects.length} proyectos`;
 
@@ -60,6 +74,8 @@ async function HomeContent() {
         </div>
         {NEW_PROJECT}
       </header>
+
+      {removed ? <RemovedProjectNotice notice={removed} /> : null}
 
       <Section title="Estado del servidor">
         {vps ? (

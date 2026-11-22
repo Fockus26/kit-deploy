@@ -1,6 +1,6 @@
 "use client";
 
-import { Ellipsis, Power, Rocket, RotateCw } from "lucide-react";
+import { Ellipsis, Power, Rocket, RotateCw, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   redeployAction,
@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { type ActionKind, type Outcome, outcomeOf } from "@/lib/kit/outcome";
+import { RemoveProjectDialog } from "./remove-project-dialog";
 import { RollbackButton, type RollbackTarget } from "./rollback-button";
 import { useServerAction } from "./use-server-action";
 
@@ -30,8 +31,9 @@ export type ProjectActionsProps = {
 };
 
 /**
- * HANDOFF §3 Proyecto · cabecera: Reiniciar, Parar, Rollback and Redeploy (primary) in a
- * wrapping row; below 768 only Redeploy and Rollback stay, the other two go to "Más acciones".
+ * HANDOFF §3 Proyecto · cabecera: Reiniciar, Parar, Eliminar (D069), Rollback and Redeploy
+ * (primary) in a wrapping row; below 768 only Redeploy and Rollback stay, the other three go to
+ * "Más acciones".
  * One Notice (role status or alert) tells how the last action went.
  */
 export function ProjectActions({
@@ -50,6 +52,8 @@ export function ProjectActions({
   const hint = useId();
   const menu = useRef<HTMLButtonElement>(null);
   const stopButton = useRef<HTMLButtonElement>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const removeButton = useRef<HTMLButtonElement>(null);
   const fromMenu = useRef(false);
   const shas = useRef({ target: rollback.sha });
   shas.current = { target: rollback.sha };
@@ -107,6 +111,20 @@ export function ProjectActions({
             <Power aria-hidden="true" />
             Parar
           </Button>
+          {/* Also with nothing live: a project that never deployed can go too. */}
+          <Button
+            ref={removeButton}
+            variant="destructive-text"
+            aria-label="Eliminar proyecto"
+            disabled={busy}
+            onClick={() => {
+              fromMenu.current = false;
+              setRemoveOpen(true);
+            }}
+          >
+            <Trash2 aria-hidden="true" />
+            Eliminar
+          </Button>
         </div>
         <RollbackButton
           project={project}
@@ -135,14 +153,14 @@ export function ProjectActions({
                 ref={menu}
                 variant="outline"
                 aria-label="Más acciones"
-                disabled={!hasLive || busy}
+                disabled={busy}
                 className="size-11 px-0"
               >
                 <Ellipsis aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={doRestart}>
+              <DropdownMenuItem disabled={!hasLive} onSelect={doRestart}>
                 <RotateCw aria-hidden="true" />
                 {restartLabel}
               </DropdownMenuItem>
@@ -156,6 +174,16 @@ export function ProjectActions({
               >
                 <Power aria-hidden="true" />
                 Parar
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive"
+                onSelect={() => {
+                  fromMenu.current = true;
+                  setRemoveOpen(true);
+                }}
+              >
+                <Trash2 aria-hidden="true" />
+                Eliminar proyecto
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -194,6 +222,18 @@ export function ProjectActions({
         onConfirm={() => {
           setNotice(null);
           stop.run({ project, confirm: project });
+        }}
+      />
+      <RemoveProjectDialog
+        project={project}
+        open={removeOpen}
+        onOpenChange={(open) => {
+          setRemoveOpen(open);
+          // Removed → the action goes to Inicio; closed without removing → back to the trigger.
+          if (!open) {
+            const back = fromMenu.current ? menu : removeButton;
+            setTimeout(() => back.current?.focus(), 0);
+          }
         }}
       />
       {notice ? (

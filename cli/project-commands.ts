@@ -12,7 +12,12 @@ import type {
   ProjectFootprint,
   ProjectRemovalStore,
 } from "../lib/db/project-remove";
-import { type AgentClient, AgentUnreachable } from "./client";
+import {
+  agentRemove,
+  emptyMachine,
+  removeProject,
+} from "../lib/ops/project-remove";
+import type { AgentClient } from "./client";
 
 type Result = { code: number; out: string; err: string };
 const fail = (err: string, code = 1): Result => ({ code, out: "", err });
@@ -93,30 +98,6 @@ function tailLines(m: ProjectRemoval): string {
   return out;
 }
 
-function emptyMachine(m: ProjectRemoval): boolean {
-  return (
-    m.sites.length === 0 &&
-    m.containers.length === 0 &&
-    m.images.length === 0 &&
-    m.pin === null
-  );
-}
-
-async function agentRemove(
-  client: AgentClient,
-  project: string,
-  dryRun: boolean,
-): Promise<ProjectRemoval | string> {
-  try {
-    const res = await client.call("project.remove", { project, dryRun });
-    if (!res.ok) return `kit-agent: ${res.error.code}: ${res.error.message}`;
-    return res.result as ProjectRemoval;
-  } catch (e) {
-    if (e instanceof AgentUnreachable) return e.message;
-    throw e;
-  }
-}
-
 export async function projectRmCommand(
   client: AgentClient,
   ctx: ProjectRemoveContext,
@@ -180,9 +161,12 @@ export async function projectRmCommand(
     environment: null,
     name: rows?.repo ?? null,
   };
-  // The rows first: from here on nothing deploys, calls, checks or regenerates this project.
-  const rowsRemoved = rows !== null && (await store.remove(project, audit));
-  const m = await agentRemove(client, project, false);
+  // The rows first, then the machine (lib/ops/project-remove.ts, shared with the panel).
+  const { rowsRemoved, machine: m } = await removeProject(client, store, {
+    project,
+    rows,
+    audit,
+  });
   if (typeof m === "string") {
     const done = rowsRemoved ? `removed ${project}'s rows\n` : "";
     return {
@@ -191,8 +175,6 @@ export async function projectRmCommand(
       err: `${m}\nthe machine side was not finished: run it again once kit-agent answers: kit-deploy project rm ${project} --yes\n`,
     };
   }
-  // A run that only found leftovers on the machine still leaves its trace.
-  if (!rowsRemoved && !emptyMachine(m)) await store.record(audit);
   const code = m.failed.length > 0 ? 1 : 0;
   if (json)
     return {
