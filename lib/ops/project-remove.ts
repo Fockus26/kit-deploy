@@ -8,7 +8,10 @@
 import type { ProjectRemoval } from "../../agent/project-remove";
 import { type AgentClient, AgentUnreachable } from "../../cli/client";
 import type { AuditEntry } from "../db/audit";
-import type { ProjectFootprint, ProjectRemovalStore } from "../db/project-remove";
+import type {
+  ProjectFootprint,
+  ProjectRemovalStore,
+} from "../db/project-remove";
 
 /** kit-agent's `project.remove`, or why it did not answer (English: the agent's own words). */
 export async function agentRemove(

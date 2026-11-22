@@ -26,8 +26,8 @@ import {
 import { isReservedProject } from "@/lib/ops/rules";
 import { projectOnlySchema, projectRemoveSchema } from "@/lib/panel/schemas";
 import {
-  AGENT_DOWN,
   type ActionResult,
+  AGENT_DOWN,
   confirmationFailure,
   confirms,
   failure,

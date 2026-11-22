@@ -12,8 +12,8 @@ import {
   projectRemovalFootprint,
   removeProjectFromPanel,
 } from "@/lib/panel/actions/project-remove";
-import { removedNoticeHref } from "@/lib/panel/removed-notice";
 import { projectRemoveDeps } from "@/lib/panel/project-remove-runtime";
+import { removedNoticeHref } from "@/lib/panel/removed-notice";
 
 export async function projectFootprintAction(
   _prev: unknown,

@@ -28,8 +28,7 @@ export type RemovedNotice = {
   command?: string;
 };
 
-const one = (v: string | string[] | undefined) =>
-  Array.isArray(v) ? v[0] : v;
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export function removedNotice(
   search: Record<string, string | string[] | undefined>,
